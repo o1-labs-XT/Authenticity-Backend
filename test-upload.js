@@ -8,6 +8,8 @@ const axios = require('axios');
 
 // Import o1js for Mina keypair generation and signing
 const { PrivateKey, Signature } = require('o1js');
+// Import prepareImageVerification from authenticity-zkapp
+const { prepareImageVerification } = require('authenticity-zkapp');
 
 // Configuration
 const API_URL = process.env.API_URL || 'http://localhost:3000';
@@ -33,23 +35,19 @@ async function main() {
     const imageBuffer = fs.readFileSync(IMAGE_PATH);
     console.log('Image size:', (imageBuffer.length / 1024).toFixed(2), 'KB');
     
-    // Calculate SHA256 hash of the image
+    // Calculate SHA256 hash of the image (for logging/reference)
     console.log('\n🔐 Calculating SHA256 hash...');
     const sha256Hash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
     console.log('SHA256 Hash:', sha256Hash);
     
-    // Sign the SHA256 hash with the private key
-    console.log('\n✍️  Signing the hash...');
-    // For simplicity, we'll sign the hash as a single field element
-    // In production, you'd want to properly convert the hash
-    const { Field, Poseidon } = require('o1js');
+    // Prepare image verification to get the expectedHash
+    console.log('\n📊 Preparing image verification...');
+    const verificationInputs = prepareImageVerification(IMAGE_PATH);
     
-    // Convert hash to Field element (using first 31 bytes for Field compatibility)
-    const hashBigInt = BigInt('0x' + sha256Hash.substring(0, 62));
-    const hashField = Field(hashBigInt);
-    
-    // Create signature using o1js
-    const signature = Signature.create(privateKey, [hashField]);
+    // Sign the expectedHash with the private key (matching backend logic)
+    console.log('\n✍️  Signing the expectedHash...');
+    // Sign expectedHash.toFields() just like in the backend example
+    const signature = Signature.create(privateKey, verificationInputs.expectedHash.toFields());
     const signatureBase58 = signature.toBase58();
     console.log('Signature:', signatureBase58);
     
@@ -141,21 +139,5 @@ async function pollStatus(sha256Hash, maxAttempts = 10) {
   console.log('⏱️  Max polling attempts reached. Check status manually.');
 }
 
-// Check if axios and form-data are installed
-function checkDependencies() {
-  try {
-    require('axios');
-    require('form-data');
-    require('o1js');
-  } catch (error) {
-    console.error('Missing dependencies. Please run:');
-    console.error('npm install axios form-data o1js');
-    process.exit(1);
-  }
-}
-
 // Run the script
-checkDependencies();
 main();
-
-// update test-upload to use the same signing logic as /Users/hattyhattington/code/o1labs/Authenticity-Zkapp/examples/backend. the signing logic we currently use causes the server to error with invalid signature for data
