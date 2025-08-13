@@ -74,10 +74,10 @@ export interface ProofPublishingTask {
  */
 export interface VerificationInputs {
   expectedHash: Field;
-  penultimateState: Field[];
-  initialState: Field[];
-  messageWord: Field;
-  roundConstant: Field;
+  penultimateState: any[]; // UInt32[] from authenticity-zkapp
+  initialState: any[]; // UInt32[] from authenticity-zkapp
+  messageWord: any; // UInt32 from authenticity-zkapp
+  roundConstant: any; // UInt32 from authenticity-zkapp
 }
 
 /**
