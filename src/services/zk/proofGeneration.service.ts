@@ -3,12 +3,23 @@ import {
   AuthenticityInputs,
   FinalRoundInputs
 } from 'authenticity-zkapp';
-import { PublicKey, Signature } from 'o1js';
+import { PublicKey, Signature, PrivateKey } from 'o1js';
 import { ProofGenerationTask } from '../../types';
 import { zkProgramSingleton } from './zkProgramSingleton';
 import fs from 'fs';
 
 export class ProofGenerationService {
+
+  // TEMPORARY: Test function to generate credentials - DELETE THIS LATER
+  private generateTestCredentials(expectedHash: any): { pubKey: PublicKey; sig: Signature } {
+    const testPrivateKey = PrivateKey.random();
+    const testPublicKey = testPrivateKey.toPublicKey();
+    const testSignature = Signature.create(
+      testPrivateKey,
+      expectedHash.toFields()
+    );
+    return { pubKey: testPublicKey, sig: testSignature };
+  }
 
   constructor() {
     console.log('ProofGenerationService initialized');
@@ -34,9 +45,12 @@ export class ProofGenerationService {
     // Ensure program is compiled using singleton
     await zkProgramSingleton.compile();
 
-    // Parse inputs from the task
-    const pubKey = PublicKey.fromBase58(task.publicKey);
-    const sig = Signature.fromBase58(task.signature);
+    // TEMPORARY: Use generated test credentials instead of user input
+    const { pubKey, sig } = this.generateTestCredentials(task.verificationInputs.expectedHash);
+    
+    // Original code (disabled for testing):
+    // const pubKey = PublicKey.fromBase58(task.publicKey);
+    // const sig = Signature.fromBase58(task.signature);
 
     // Create public inputs for the proof
     const publicInputs = new AuthenticityInputs({
