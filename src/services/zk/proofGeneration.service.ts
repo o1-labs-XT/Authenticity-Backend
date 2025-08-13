@@ -1,0 +1,126 @@
+import {
+  AuthenticityProgram,
+  AuthenticityInputs,
+  FinalRoundInputs
+} from 'authenticity-zkapp';
+import { PublicKey, Signature, Field } from 'o1js';
+import { ProofGenerationTask } from '../../types';
+import fs from 'fs';
+
+export class ProofGenerationService {
+  private compiled = false;
+  private compiling = false;
+
+  constructor() {
+    console.log('ProofGenerationService initialized');
+  }
+
+  /**
+   * Compile the AuthenticityProgram
+   * This should be done once at startup and cached
+   */
+  async compile(): Promise<void> {
+    if (this.compiled) {
+      return;
+    }
+
+    if (this.compiling) {
+      // Wait for compilation to complete if already in progress
+      while (this.compiling) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+
+    this.compiling = true;
+    
+    try {
+      console.log('Compiling AuthenticityProgram...');
+      const startTime = Date.now();
+      
+      await AuthenticityProgram.compile();
+      
+      const compilationTime = Date.now() - startTime;
+      console.log(`AuthenticityProgram compiled successfully in ${compilationTime}ms`);
+      
+      this.compiled = true;
+    } finally {
+      this.compiling = false;
+    }
+  }
+
+  /**
+   * Generate a proof of authenticity for an image
+   * This matches the proof generation from the example backend
+   */
+  async generateProof(task: ProofGenerationTask): Promise<{
+    proof: any;
+    publicInputs: AuthenticityInputs;
+  }> {
+    console.log(`Generating proof for SHA256: ${task.sha256Hash}`);
+    
+    // Ensure program is compiled
+    await this.compile();
+
+    // Parse inputs from the task
+    const pubKey = PublicKey.fromBase58(task.publicKey);
+    const sig = Signature.fromBase58(task.signature);
+
+    // Create public inputs for the proof
+    const publicInputs = new AuthenticityInputs({
+      commitment: task.verificationInputs.expectedHash, // SHA256 of the image
+      signature: sig,
+      publicKey: pubKey,
+    });
+
+    // Create private inputs (SHA256 state from round 62)
+    const privateInputs = new FinalRoundInputs({
+      // SHA-256 state after round 62 (second-to-last round)
+      state: task.verificationInputs.penultimateState,
+      // Initial SHA-256 state (H0-H7 constants)
+      initialState: task.verificationInputs.initialState,
+      // Message word (W_t) for the final round
+      messageWord: task.verificationInputs.messageWord,
+      // Round constant (K_t) for the final round
+      roundConstant: task.verificationInputs.roundConstant,
+    });
+
+    console.log('Generating authenticity proof...');
+    const proofStartTime = Date.now();
+    
+    // Generate proof that:
+    // 1. The penultimate SHA256 state correctly produces the signed hash after the final round
+    // 2. The supplied signature was made with the supplied public key on the SHA256 commitment
+    const { proof } = await AuthenticityProgram.verifyAuthenticity(
+      publicInputs,
+      privateInputs
+    );
+
+    const proofTime = Date.now() - proofStartTime;
+    console.log(`Proof generated successfully in ${proofTime}ms`);
+
+    // Clean up the image file after proof generation
+    if (task.imagePath && fs.existsSync(task.imagePath)) {
+      fs.unlinkSync(task.imagePath);
+      console.log(`Cleaned up image file: ${task.imagePath}`);
+    }
+
+    return { proof, publicInputs };
+  }
+
+  /**
+   * Verify a proof (for testing purposes)
+   */
+  async verifyProof(proof: any): Promise<boolean> {
+    await this.compile();
+    const isValid = await AuthenticityProgram.verify(proof);
+    return isValid;
+  }
+
+  /**
+   * Get compilation status
+   */
+  isCompiled(): boolean {
+    return this.compiled;
+  }
+}
