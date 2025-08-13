@@ -16,6 +16,7 @@ export class AuthenticityRepository {
   private getByHashStmt!: Database.Statement;
   private getStatusStmt!: Database.Statement;
   private deleteFailedStmt!: Database.Statement;
+  private deleteRecordStmt!: Database.Statement;
 
   constructor(db: Database.Database) {
     this.db = db;
@@ -59,6 +60,11 @@ export class AuthenticityRepository {
     this.deleteFailedStmt = this.db.prepare(`
       DELETE FROM authenticity_records 
       WHERE sha256_hash = ? AND status = 'failed'
+    `);
+
+    this.deleteRecordStmt = this.db.prepare(`
+      DELETE FROM authenticity_records 
+      WHERE sha256_hash = ?
     `);
   }
 
@@ -155,6 +161,14 @@ export class AuthenticityRepository {
    */
   async deleteFailedRecord(sha256Hash: string): Promise<boolean> {
     const result = this.deleteFailedStmt.run(sha256Hash);
+    return result.changes > 0;
+  }
+
+  /**
+   * Delete any record by hash (use with caution)
+   */
+  async deleteRecord(sha256Hash: string): Promise<boolean> {
+    const result = this.deleteRecordStmt.run(sha256Hash);
     return result.changes > 0;
   }
 

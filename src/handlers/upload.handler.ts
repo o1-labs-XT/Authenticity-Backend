@@ -243,11 +243,13 @@ export class UploadHandler {
     } catch (error: any) {
       console.error(`Failed to generate/publish proof for ${task.sha256Hash}:`, error);
       
-      // Update record with error
-      await this.repository.updateRecordStatus(task.sha256Hash, {
-        status: 'failed',
-        errorMessage: error.message,
-      });
+      // Delete the failed record to allow retry with same image
+      const deleted = await this.repository.deleteRecord(task.sha256Hash);
+      if (deleted) {
+        console.log(`Deleted failed record for ${task.sha256Hash} to allow retry`);
+      } else {
+        console.warn(`Could not delete record for ${task.sha256Hash} - may already be deleted`);
+      }
     }
   }
 }
