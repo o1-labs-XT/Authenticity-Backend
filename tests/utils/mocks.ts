@@ -129,29 +129,6 @@ export class MockServices {
       isCompiled: sinon.stub().returns(false),
     };
   }
-
-  static createMockZkAppInteractionService() {
-    return {
-      getTokenAccountState: sinon.stub().resolves({
-        commitment: Field(1),
-        creatorX: Field(2),
-        creatorIsOdd: Field(0),
-        exists: true,
-      }),
-      reconstructCreatorPublicKey: sinon.stub().returns(MockMinaTypes.createMockPublicKey()),
-      verifyImageCommitment: sinon.stub().resolves({
-        verified: true,
-        creatorPublicKey: 'B62mock-creator',
-      }),
-      getZkAppState: sinon.stub().resolves({
-        exists: true,
-        balance: '1000000',
-        nonce: '1',
-      }),
-      getTokenId: sinon.stub().returns(Field(1)),
-      switchNetwork: sinon.stub(),
-    };
-  }
 }
 
 /**

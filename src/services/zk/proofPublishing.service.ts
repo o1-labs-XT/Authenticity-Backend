@@ -1,4 +1,4 @@
-import { AuthenticityZkApp, AuthenticityInputs } from 'authenticity-zkapp';
+import { AuthenticityZkApp } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, Field } from 'o1js';
 import { ProofPublishingTask } from '../../types';
 
@@ -29,7 +29,7 @@ export class ProofPublishingService {
         const zkAppPublicKey = PublicKey.fromBase58(this.zkAppAddress);
         this.zkApp = new AuthenticityZkApp(zkAppPublicKey);
         console.log(`ProofPublishingService initialized with zkApp at ${zkAppAddress}`);
-      } catch (error) {
+      } catch {
         console.warn(`Invalid zkApp address provided: ${zkAppAddress}`);
       }
     }
@@ -115,10 +115,6 @@ export class ProofPublishingService {
     const creator = PublicKey.fromBase58(task.creatorPublicKey);
     const feePayer = PrivateKey.fromBase58(this.feePayerKey);
     
-    // If we need the token owner's private key for signing (for funding new account)
-    // In production, this might be handled differently
-    const tokenOwnerKey = PrivateKey.random(); // This is a placeholder
-
     console.log('Creating transaction to publish proof...');
     
     try {
@@ -190,7 +186,7 @@ export class ProofPublishingService {
       const zkAppPublicKey = PublicKey.fromBase58(this.zkAppAddress);
       const account = Mina.getAccount(zkAppPublicKey);
       return !!account.zkapp;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

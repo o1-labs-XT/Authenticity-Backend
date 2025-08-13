@@ -6,13 +6,12 @@ import { HashingService } from './services/image/hashing.service';
 import { VerificationService } from './services/image/verification.service';
 import { ProofGenerationService } from './services/zk/proofGeneration.service';
 import { ProofPublishingService } from './services/zk/proofPublishing.service';
-import { ZkAppInteractionService } from './services/zk/zkAppInteraction.service';
 import { ZkCoordinatorService } from './services/zk/coordinator.service';
 import { ProofQueueService } from './services/queue/proofQueue.service';
 import { UploadHandler } from './handlers/upload.handler';
 import { StatusHandler } from './handlers/status.handler';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler';
-import { Mina, PrivateKey, PublicKey } from 'o1js';
+import { Mina } from 'o1js';
 
 // Load environment variables
 dotenv.config();
@@ -23,8 +22,8 @@ async function main() {
   console.log(`Network: ${process.env.MINA_NETWORK || 'local'}`);
 
   try {
-    // Initialize Mina network
-    if (process.env.MINA_NETWORK === 'local') {
+    // Initialize local Mina network for tests
+    if (process.env.MINA_NETWORK === '') {
       console.log('Initializing local Mina blockchain...');
       const Local = await Mina.LocalBlockchain({ proofsEnabled: true });
       Mina.setActiveInstance(Local);
@@ -62,10 +61,6 @@ async function main() {
       process.env.FEE_PAYER_PRIVATE_KEY || '',
       process.env.MINA_NETWORK || 'testnet'
     );
-    const zkAppInteractionService = new ZkAppInteractionService(
-      process.env.MINA_NETWORK || 'testnet',
-      process.env.ZKAPP_ADDRESS
-    );
 
     // Initialize coordinator
     const zkCoordinatorService = new ZkCoordinatorService(
@@ -96,6 +91,7 @@ async function main() {
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
 
     // Pre-compile circuits if enabled
+    // todo: these should share a single compiled instance. o1js internal caching might mitigate this issue 
     if (process.env.PRECOMPILE === 'true') {
       console.log('Pre-compiling ZK circuits (this may take a few minutes)...');
       await zkCoordinatorService.precompile();

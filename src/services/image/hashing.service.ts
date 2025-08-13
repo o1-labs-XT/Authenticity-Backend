@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { Field, Poseidon } from 'o1js';
 import { 
   hashImageOffCircuit, 

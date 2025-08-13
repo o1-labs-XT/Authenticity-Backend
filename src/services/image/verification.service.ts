@@ -127,14 +127,14 @@ export class VerificationService {
     // Check public key format
     try {
       PublicKey.fromBase58(publicKey);
-    } catch (error) {
+    } catch {
       return { valid: false, error: 'Invalid public key format' };
     }
 
     // Check signature format
     try {
       Signature.fromBase58(signature);
-    } catch (error) {
+    } catch {
       return { valid: false, error: 'Invalid signature format' };
     }
 

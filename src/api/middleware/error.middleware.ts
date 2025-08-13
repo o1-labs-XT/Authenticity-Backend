@@ -9,7 +9,7 @@ export function errorMiddleware(
   error: any,
   req: Request,
   res: Response<ErrorResponse>,
-  next: NextFunction
+  _next: NextFunction
 ): void {
   // Log the error
   console.error(`Error handling ${req.method} ${req.path}:`, error);

@@ -132,35 +132,4 @@ export class DatabaseConnection {
     this.db.close();
   }
 
-  /**
-   * Get database statistics
-   */
-  getStats(): {
-    cacheSize: number;
-    pageSize: number;
-    totalChanges: number;
-  } {
-    const totalChangesResult = this.db.prepare('SELECT total_changes() as changes').get() as any;
-    return {
-      cacheSize: Number(this.db.pragma('cache_size', { simple: true })),
-      pageSize: Number(this.db.pragma('page_size', { simple: true })),
-      totalChanges: totalChangesResult?.changes || 0,
-    };
-  }
-
-  /**
-   * Perform database maintenance
-   */
-  vacuum(): void {
-    console.log('Running VACUUM...');
-    this.db.pragma('vacuum');
-  }
-
-  /**
-   * Analyze database for query optimization
-   */
-  analyze(): void {
-    console.log('Running ANALYZE...');
-    this.db.pragma('analyze');
-  }
 }

@@ -1,4 +1,4 @@
-import { Field, PublicKey, Signature } from 'o1js';
+import { Field } from 'o1js';
 
 /**
  * Database record for an authenticity proof
@@ -144,21 +144,3 @@ export interface ErrorResponse {
   };
 }
 
-/**
- * Configuration for proof generation
- */
-export interface ProofConfig {
-  timeout: number;
-  maxRetries: number;
-  circuitCachePath: string;
-}
-
-/**
- * Configuration for blockchain interaction
- */
-export interface BlockchainConfig {
-  network: 'testnet' | 'mainnet' | 'local';
-  zkAppAddress: string;
-  deployerPrivateKey: string;
-  feePayerPrivateKey: string;
-}

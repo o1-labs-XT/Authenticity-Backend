@@ -3,7 +3,7 @@ import {
   AuthenticityInputs,
   FinalRoundInputs
 } from 'authenticity-zkapp';
-import { PublicKey, Signature, Field } from 'o1js';
+import { PublicKey, Signature } from 'o1js';
 import { ProofGenerationTask } from '../../types';
 import fs from 'fs';
 
