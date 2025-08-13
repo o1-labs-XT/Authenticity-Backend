@@ -1,0 +1,164 @@
+import { Field, PublicKey, Signature } from 'o1js';
+
+/**
+ * Database record for an authenticity proof
+ */
+export interface AuthenticityRecord {
+  sha256_hash: string;
+  token_owner_address: string;
+  creator_public_key: string;
+  signature: string;
+  status: 'pending' | 'verified' | 'failed';
+  created_at: string;
+  verified_at?: string | null;
+  transaction_id?: string | null;
+  error_message?: string | null;
+  retry_count: number;
+  proof_data?: string | null;
+}
+
+/**
+ * Input for creating a new authenticity record
+ */
+export interface CreateAuthenticityRecordInput {
+  sha256Hash: string;
+  tokenOwnerAddress: string;
+  creatorPublicKey: string;
+  signature: string;
+}
+
+/**
+ * Result of checking for an existing image
+ */
+export interface ExistingImageResult {
+  exists: boolean;
+  tokenOwnerAddress?: string;
+  status?: 'pending' | 'verified' | 'failed';
+}
+
+/**
+ * Status update for an authenticity record
+ */
+export interface StatusUpdate {
+  status: 'verified' | 'failed';
+  transactionId?: string;
+  errorMessage?: string;
+  proofData?: any;
+}
+
+/**
+ * Task for proof generation queue
+ */
+export interface ProofGenerationTask {
+  sha256Hash: string;
+  tokenOwnerAddress: string;
+  publicKey: string;
+  signature: string;
+  verificationInputs: VerificationInputs;
+  imagePath?: string;
+}
+
+/**
+ * Task for proof publishing queue
+ */
+export interface ProofPublishingTask {
+  sha256Hash: string;
+  proof: any; // AuthenticityProof
+  publicInputs: any; // AuthenticityInputs
+  tokenOwnerAddress: string;
+  creatorPublicKey: string;
+}
+
+/**
+ * Verification inputs from prepareImageVerification
+ */
+export interface VerificationInputs {
+  expectedHash: Field;
+  penultimateState: Field[];
+  initialState: Field[];
+  messageWord: Field;
+  roundConstant: Field;
+}
+
+/**
+ * Queue task structure
+ */
+export interface QueueTask {
+  id: string;
+  type: 'generate_proof' | 'publish_proof';
+  payload: ProofGenerationTask | ProofPublishingTask;
+  attempts: number;
+  maxAttempts: number;
+  createdAt: Date;
+  nextAttemptAt?: Date;
+}
+
+/**
+ * Queue metrics for monitoring
+ */
+export interface QueueMetrics {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  avgProcessingTime: number;
+}
+
+/**
+ * API response for upload endpoint
+ */
+export interface UploadResponse {
+  tokenOwnerAddress: string;
+  sha256Hash?: string;
+  status: 'pending' | 'duplicate';
+}
+
+/**
+ * API response for status endpoint
+ */
+export interface StatusResponse {
+  status: 'pending' | 'verified' | 'failed';
+  tokenOwnerAddress?: string;
+  transactionId?: string;
+  errorMessage?: string;
+}
+
+/**
+ * API response for token owner endpoint
+ */
+export interface TokenOwnerResponse {
+  tokenOwnerAddress?: string;
+  status?: 'pending' | 'verified' | 'failed';
+  found: boolean;
+}
+
+/**
+ * API error response
+ */
+export interface ErrorResponse {
+  error: {
+    code: string;
+    message: string;
+    field?: string;
+    retryable?: boolean;
+  };
+}
+
+/**
+ * Configuration for proof generation
+ */
+export interface ProofConfig {
+  timeout: number;
+  maxRetries: number;
+  circuitCachePath: string;
+}
+
+/**
+ * Configuration for blockchain interaction
+ */
+export interface BlockchainConfig {
+  network: 'testnet' | 'mainnet' | 'local';
+  zkAppAddress: string;
+  deployerPrivateKey: string;
+  feePayerPrivateKey: string;
+}
