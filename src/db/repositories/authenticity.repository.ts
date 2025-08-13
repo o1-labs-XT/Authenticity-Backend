@@ -251,9 +251,9 @@ export class AuthenticityRepository {
   }
 
   /**
-   * Execute a transaction
+   * Execute a transaction (note: better-sqlite3 transactions are synchronous)
    */
-  async transaction<T>(fn: () => T): Promise<T> {
+  transaction<T>(fn: () => T): T {
     const transaction = this.db.transaction(fn);
     return transaction();
   }
