@@ -2,8 +2,9 @@ import { Request, Response } from 'express';
 import { HashingService } from '../services/image/hashing.service';
 import { VerificationService } from '../services/image/verification.service';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository';
-import { ProofQueueService } from '../services/queue/proofQueue.service';
-import { UploadResponse, ErrorResponse } from '../types';
+import { ProofGenerationService } from '../services/zk/proofGeneration.service';
+import { ProofPublishingService } from '../services/zk/proofPublishing.service';
+import { UploadResponse, ErrorResponse, ProofGenerationTask } from '../types';
 import fs from 'fs';
 
 export class UploadHandler {
@@ -11,7 +12,8 @@ export class UploadHandler {
     private hashingService: HashingService,
     private verificationService: VerificationService,
     private repository: AuthenticityRepository,
-    private queueService: ProofQueueService
+    private proofGenerationService: ProofGenerationService,
+    private proofPublishingService: ProofPublishingService
   ) {}
 
   /**
@@ -141,20 +143,18 @@ export class UploadHandler {
         signature,
       });
 
-      // Queue proof generation task
-      const taskId = await this.queueService.enqueueProofGeneration({
+      // Start proof generation and publishing asynchronously
+      // We don't await this - it runs in the background
+      this.generateAndPublishProof({
         sha256Hash,
         tokenOwnerAddress,
         publicKey,
         signature,
         verificationInputs,
         imagePath: file.path,
+      }).catch(error => {
+        console.error(`Failed to generate/publish proof for ${sha256Hash}:`, error);
       });
-
-      console.log(`Queued proof generation task: ${taskId}`);
-
-      // Note: We're not cleaning up the file here as the proof generation
-      // service will need it. The service should clean it up after processing.
 
       // Return token owner address immediately
       res.json({
@@ -192,6 +192,61 @@ export class UploadHandler {
           code: 'INTERNAL_ERROR',
           message: 'Failed to process upload',
         },
+      });
+    }
+  }
+
+  /**
+   * Generate and publish proof (runs asynchronously in background)
+   */
+  private async generateAndPublishProof(task: ProofGenerationTask): Promise<void> {
+    try {
+      console.log(`Starting proof generation for ${task.sha256Hash}`);
+      
+      // Generate the proof
+      const { proof, publicInputs } = await this.proofGenerationService.generateProof(task);
+      
+      // Store proof data temporarily
+      await this.repository.updateRecordStatus(task.sha256Hash, {
+        status: 'verified',
+        proofData: {
+          proof: JSON.stringify(proof),
+          publicInputs: JSON.stringify(publicInputs),
+        },
+      });
+
+      console.log(`Proof generated successfully for ${task.sha256Hash}, now publishing...`);
+      
+      // Check if zkApp is deployed
+      const isDeployed = await this.proofPublishingService.isDeployed();
+      if (!isDeployed) {
+        throw new Error('AuthenticityZkApp is not deployed. Please deploy the contract first.');
+      }
+      
+      // Publish the proof to blockchain
+      const transactionId = await this.proofPublishingService.publishProof({
+        sha256Hash: task.sha256Hash,
+        proof,
+        publicInputs,
+        tokenOwnerAddress: task.tokenOwnerAddress,
+        creatorPublicKey: task.publicKey,
+      });
+      
+      // Update record with transaction ID
+      await this.repository.updateRecordStatus(task.sha256Hash, {
+        status: 'verified',
+        transactionId,
+      });
+      
+      console.log(`Proof published successfully for ${task.sha256Hash}, tx: ${transactionId}`);
+      
+    } catch (error: any) {
+      console.error(`Failed to generate/publish proof for ${task.sha256Hash}:`, error);
+      
+      // Update record with error
+      await this.repository.updateRecordStatus(task.sha256Hash, {
+        status: 'failed',
+        errorMessage: error.message,
       });
     }
   }

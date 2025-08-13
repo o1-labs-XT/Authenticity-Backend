@@ -16,7 +16,6 @@ export class AuthenticityRepository {
   private getByHashStmt!: Database.Statement;
   private getStatusStmt!: Database.Statement;
   private deleteFailedStmt!: Database.Statement;
-  private incrementRetryStmt!: Database.Statement;
 
   constructor(db: Database.Database) {
     this.db = db;
@@ -60,12 +59,6 @@ export class AuthenticityRepository {
     this.deleteFailedStmt = this.db.prepare(`
       DELETE FROM authenticity_records 
       WHERE sha256_hash = ? AND status = 'failed'
-    `);
-
-    this.incrementRetryStmt = this.db.prepare(`
-      UPDATE authenticity_records 
-      SET retry_count = retry_count + 1
-      WHERE sha256_hash = ?
     `);
   }
 
@@ -166,14 +159,7 @@ export class AuthenticityRepository {
   }
 
   /**
-   * Increment retry count for a record
-   */
-  async incrementRetryCount(sha256Hash: string): Promise<void> {
-    this.incrementRetryStmt.run(sha256Hash);
-  }
-
-  /**
-   * Get all pending records (for queue processing)
+   * Get all pending records
    */
   async getPendingRecords(limit: number = 10): Promise<AuthenticityRecord[]> {
     const stmt = this.db.prepare(`
@@ -184,20 +170,6 @@ export class AuthenticityRepository {
     `);
 
     return stmt.all(limit) as AuthenticityRecord[];
-  }
-
-  /**
-   * Get failed records that can be retried
-   */
-  async getRetriableRecords(maxRetries: number = 3): Promise<AuthenticityRecord[]> {
-    const stmt = this.db.prepare(`
-      SELECT * FROM authenticity_records 
-      WHERE status = 'failed' 
-        AND retry_count < ?
-      ORDER BY created_at ASC
-    `);
-
-    return stmt.all(maxRetries) as AuthenticityRecord[];
   }
 
   /**

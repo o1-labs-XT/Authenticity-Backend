@@ -6,8 +6,6 @@ import { HashingService } from './services/image/hashing.service';
 import { VerificationService } from './services/image/verification.service';
 import { ProofGenerationService } from './services/zk/proofGeneration.service';
 import { ProofPublishingService } from './services/zk/proofPublishing.service';
-import { ZkCoordinatorService } from './services/zk/coordinator.service';
-import { ProofQueueService } from './services/queue/proofQueue.service';
 import { UploadHandler } from './handlers/upload.handler';
 import { StatusHandler } from './handlers/status.handler';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler';
@@ -62,41 +60,22 @@ async function main() {
       process.env.MINA_NETWORK || 'testnet'
     );
 
-    // Initialize coordinator
-    const zkCoordinatorService = new ZkCoordinatorService(
-      proofGenerationService,
-      proofPublishingService,
-      repository
-    );
-
-    // Initialize queue service
-    const queueService = new ProofQueueService();
-    
-    // Set queue handlers
-    queueService.setProofGenerationHandler(
-      async (task) => await zkCoordinatorService.handleProofGeneration(task)
-    );
-    queueService.setProofPublishingHandler(
-      async (task) => await zkCoordinatorService.handleProofPublishing(task)
-    );
-
     // Initialize handlers
     const uploadHandler = new UploadHandler(
       hashingService,
       verificationService,
       repository,
-      queueService
+      proofGenerationService,
+      proofPublishingService
     );
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
 
-    // Pre-compile circuits if enabled
-    // todo: these should share a single compiled instance. o1js internal caching might mitigate this issue 
-    if (process.env.PRECOMPILE === 'true') {
-      console.log('Pre-compiling ZK circuits (this may take a few minutes)...');
-      await zkCoordinatorService.precompile();
-      console.log('✅ Circuits compiled and cached');
-    }
+    // Always compile circuits on startup (must be sequential, not parallel)
+    console.log('Compiling ZK circuits (this may take a few minutes)...');
+    await proofGenerationService.compile();
+    await proofPublishingService.compile();
+    console.log('✅ Circuits compiled and cached');
 
     // Create and start server
     const app = createServer({
@@ -130,9 +109,6 @@ async function main() {
       server.close(() => {
         console.log('HTTP server closed');
       });
-
-      // Clear queue
-      queueService.clearQueue();
       
       // Close database
       dbConnection.close();

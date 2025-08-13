@@ -143,23 +143,6 @@ describe('AuthenticityRepository', () => {
     });
   });
 
-  describe('incrementRetryCount', () => {
-    it('should increment retry count', async () => {
-      const record = createMockAuthenticityRecord();
-      await repository.insertPendingRecord(record);
-      
-      await repository.incrementRetryCount(record.sha256Hash);
-      
-      const updated = await repository.getRecordByHash(record.sha256Hash);
-      expect(updated?.retry_count).toBe(1);
-      
-      await repository.incrementRetryCount(record.sha256Hash);
-      
-      const updated2 = await repository.getRecordByHash(record.sha256Hash);
-      expect(updated2?.retry_count).toBe(2);
-    });
-  });
-
   describe('getPendingRecords', () => {
     it('should return only pending records', async () => {
       const pending1 = createMockAuthenticityRecord({ status: 'pending' });
@@ -188,31 +171,6 @@ describe('AuthenticityRepository', () => {
       
       const records = await repository.getPendingRecords(3);
       expect(records).toHaveLength(3);
-    });
-  });
-
-  describe('getRetriableRecords', () => {
-    it('should return failed records with retry count below max', async () => {
-      const record1 = createMockAuthenticityRecord();
-      const record2 = createMockAuthenticityRecord();
-      
-      await repository.insertPendingRecord(record1);
-      await repository.insertPendingRecord(record2);
-      
-      // Set record1 as failed with 1 retry
-      await repository.updateRecordStatus(record1.sha256Hash, { status: 'failed' });
-      await repository.incrementRetryCount(record1.sha256Hash);
-      
-      // Set record2 as failed with 3 retries
-      await repository.updateRecordStatus(record2.sha256Hash, { status: 'failed' });
-      for (let i = 0; i < 3; i++) {
-        await repository.incrementRetryCount(record2.sha256Hash);
-      }
-      
-      const retriable = await repository.getRetriableRecords(3);
-      
-      expect(retriable).toHaveLength(1);
-      expect(retriable[0].sha256_hash).toBe(record1.sha256Hash);
     });
   });
 

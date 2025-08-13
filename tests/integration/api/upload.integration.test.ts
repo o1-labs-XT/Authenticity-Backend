@@ -8,13 +8,15 @@ import { StatusHandler } from '../../../src/handlers/status.handler';
 import { TokenOwnerHandler } from '../../../src/handlers/tokenOwner.handler';
 import path from 'path';
 import fs from 'fs';
+import sinon from 'sinon';
 
 describe('Upload API Integration', () => {
   let app: Express;
   let mockHashingService: any;
   let mockVerificationService: any;
   let mockRepository: any;
-  let mockQueueService: any;
+  let mockProofGenerationService: any;
+  let mockProofPublishingService: any;
   let testImagePath: string;
 
   beforeEach(() => {
@@ -27,14 +29,25 @@ describe('Upload API Integration', () => {
     mockHashingService = MockServices.createMockHashingService();
     mockVerificationService = MockServices.createMockVerificationService();
     mockRepository = MockServices.createMockRepository();
-    mockQueueService = MockServices.createMockProofQueueService();
+    mockProofGenerationService = {
+      generateProof: sinon.stub().resolves({ proof: 'mock-proof', publicInputs: 'mock-inputs' }),
+      compile: sinon.stub(),
+      isCompiled: sinon.stub().returns(true)
+    };
+    mockProofPublishingService = {
+      publishProof: sinon.stub().resolves('tx-123'),
+      compile: sinon.stub(),
+      isDeployed: sinon.stub().returns(true),
+      isCompiled: sinon.stub().returns(true)
+    };
 
     // Create handlers
     const uploadHandler = new UploadHandler(
       mockHashingService,
       mockVerificationService,
       mockRepository,
-      mockQueueService
+      mockProofGenerationService,
+      mockProofPublishingService
     );
     const statusHandler = new StatusHandler(mockRepository);
     const tokenOwnerHandler = new TokenOwnerHandler(mockRepository);
@@ -58,7 +71,6 @@ describe('Upload API Integration', () => {
       mockHashingService.computeSHA256.returns('test-hash-123');
       mockVerificationService.generateTokenOwnerAddress.returns('B62token-owner-123');
       mockRepository.checkExistingImage.resolves({ exists: false });
-      mockQueueService.enqueueProofGeneration.resolves('task-123');
 
       const response = await request(app)
         .post('/api/upload')

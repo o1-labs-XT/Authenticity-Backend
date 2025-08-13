@@ -8,20 +8,32 @@ describe('UploadHandler', () => {
   let mockHashingService: any;
   let mockVerificationService: any;
   let mockRepository: any;
-  let mockQueueService: any;
+  let mockProofGenerationService: any;
+  let mockProofPublishingService: any;
   let testImage: ReturnType<typeof createTestImage>;
 
   beforeEach(() => {
     mockHashingService = MockServices.createMockHashingService();
     mockVerificationService = MockServices.createMockVerificationService();
     mockRepository = MockServices.createMockRepository();
-    mockQueueService = MockServices.createMockProofQueueService();
+    mockProofGenerationService = {
+      generateProof: sinon.stub(),
+      compile: sinon.stub(),
+      isCompiled: sinon.stub().returns(true)
+    };
+    mockProofPublishingService = {
+      publishProof: sinon.stub(),
+      compile: sinon.stub(),
+      isDeployed: sinon.stub().returns(true),
+      isCompiled: sinon.stub().returns(true)
+    };
     
     uploadHandler = new UploadHandler(
       mockHashingService,
       mockVerificationService,
       mockRepository,
-      mockQueueService
+      mockProofGenerationService,
+      mockProofPublishingService
     );
 
     testImage = createTestImage();
@@ -49,7 +61,11 @@ describe('UploadHandler', () => {
       mockHashingService.computeSHA256.returns('test-hash');
       mockRepository.checkExistingImage.resolves({ exists: false });
       mockVerificationService.generateTokenOwnerAddress.returns('B62token-owner');
-      mockQueueService.enqueueProofGeneration.resolves('task-id');
+      mockProofGenerationService.generateProof.resolves({
+        proof: 'mock-proof',
+        publicInputs: 'mock-inputs'
+      });
+      mockProofPublishingService.publishProof.resolves('tx-123');
 
       await uploadHandler.handleUpload(req, res);
 
@@ -60,7 +76,6 @@ describe('UploadHandler', () => {
         status: 'pending',
       });
       expect(mockRepository.insertPendingRecord.calledOnce).toBe(true);
-      expect(mockQueueService.enqueueProofGeneration.calledOnce).toBe(true);
     });
 
     it('should return error when no image file provided', async () => {
@@ -159,7 +174,6 @@ describe('UploadHandler', () => {
         status: 'duplicate',
       });
       expect(mockRepository.insertPendingRecord.called).toBe(false);
-      expect(mockQueueService.enqueueProofGeneration.called).toBe(false);
     });
 
     it('should return error for invalid signature', async () => {

@@ -5,48 +5,20 @@ import {
 } from 'authenticity-zkapp';
 import { PublicKey, Signature } from 'o1js';
 import { ProofGenerationTask } from '../../types';
+import { zkProgramSingleton } from './zkProgramSingleton';
 import fs from 'fs';
 
 export class ProofGenerationService {
-  private compiled = false;
-  private compiling = false;
 
   constructor() {
     console.log('ProofGenerationService initialized');
   }
 
   /**
-   * Compile the AuthenticityProgram
-   * This should be done once at startup and cached
+   * Compile the AuthenticityProgram using the singleton
    */
   async compile(): Promise<void> {
-    if (this.compiled) {
-      return;
-    }
-
-    if (this.compiling) {
-      // Wait for compilation to complete if already in progress
-      while (this.compiling) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      return;
-    }
-
-    this.compiling = true;
-    
-    try {
-      console.log('Compiling AuthenticityProgram...');
-      const startTime = Date.now();
-      
-      await AuthenticityProgram.compile();
-      
-      const compilationTime = Date.now() - startTime;
-      console.log(`AuthenticityProgram compiled successfully in ${compilationTime}ms`);
-      
-      this.compiled = true;
-    } finally {
-      this.compiling = false;
-    }
+    await zkProgramSingleton.compile();
   }
 
   /**
@@ -59,8 +31,8 @@ export class ProofGenerationService {
   }> {
     console.log(`Generating proof for SHA256: ${task.sha256Hash}`);
     
-    // Ensure program is compiled
-    await this.compile();
+    // Ensure program is compiled using singleton
+    await zkProgramSingleton.compile();
 
     // Parse inputs from the task
     const pubKey = PublicKey.fromBase58(task.publicKey);
@@ -112,7 +84,7 @@ export class ProofGenerationService {
    * Verify a proof (for testing purposes)
    */
   async verifyProof(proof: any): Promise<boolean> {
-    await this.compile();
+    await zkProgramSingleton.compile();
     const isValid = await AuthenticityProgram.verify(proof);
     return isValid;
   }
@@ -121,6 +93,6 @@ export class ProofGenerationService {
    * Get compilation status
    */
   isCompiled(): boolean {
-    return this.compiled;
+    return zkProgramSingleton.isCompiled();
   }
 }

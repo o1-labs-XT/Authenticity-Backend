@@ -13,7 +13,6 @@ export interface AuthenticityRecord {
   verified_at?: string | null;
   transaction_id?: string | null;
   error_message?: string | null;
-  retry_count: number;
   proof_data?: string | null;
 }
 
@@ -47,7 +46,7 @@ export interface StatusUpdate {
 }
 
 /**
- * Task for proof generation queue
+ * Task for proof generation
  */
 export interface ProofGenerationTask {
   sha256Hash: string;
@@ -59,7 +58,7 @@ export interface ProofGenerationTask {
 }
 
 /**
- * Task for proof publishing queue
+ * Task for proof publishing
  */
 export interface ProofPublishingTask {
   sha256Hash: string;
@@ -80,29 +79,6 @@ export interface VerificationInputs {
   roundConstant: any; // UInt32 from authenticity-zkapp
 }
 
-/**
- * Queue task structure
- */
-export interface QueueTask {
-  id: string;
-  type: 'generate_proof' | 'publish_proof';
-  payload: ProofGenerationTask | ProofPublishingTask;
-  attempts: number;
-  maxAttempts: number;
-  createdAt: Date;
-  nextAttemptAt?: Date;
-}
-
-/**
- * Queue metrics for monitoring
- */
-export interface QueueMetrics {
-  pending: number;
-  processing: number;
-  completed: number;
-  failed: number;
-  avgProcessingTime: number;
-}
 
 /**
  * API response for upload endpoint
@@ -140,7 +116,6 @@ export interface ErrorResponse {
     code: string;
     message: string;
     field?: string;
-    retryable?: boolean;
   };
 }
 
