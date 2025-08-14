@@ -1,5 +1,5 @@
 import { AuthenticityZkApp } from 'authenticity-zkapp';
-import { Mina, PublicKey, PrivateKey, AccountUpdate, Field, fetchAccount } from 'o1js';
+import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount } from 'o1js';
 import { ProofPublishingTask } from '../../types/index.js';
 
 export class ProofPublishingService {
