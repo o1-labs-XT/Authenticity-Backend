@@ -29,8 +29,7 @@ async function main() {
       // For local development, use test accounts
       const testAccounts = Local.testAccounts;
       if (testAccounts && testAccounts.length >= 3) {
-          process.env.FEE_PAYER_PRIVATE_KEY = testAccounts[1].key.toBase58();
-          process.env.DEPLOYER_PRIVATE_KEY = testAccounts[0].key.toBase58();
+          process.env.FEE_PAYER_PRIVATE_KEY = testAccounts[1].key.toBase58(); 
       }
     }
 
@@ -50,7 +49,6 @@ async function main() {
     const proofGenerationService = new ProofGenerationService();
     const proofPublishingService = new ProofPublishingService(
       process.env.ZKAPP_ADDRESS || '',
-      process.env.DEPLOYER_PRIVATE_KEY || '',
       process.env.FEE_PAYER_PRIVATE_KEY || '',
       process.env.MINA_NETWORK || 'testnet'
     );

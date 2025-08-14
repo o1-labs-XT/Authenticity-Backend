@@ -6,18 +6,15 @@ export class ProofPublishingService {
   private zkApp: AuthenticityZkApp | null = null;
   private compiled = false;
   private compiling = false;
-  private zkAppAddress: string;
-  private deployerKey: string;
+  private zkAppAddress: string; 
   private feePayerKey: string;
 
   constructor(
-    zkAppAddress: string,
-    deployerKey: string,
+    zkAppAddress: string, 
     feePayerKey: string,
     network: string = 'testnet'
   ) {
-    this.zkAppAddress = zkAppAddress;
-    this.deployerKey = deployerKey;
+    this.zkAppAddress = zkAppAddress; 
     this.feePayerKey = feePayerKey;
 
     // Initialize network

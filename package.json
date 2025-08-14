@@ -28,8 +28,7 @@
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "multer": "^2.0.2",
-    "o1js": "^2.8.0",
-    "sqlite3": "^5.1.7"
+    "o1js": "^2.8.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
