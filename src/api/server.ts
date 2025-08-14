@@ -2,14 +2,14 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import { createUploadRoutes } from './routes/upload.routes';
-import { createStatusRoutes } from './routes/status.routes';
-import { createTokenOwnerRoutes } from './routes/tokenOwner.routes';
-import { errorMiddleware } from './middleware/error.middleware';
-import { loggingMiddleware } from './middleware/logging.middleware';
-import { UploadHandler } from '../handlers/upload.handler';
-import { StatusHandler } from '../handlers/status.handler';
-import { TokenOwnerHandler } from '../handlers/tokenOwner.handler';
+import { createUploadRoutes } from './routes/upload.routes.js';
+import { createStatusRoutes } from './routes/status.routes.js';
+import { createTokenOwnerRoutes } from './routes/tokenOwner.routes.js';
+import { errorMiddleware } from './middleware/error.middleware.js';
+import { loggingMiddleware } from './middleware/logging.middleware.js';
+import { UploadHandler } from '../handlers/upload.handler.js';
+import { StatusHandler } from '../handlers/status.handler.js';
+import { TokenOwnerHandler } from '../handlers/tokenOwner.handler.js';
 
 export interface ServerDependencies {
   uploadHandler: UploadHandler;

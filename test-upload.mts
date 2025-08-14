@@ -3,12 +3,15 @@ import fs from 'fs';
 import path from 'path';
 import FormData from 'form-data';
 import axios from 'axios';
+import dotenv from 'dotenv';
+
 
 // Import o1js for Mina keypair generation and signing
 import { PrivateKey, Signature } from 'o1js';
 // Import prepareImageVerification from authenticity-zkapp
 import { AuthenticityProgram, AuthenticityInputs, FinalRoundInputs, prepareImageVerification, AuthenticityZkApp, hashImageOffCircuit, computeOnChainCommitment } from 'authenticity-zkapp';
 
+dotenv.config();
  
 // Configuration
 const API_URL = process.env.API_URL || 'http://localhost:3000';

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { AuthenticityRepository } from '../db/repositories/authenticity.repository';
-import { StatusResponse, ErrorResponse } from '../types';
+import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { StatusResponse, ErrorResponse } from '../types/index.js';
 
 export class StatusHandler {
   constructor(private repository: AuthenticityRepository) {}

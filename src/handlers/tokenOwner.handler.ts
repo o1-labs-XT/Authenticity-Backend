@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { AuthenticityRepository } from '../db/repositories/authenticity.repository';
-import { TokenOwnerResponse, ErrorResponse } from '../types';
+import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { TokenOwnerResponse, ErrorResponse } from '../types/index.js';
 
 export class TokenOwnerHandler {
   constructor(private repository: AuthenticityRepository) {}

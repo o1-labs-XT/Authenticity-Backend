@@ -4,8 +4,8 @@ import {
   FinalRoundInputs
 } from 'authenticity-zkapp';
 import { PublicKey, Signature, PrivateKey } from 'o1js';
-import { ProofGenerationTask } from '../../types';
-import { zkProgramSingleton } from './zkProgramSingleton';
+import { ProofGenerationTask } from '../../types/index.js';
+import { zkProgramSingleton } from './zkProgramSingleton.js';
 import fs from 'fs';
 
 export class ProofGenerationService {

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { TokenOwnerHandler } from '../../handlers/tokenOwner.handler';
+import { TokenOwnerHandler } from '../../handlers/tokenOwner.handler.js';
 
 export function createTokenOwnerRoutes(tokenOwnerHandler: TokenOwnerHandler): Router {
   const router = Router();

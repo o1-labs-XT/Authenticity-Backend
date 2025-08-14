@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import crypto from 'crypto';
-import { UploadHandler } from '../../handlers/upload.handler';
+import { UploadHandler } from '../../handlers/upload.handler.js';
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({

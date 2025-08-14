@@ -4,7 +4,7 @@ import {
   CreateAuthenticityRecordInput,
   ExistingImageResult,
   StatusUpdate,
-} from '../../types';
+} from '../../types/index.js';
 
 export class AuthenticityRepository {
   private db: Database.Database;

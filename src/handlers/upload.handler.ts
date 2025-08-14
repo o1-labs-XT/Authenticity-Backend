@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
-import { HashingService } from '../services/image/hashing.service';
-import { VerificationService } from '../services/image/verification.service';
-import { AuthenticityRepository } from '../db/repositories/authenticity.repository';
-import { ProofGenerationService } from '../services/zk/proofGeneration.service';
-import { ProofPublishingService } from '../services/zk/proofPublishing.service';
-import { UploadResponse, ErrorResponse, ProofGenerationTask } from '../types';
+import { HashingService } from '../services/image/hashing.service.js';
+import { VerificationService } from '../services/image/verification.service.js';
+import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { ProofGenerationService } from '../services/zk/proofGeneration.service.js';
+import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
+import { UploadResponse, ErrorResponse, ProofGenerationTask } from '../types/index.js';
 import fs from 'fs';
 
 export class UploadHandler {

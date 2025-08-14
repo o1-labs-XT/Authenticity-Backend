@@ -1,6 +1,6 @@
 import { AuthenticityZkApp } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, Field, fetchAccount } from 'o1js';
-import { ProofPublishingTask } from '../../types';
+import { ProofPublishingTask } from '../../types/index.js';
 
 export class ProofPublishingService {
   private zkApp: AuthenticityZkApp | null = null;

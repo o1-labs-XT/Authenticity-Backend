@@ -1,7 +1,7 @@
 import { prepareImageVerification, AuthenticityInputs, FinalRoundInputs } from 'authenticity-zkapp';
 import { Signature, PublicKey, Field, PrivateKey } from 'o1js';
 import fs from 'fs';
-import { VerificationInputs } from '../../types';
+import { VerificationInputs } from '../../types/index.js';
 
 export class VerificationService {
   /**

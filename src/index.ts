@@ -1,27 +1,27 @@
 import dotenv from 'dotenv';
-import { createServer } from './api/server';
-import { DatabaseConnection } from './db/database';
-import { AuthenticityRepository } from './db/repositories/authenticity.repository';
-import { HashingService } from './services/image/hashing.service';
-import { VerificationService } from './services/image/verification.service';
-import { ProofGenerationService } from './services/zk/proofGeneration.service';
-import { ProofPublishingService } from './services/zk/proofPublishing.service';
-import { UploadHandler } from './handlers/upload.handler';
-import { StatusHandler } from './handlers/status.handler';
-import { TokenOwnerHandler } from './handlers/tokenOwner.handler';
+import { createServer } from './api/server.js';
+import { DatabaseConnection } from './db/database.js';
+import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
+import { HashingService } from './services/image/hashing.service.js';
+import { VerificationService } from './services/image/verification.service.js';
+import { ProofGenerationService } from './services/zk/proofGeneration.service.js';
+import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
+import { UploadHandler } from './handlers/upload.handler.js';
+import { StatusHandler } from './handlers/status.handler.js';
+import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
 import { Mina } from 'o1js';
 
 // Load environment variables
 dotenv.config();
 
 async function main() {
-  console.log('🚀 Starting Provenance Backend...');
+  console.log('🚀 Starting Authenticity Backend...');
   console.log(`Environment: ${process.env.NODE_ENV}`);
   console.log(`Network: ${process.env.MINA_NETWORK || 'local'}`);
 
   try {
     // Initialize local Mina network for tests
-    if (process.env.MINA_NETWORK === '') {
+    if (process.env.MINA_NETWORK === 'local') {
       console.log('Initializing local Mina blockchain...');
       const Local = await Mina.LocalBlockchain({ proofsEnabled: true });
       Mina.setActiveInstance(Local);
@@ -29,13 +29,8 @@ async function main() {
       // For local development, use test accounts
       const testAccounts = Local.testAccounts;
       if (testAccounts && testAccounts.length >= 3) {
-        // Use test accounts if no keys are configured
-        if (!process.env.DEPLOYER_PRIVATE_KEY) {
-          process.env.DEPLOYER_PRIVATE_KEY = testAccounts[0].key.toBase58();
-        }
-        if (!process.env.FEE_PAYER_PRIVATE_KEY) {
           process.env.FEE_PAYER_PRIVATE_KEY = testAccounts[1].key.toBase58();
-        }
+          process.env.DEPLOYER_PRIVATE_KEY = testAccounts[0].key.toBase58();
       }
     }
 
@@ -71,8 +66,7 @@ async function main() {
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
 
-    // Always compile circuits on startup (must be sequential, not parallel)
-    console.log('Compiling ZK circuits (this may take a few minutes)...');
+    console.log('Compiling ZK circuits...');
     await proofGenerationService.compile();
     await proofPublishingService.compile();
     console.log('✅ Circuits compiled and cached');

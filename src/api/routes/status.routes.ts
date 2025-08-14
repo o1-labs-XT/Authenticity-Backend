@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { StatusHandler } from '../../handlers/status.handler';
+import { StatusHandler } from '../../handlers/status.handler.js';
 
 export function createStatusRoutes(statusHandler: StatusHandler): Router {
   const router = Router();
