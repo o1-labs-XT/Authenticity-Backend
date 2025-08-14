@@ -42,7 +42,7 @@ export interface ExistingImageResult {
  * Status update for an authenticity record
  */
 export interface StatusUpdate {
-  status: 'verified' | 'failed';
+  status?: 'pending' | 'verified' | 'failed';
   transactionId?: string;
   errorMessage?: string;
   proofData?: any;

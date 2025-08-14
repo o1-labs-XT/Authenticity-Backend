@@ -5,7 +5,6 @@ import {
 } from 'authenticity-zkapp';
 import { PublicKey, Signature, PrivateKey } from 'o1js';
 import { ProofGenerationTask } from '../../types/index.js';
-import { zkProgramSingleton } from './zkProgramSingleton.js';
 import fs from 'fs';
 
 export class ProofGenerationService {
@@ -25,12 +24,6 @@ export class ProofGenerationService {
     console.log('ProofGenerationService initialized');
   }
 
-  /**
-   * Compile the AuthenticityProgram using the singleton
-   */
-  async compile(): Promise<void> {
-    await zkProgramSingleton.compile();
-  }
 
   /**
    * Generate a proof of authenticity for an image
@@ -42,8 +35,8 @@ export class ProofGenerationService {
   }> {
     console.log(`Generating proof for SHA256: ${task.sha256Hash}`);
     
-    // Ensure program is compiled using singleton
-    await zkProgramSingleton.compile();
+    // Ensure program is compiled (o1js caches this internally)
+    await AuthenticityProgram.compile();
 
     // TEMPORARY: Use generated test credentials instead of user input
     const { pubKey, sig } = this.generateTestCredentials(task.verificationInputs.expectedHash);
@@ -71,8 +64,7 @@ export class ProofGenerationService {
       roundConstant: task.verificationInputs.roundConstant,
     });
 
-    console.log('Generating authenticity proof...');
-    const proofStartTime = Date.now();
+    console.log('Generating authenticity proof...'); 
     
     // Generate proof that:
     // 1. The penultimate SHA256 state correctly produces the signed hash after the final round
@@ -81,10 +73,7 @@ export class ProofGenerationService {
       publicInputs,
       privateInputs
     );
-
-    const proofTime = Date.now() - proofStartTime;
-    console.log(`Proof generated successfully in ${proofTime}ms`);
-
+ 
     // Clean up the image file after proof generation
     if (task.imagePath && fs.existsSync(task.imagePath)) {
       fs.unlinkSync(task.imagePath);
@@ -94,19 +83,4 @@ export class ProofGenerationService {
     return { proof, publicInputs };
   }
 
-  /**
-   * Verify a proof (for testing purposes)
-   */
-  async verifyProof(proof: any): Promise<boolean> {
-    await zkProgramSingleton.compile();
-    const isValid = await AuthenticityProgram.verify(proof);
-    return isValid;
-  }
-
-  /**
-   * Get compilation status
-   */
-  isCompiled(): boolean {
-    return zkProgramSingleton.isCompiled();
-  }
 }

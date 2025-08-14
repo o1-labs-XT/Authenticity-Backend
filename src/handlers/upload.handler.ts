@@ -132,15 +132,6 @@ export class UploadHandler {
       const tokenOwnerPrivate = tokenOwner.privateKey;
       console.log(`Generated token owner address: ${tokenOwnerAddress}`);
 
-      // Insert pending record in database
-      await this.repository.insertPendingRecord({
-        sha256Hash,
-        tokenOwnerAddress,
-        tokenOwnerPrivate,
-        creatorPublicKey: publicKey,
-        signature,
-      });
-
       // Start proof generation and publishing asynchronously
       // We don't await this - it runs in the background
       this.generateAndPublishProof({
@@ -201,12 +192,21 @@ export class UploadHandler {
     try {
       console.log(`Starting proof generation for ${task.sha256Hash}`);
 
+       // Insert pending record in database
+      await this.repository.insertPendingRecord({
+        sha256Hash: task.sha256Hash,
+        tokenOwnerAddress: task.tokenOwnerAddress,
+        tokenOwnerPrivate: task.tokenOwnerPrivateKey,
+        creatorPublicKey: task.publicKey,
+        signature: task.signature,
+      });
+      
       // Generate the proof
       const { proof, publicInputs } = await this.proofGenerationService.generateProof(task);
 
       // Store proof data temporarily
       await this.repository.updateRecordStatus(task.sha256Hash, {
-        status: 'verified',
+        status: 'pending',
         proofData: {
           proof: JSON.stringify(proof),
           publicInputs: JSON.stringify(publicInputs),
@@ -215,13 +215,8 @@ export class UploadHandler {
 
       console.log(`Proof generated successfully for ${task.sha256Hash}, now publishing...`);
 
-      // Check if zkApp is deployed
-      const isDeployed = await this.proofPublishingService.isDeployed();
-      if (!isDeployed) {
-        throw new Error('AuthenticityZkApp is not deployed. Please deploy the contract first.');
-      }
-
       // Publish the proof to blockchain
+      // waits for the transaction to be published on chain
       const transactionId = await this.proofPublishingService.publishProof({
         sha256Hash: task.sha256Hash,
         proof,

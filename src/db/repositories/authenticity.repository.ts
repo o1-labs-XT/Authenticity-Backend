@@ -169,33 +169,4 @@ export class AuthenticityRepository {
     const result = this.deleteRecordStmt.run(sha256Hash);
     return result.changes > 0;
   }
-
-  /**
-   * Get statistics about records
-   */
-  async getStatistics(): Promise<{
-    total: number;
-    pending: number;
-    verified: number;
-    failed: number;
-  }> {
-    const stmt = this.db.prepare(`
-      SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as verified,
-        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-      FROM authenticity_records
-    `);
-
-    const result = stmt.get() as any;
-
-    return {
-      total: result.total || 0,
-      pending: result.pending || 0,
-      verified: result.verified || 0,
-      failed: result.failed || 0,
-    };
-  }
-
 }

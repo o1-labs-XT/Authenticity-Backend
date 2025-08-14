@@ -55,11 +55,6 @@ async function main() {
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
 
-    console.log('Compiling ZK circuits...');
-    await proofGenerationService.compile();
-    await proofPublishingService.compile();
-    console.log('✅ Circuits compiled and cached');
-
     // Create and start server
     const app = createServer({
       uploadHandler,
@@ -76,12 +71,6 @@ async function main() {
       console.log(`   POST /api/upload - Upload image for proof generation`);
       console.log(`   GET  /api/status/:sha256Hash - Check proof status`);
       console.log(`   GET  /api/token-owner/:sha256Hash - Get token owner address`);
-      console.log(`   GET  /api/statistics - View statistics`);
-      
-      if (!process.env.ZKAPP_ADDRESS) {
-        console.warn('⚠️  Warning: ZKAPP_ADDRESS not configured. Publishing will fail.');
-        console.warn('   Deploy the AuthenticityZkApp and set ZKAPP_ADDRESS in .env');
-      }
     });
 
     // Graceful shutdown
@@ -102,11 +91,6 @@ async function main() {
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
-
-    // Log startup statistics
-    const stats = await repository.getStatistics();
-    console.log(`📊 Database statistics:`, stats);
-
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
