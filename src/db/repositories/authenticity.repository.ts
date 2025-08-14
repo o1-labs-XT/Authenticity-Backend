@@ -27,8 +27,8 @@ export class AuthenticityRepository {
     // Prepare all statements at initialization for better performance
     this.insertStmt = this.db.prepare(`
       INSERT INTO authenticity_records 
-      (sha256_hash, token_owner_address, creator_public_key, signature, status)
-      VALUES (?, ?, ?, ?, 'pending')
+      (sha256_hash, token_owner_address, token_owner_private_key, creator_public_key, signature, status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
     `);
 
     this.checkExistingStmt = this.db.prepare(`
@@ -76,6 +76,7 @@ export class AuthenticityRepository {
       this.insertStmt.run(
         record.sha256Hash,
         record.tokenOwnerAddress,
+        record.tokenOwnerPrivate,
         record.creatorPublicKey,
         record.signature
       );

@@ -11,14 +11,14 @@ import fs from 'fs';
 export class ProofGenerationService {
 
   // TEMPORARY: Test function to generate credentials - DELETE THIS LATER
-  private generateTestCredentials(expectedHash: any): { pubKey: PublicKey; sig: Signature } {
+  private generateTestCredentials(expectedHash: any): { pubKey: PublicKey; sig: Signature; privKey: PrivateKey } {
     const testPrivateKey = PrivateKey.random();
     const testPublicKey = testPrivateKey.toPublicKey();
     const testSignature = Signature.create(
       testPrivateKey,
       expectedHash.toFields()
     );
-    return { pubKey: testPublicKey, sig: testSignature };
+    return { pubKey: testPublicKey, sig: testSignature, privKey: testPrivateKey };
   }
 
   constructor() {
@@ -39,6 +39,7 @@ export class ProofGenerationService {
   async generateProof(task: ProofGenerationTask): Promise<{
     proof: any;
     publicInputs: AuthenticityInputs;
+    creatorPrivateKey: string;
   }> {
     console.log(`Generating proof for SHA256: ${task.sha256Hash}`);
     
@@ -46,7 +47,7 @@ export class ProofGenerationService {
     await zkProgramSingleton.compile();
 
     // TEMPORARY: Use generated test credentials instead of user input
-    const { pubKey, sig } = this.generateTestCredentials(task.verificationInputs.expectedHash);
+    const { pubKey, sig, privKey } = this.generateTestCredentials(task.verificationInputs.expectedHash);
     
     // Original code (disabled for testing):
     // const pubKey = PublicKey.fromBase58(task.publicKey);
@@ -91,7 +92,7 @@ export class ProofGenerationService {
       console.log(`Cleaned up image file: ${task.imagePath}`);
     }
 
-    return { proof, publicInputs };
+    return { proof, publicInputs, creatorPrivateKey: privKey.toBase58() };
   }
 
   /**

@@ -6,7 +6,9 @@ import { Field } from 'o1js';
 export interface AuthenticityRecord {
   sha256_hash: string;
   token_owner_address: string;
+  token_owner_private_key?: string | null;
   creator_public_key: string;
+  creator_private_key?: string | null;
   signature: string;
   status: 'pending' | 'verified' | 'failed';
   created_at: string;
@@ -22,6 +24,7 @@ export interface AuthenticityRecord {
 export interface CreateAuthenticityRecordInput {
   sha256Hash: string;
   tokenOwnerAddress: string;
+  tokenOwnerPrivate: string;
   creatorPublicKey: string;
   signature: string;
 }
@@ -51,6 +54,7 @@ export interface StatusUpdate {
 export interface ProofGenerationTask {
   sha256Hash: string;
   tokenOwnerAddress: string;
+  tokenOwnerPrivateKey: string;
   publicKey: string;
   signature: string;
   verificationInputs: VerificationInputs;
@@ -65,7 +69,9 @@ export interface ProofPublishingTask {
   proof: any; // AuthenticityProof
   publicInputs: any; // AuthenticityInputs
   tokenOwnerAddress: string;
+  tokenOwnerPrivateKey: string;
   creatorPublicKey: string;
+  creatorPrivateKey?: string; // Optional for now since it's generated in proof generation
 }
 
 /**
@@ -78,7 +84,6 @@ export interface VerificationInputs {
   messageWord: any; // UInt32 from authenticity-zkapp
   roundConstant: any; // UInt32 from authenticity-zkapp
 }
-
 
 /**
  * API response for upload endpoint
@@ -118,4 +123,3 @@ export interface ErrorResponse {
     field?: string;
   };
 }
-

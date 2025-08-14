@@ -1,8 +1,4 @@
-import { 
-  prepareImageVerification,
-  AuthenticityInputs,
-  FinalRoundInputs
-} from 'authenticity-zkapp';
+import { prepareImageVerification, AuthenticityInputs, FinalRoundInputs } from 'authenticity-zkapp';
 import { Signature, PublicKey, Field, PrivateKey } from 'o1js';
 import fs from 'fs';
 import { VerificationInputs } from '../../types';
@@ -16,7 +12,7 @@ export class VerificationService {
     // Use the prepareImageVerification function from authenticity-zkapp
     // This extracts the penultimate SHA256 state needed for the ZK proof
     const inputs = prepareImageVerification(imagePath);
-    
+
     return {
       expectedHash: inputs.expectedHash,
       penultimateState: inputs.penultimateState,
@@ -33,7 +29,7 @@ export class VerificationService {
     // Write to temporary file since prepareImageVerification expects a path
     const tempPath = `/tmp/temp_image_${Date.now()}.tmp`;
     fs.writeFileSync(tempPath, imageBuffer);
-    
+
     try {
       const inputs = this.prepareForVerification(tempPath);
       return inputs;
@@ -49,11 +45,7 @@ export class VerificationService {
    * Verify signature matches the image hash
    * This is done outside the circuit for performance
    */
-  verifySignature(
-    signature: Signature,
-    expectedHash: Field,
-    publicKey: PublicKey
-  ): boolean {
+  verifySignature(signature: Signature, expectedHash: Field, publicKey: PublicKey): boolean {
     // Verify the signature on the expected hash
     // The signature should be on the SHA256 hash of the image
     return signature.verify(publicKey, expectedHash.toFields()).toBoolean();
@@ -77,9 +69,12 @@ export class VerificationService {
    * Generate random token owner address
    * This creates a new random keypair for token ownership
    */
-  generateTokenOwnerAddress(): string {
+  generateTokenOwnerAddress(): { privateKey: string; publicKey: string } {
     const randomKey = PrivateKey.random();
-    return randomKey.toPublicKey().toBase58();
+    return {
+      privateKey: randomKey.toBase58(),
+      publicKey: randomKey.toPublicKey().toBase58(),
+    };
   }
 
   /**
