@@ -1,14 +1,9 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export interface DatabaseConfig {
   path: string;
-  maxConnections?: number;
   busyTimeout?: number;
   walMode?: boolean;
   verbose?: boolean;
@@ -62,70 +57,39 @@ export class DatabaseConnection {
   }
 
   private runMigrations(): void {
-    console.log('Running database migrations...');
+    console.log('Initializing database schema...');
 
-    // Create migrations table if it doesn't exist
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS migrations (
-        id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL UNIQUE,
-        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Get list of migration files
-    const migrationsDir = path.join(__dirname, 'migrations');
-    const migrationFiles = fs
-      .readdirSync(migrationsDir)
-      .filter((file) => file.endsWith('.sql'))
-      .sort();
-
-    // Check which migrations have been applied
-    const appliedMigrations = this.db
-      .prepare('SELECT name FROM migrations')
-      .all()
-      .map((row: any) => row.name);
-
-    // Apply pending migrations
-    for (const migrationFile of migrationFiles) {
-      if (!appliedMigrations.includes(migrationFile)) {
-        console.log(`Applying migration: ${migrationFile}`);
+    // Create the complete schema in a single transaction
+    this.db.transaction(() => {
+      // Main table for authenticity records with all columns
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS authenticity_records (
+          sha256_hash TEXT PRIMARY KEY,
+          token_owner_address TEXT NOT NULL,
+          token_owner_private_key TEXT,
+          creator_public_key TEXT NOT NULL,
+          creator_private_key TEXT,
+          signature TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('pending', 'verified', 'failed')),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          verified_at TIMESTAMP,
+          transaction_id TEXT,
+          error_message TEXT,
+          proof_data TEXT  -- JSON serialized proof data
+        );
         
-        const migrationPath = path.join(migrationsDir, migrationFile);
-        const migration = fs.readFileSync(migrationPath, 'utf-8');
+        -- Indexes for performance
+        CREATE INDEX IF NOT EXISTS idx_status ON authenticity_records(status);
+        CREATE INDEX IF NOT EXISTS idx_token_owner ON authenticity_records(token_owner_address);
+        CREATE INDEX IF NOT EXISTS idx_created_at ON authenticity_records(created_at);
+      `);
+    })();
 
-        // Execute migration in a transaction
-        this.db.transaction(() => {
-          this.db.exec(migration);
-          this.db
-            .prepare('INSERT INTO migrations (name) VALUES (?)')
-            .run(migrationFile);
-        })();
-
-        console.log(`Migration ${migrationFile} applied successfully`);
-      }
-    }
-
-    console.log('All migrations completed');
+    console.log('Database schema initialized successfully');
   }
 
   getDb(): Database.Database {
     return this.db;
-  }
-
-  /**
-   * Execute a function within a transaction
-   */
-  transaction<T>(fn: () => T): T {
-    const transaction = this.db.transaction(fn);
-    return transaction();
-  }
-
-  /**
-   * Prepare a statement for repeated execution
-   */
-  prepare(sql: string): Database.Statement {
-    return this.db.prepare(sql);
   }
 
   /**

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { HashingService } from '../services/image/hashing.service.js';
+import { hashImageOffCircuit } from 'authenticity-zkapp';
 import { VerificationService } from '../services/image/verification.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { ProofGenerationService } from '../services/zk/proofGeneration.service.js';
@@ -9,7 +9,6 @@ import fs from 'fs';
 
 export class UploadHandler {
   constructor(
-    private hashingService: HashingService,
     private verificationService: VerificationService,
     private repository: AuthenticityRepository,
     private proofGenerationService: ProofGenerationService,
@@ -81,7 +80,7 @@ export class UploadHandler {
       }
 
       // Compute SHA256 hash of image
-      const sha256Hash = this.hashingService.computeSHA256(imageBuffer);
+      const sha256Hash = hashImageOffCircuit(imageBuffer);
       console.log(`Image SHA256: ${sha256Hash}`);
 
       // Check for existing record (duplicate detection)

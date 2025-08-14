@@ -60,23 +60,4 @@ export class StatusHandler {
       });
     }
   }
-
-  /**
-   * Get detailed statistics (optional admin endpoint)
-   */
-  async getStatistics(req: Request, res: Response): Promise<void> {
-    try {
-      const stats = await this.repository.getStatistics();
-      res.json(stats);
-    } catch (error: any) {
-      console.error('Statistics handler error:', error);
-      
-      res.status(500).json({
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to retrieve statistics',
-        },
-      });
-    }
-  }
 }

@@ -2,18 +2,19 @@ import { UploadHandler } from '../../../src/handlers/upload.handler';
 import { MockServices, MockHttp } from '../../utils/mocks';
 import { createTestImage } from '../../utils/test-helpers';
 import sinon from 'sinon';
+import * as AuthenticityZkapp from 'authenticity-zkapp';
 
 describe('UploadHandler', () => {
   let uploadHandler: UploadHandler;
-  let mockHashingService: any;
   let mockVerificationService: any;
+  let hashImageOffCircuitStub: sinon.SinonStub;
   let mockRepository: any;
   let mockProofGenerationService: any;
   let mockProofPublishingService: any;
   let testImage: ReturnType<typeof createTestImage>;
 
   beforeEach(() => {
-    mockHashingService = MockServices.createMockHashingService();
+    hashImageOffCircuitStub = sinon.stub(AuthenticityZkapp, 'hashImageOffCircuit').returns('mock-sha256-hash');
     mockVerificationService = MockServices.createMockVerificationService();
     mockRepository = MockServices.createMockRepository();
     mockProofGenerationService = {
@@ -29,7 +30,6 @@ describe('UploadHandler', () => {
     };
     
     uploadHandler = new UploadHandler(
-      mockHashingService,
       mockVerificationService,
       mockRepository,
       mockProofGenerationService,
@@ -37,6 +37,10 @@ describe('UploadHandler', () => {
     );
 
     testImage = createTestImage();
+  });
+
+  afterEach(() => {
+    sinon.restore();
   });
 
   afterEach(() => {
@@ -58,7 +62,7 @@ describe('UploadHandler', () => {
       });
       const res = MockHttp.createMockResponse();
 
-      mockHashingService.computeSHA256.returns('test-hash');
+      hashImageOffCircuitStub.returns('test-hash');
       mockRepository.checkExistingImage.resolves({ exists: false });
       mockVerificationService.generateTokenOwnerAddress.returns('B62token-owner');
       mockProofGenerationService.generateProof.resolves({
@@ -160,7 +164,7 @@ describe('UploadHandler', () => {
       });
       const res = MockHttp.createMockResponse();
 
-      mockHashingService.computeSHA256.returns('existing-hash');
+      hashImageOffCircuitStub.returns('existing-hash');
       mockRepository.checkExistingImage.resolves({
         exists: true,
         tokenOwnerAddress: 'B62existing-token-owner',
@@ -189,7 +193,7 @@ describe('UploadHandler', () => {
       });
       const res = MockHttp.createMockResponse();
 
-      mockHashingService.computeSHA256.returns('test-hash');
+      hashImageOffCircuitStub.returns('test-hash');
       mockRepository.checkExistingImage.resolves({ exists: false });
       mockVerificationService.verifySignature.returns(false);
 
@@ -246,7 +250,7 @@ describe('UploadHandler', () => {
       });
       const res = MockHttp.createMockResponse();
 
-      mockHashingService.computeSHA256.throws(new Error('Hashing failed'));
+      hashImageOffCircuitStub.throws(new Error('Hashing failed'));
 
       await uploadHandler.handleUpload(req, res);
 

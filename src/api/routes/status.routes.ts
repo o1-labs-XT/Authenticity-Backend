@@ -35,30 +35,5 @@ export function createStatusRoutes(statusHandler: StatusHandler): Router {
     }
   );
 
-  /**
-   * GET /api/statistics
-   * 
-   * Get overall statistics (optional admin endpoint)
-   * 
-   * Response:
-   * - 200: {
-   *     total: number,
-   *     pending: number,
-   *     verified: number,
-   *     failed: number
-   *   }
-   * - 500: Internal error
-   */
-  router.get(
-    '/statistics',
-    async (req, res, next) => {
-      try {
-        await statusHandler.getStatistics(req, res);
-      } catch (error) {
-        next(error);
-      }
-    }
-  );
-
   return router;
 }

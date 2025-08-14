@@ -29,17 +29,6 @@ export class MockMinaTypes {
  * Create mock services for testing
  */
 export class MockServices {
-  static createMockHashingService() {
-    return {
-      computeSHA256: sinon.stub().returns('mock-sha256-hash'),
-      sha256ToField: sinon.stub().returns(Field(1)),
-      computePoseidonHash: sinon.stub().returns(Field(2)),
-      computeOnChainCommitment: sinon.stub().returns(Field(3)),
-      verifyImageHash: sinon.stub().returns(true),
-      fieldToHex: sinon.stub().returns('0x123'),
-    };
-  }
-
   static createMockVerificationService() {
     return {
       prepareForVerification: sinon.stub().returns({
@@ -93,18 +82,13 @@ export class MockServices {
       getRecordByHash: sinon.stub().resolves(null),
       getRecordStatus: sinon.stub().resolves(null),
       deleteFailedRecord: sinon.stub().resolves(false),
-      incrementRetryCount: sinon.stub().resolves(),
-      getPendingRecords: sinon.stub().resolves([]),
-      getRetriableRecords: sinon.stub().resolves([]),
+      deleteRecord: sinon.stub().resolves(false),
       getStatistics: sinon.stub().resolves({
         total: 0,
         pending: 0,
         verified: 0,
         failed: 0,
       }),
-      cleanupOldFailedRecords: sinon.stub().resolves(0),
-      executeQuery: sinon.stub().resolves([]),
-      transaction: sinon.stub().callsFake((fn) => fn()),
     };
   }
 

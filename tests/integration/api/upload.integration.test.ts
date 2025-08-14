@@ -9,10 +9,11 @@ import { TokenOwnerHandler } from '../../../src/handlers/tokenOwner.handler';
 import path from 'path';
 import fs from 'fs';
 import sinon from 'sinon';
+import * as AuthenticityZkapp from 'authenticity-zkapp';
 
 describe('Upload API Integration', () => {
   let app: Express;
-  let mockHashingService: any;
+  let hashImageOffCircuitStub: sinon.SinonStub;
   let mockVerificationService: any;
   let mockRepository: any;
   let mockProofGenerationService: any;
@@ -26,7 +27,7 @@ describe('Upload API Integration', () => {
     fs.writeFileSync(testImagePath, testImageBuffer);
 
     // Create mocks
-    mockHashingService = MockServices.createMockHashingService();
+    hashImageOffCircuitStub = sinon.stub(AuthenticityZkapp, 'hashImageOffCircuit').returns('mock-sha256-hash');
     mockVerificationService = MockServices.createMockVerificationService();
     mockRepository = MockServices.createMockRepository();
     mockProofGenerationService = {
@@ -43,7 +44,6 @@ describe('Upload API Integration', () => {
 
     // Create handlers
     const uploadHandler = new UploadHandler(
-      mockHashingService,
       mockVerificationService,
       mockRepository,
       mockProofGenerationService,
@@ -61,6 +61,7 @@ describe('Upload API Integration', () => {
   });
 
   afterEach(() => {
+    sinon.restore();
     if (fs.existsSync(testImagePath)) {
       fs.unlinkSync(testImagePath);
     }
@@ -68,7 +69,7 @@ describe('Upload API Integration', () => {
 
   describe('POST /api/upload', () => {
     it('should successfully upload an image', async () => {
-      mockHashingService.computeSHA256.returns('test-hash-123');
+      hashImageOffCircuitStub.returns('test-hash-123');
       mockVerificationService.generateTokenOwnerAddress.returns('B62token-owner-123');
       mockRepository.checkExistingImage.resolves({ exists: false });
 
@@ -120,7 +121,7 @@ describe('Upload API Integration', () => {
     });
 
     it('should handle duplicate images', async () => {
-      mockHashingService.computeSHA256.returns('existing-hash');
+      hashImageOffCircuitStub.returns('existing-hash');
       mockRepository.checkExistingImage.resolves({
         exists: true,
         tokenOwnerAddress: 'B62existing-owner',
@@ -140,7 +141,7 @@ describe('Upload API Integration', () => {
     });
 
     it('should return 400 for invalid signature', async () => {
-      mockHashingService.computeSHA256.returns('test-hash');
+      hashImageOffCircuitStub.returns('test-hash');
       mockRepository.checkExistingImage.resolves({ exists: false });
       mockVerificationService.verifySignature.returns(false);
 

@@ -2,7 +2,6 @@ import dotenv from 'dotenv';
 import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
-import { HashingService } from './services/image/hashing.service.js';
 import { VerificationService } from './services/image/verification.service.js';
 import { ProofGenerationService } from './services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
@@ -22,15 +21,9 @@ async function main() {
   try {
     // Initialize local Mina network for tests
     if (process.env.MINA_NETWORK === 'local') {
-      console.log('Initializing local Mina blockchain...');
       const Local = await Mina.LocalBlockchain({ proofsEnabled: true });
       Mina.setActiveInstance(Local);
-      
-      // For local development, use test accounts
-      const testAccounts = Local.testAccounts;
-      if (testAccounts && testAccounts.length >= 3) {
-          process.env.FEE_PAYER_PRIVATE_KEY = testAccounts[1].key.toBase58(); 
-      }
+      process.env.FEE_PAYER_PRIVATE_KEY = Local.testAccounts[1].key.toBase58(); 
     }
 
     // Initialize database
@@ -42,7 +35,6 @@ async function main() {
 
     // Initialize services
     console.log('Initializing services...');
-    const hashingService = new HashingService();
     const verificationService = new VerificationService();
     
     // Initialize ZK services
@@ -55,7 +47,6 @@ async function main() {
 
     // Initialize handlers
     const uploadHandler = new UploadHandler(
-      hashingService,
       verificationService,
       repository,
       proofGenerationService,

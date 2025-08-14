@@ -171,20 +171,6 @@ export class AuthenticityRepository {
   }
 
   /**
-   * Get all pending records
-   */
-  async getPendingRecords(limit: number = 10): Promise<AuthenticityRecord[]> {
-    const stmt = this.db.prepare(`
-      SELECT * FROM authenticity_records 
-      WHERE status = 'pending' 
-      ORDER BY created_at ASC 
-      LIMIT ?
-    `);
-
-    return stmt.all(limit) as AuthenticityRecord[];
-  }
-
-  /**
    * Get statistics about records
    */
   async getStatistics(): Promise<{
@@ -212,33 +198,4 @@ export class AuthenticityRepository {
     };
   }
 
-  /**
-   * Clean up old failed records
-   */
-  async cleanupOldFailedRecords(daysOld: number = 7): Promise<number> {
-    const stmt = this.db.prepare(`
-      DELETE FROM authenticity_records 
-      WHERE status = 'failed' 
-        AND created_at < datetime('now', '-' || ? || ' days')
-    `);
-
-    const result = stmt.run(daysOld);
-    return result.changes;
-  }
-
-  /**
-   * Execute a custom query (for complex operations)
-   */
-  async executeQuery<T>(sql: string, params: any[] = []): Promise<T[]> {
-    const stmt = this.db.prepare(sql);
-    return stmt.all(...params) as T[];
-  }
-
-  /**
-   * Execute a transaction (note: better-sqlite3 transactions are synchronous)
-   */
-  transaction<T>(fn: () => T): T {
-    const transaction = this.db.transaction(fn);
-    return transaction();
-  }
 }
