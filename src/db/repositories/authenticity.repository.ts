@@ -8,7 +8,7 @@ import {
 
 export class AuthenticityRepository {
   private db: Database.Database;
-  
+
   // Prepared statements for better performance
   private insertStmt!: Database.Statement;
   private checkExistingStmt!: Database.Statement;
@@ -108,10 +108,7 @@ export class AuthenticityRepository {
   /**
    * Update the status of an authenticity record
    */
-  async updateRecordStatus(
-    sha256Hash: string,
-    update: StatusUpdate
-  ): Promise<void> {
+  async updateRecordStatus(sha256Hash: string, update: StatusUpdate): Promise<void> {
     const result = this.updateStatusStmt.run(
       update.status,
       update.status, // Used in CASE statement
@@ -144,7 +141,7 @@ export class AuthenticityRepository {
     errorMessage?: string;
   } | null> {
     const result = this.getStatusStmt.get(sha256Hash) as any;
-    
+
     if (!result) {
       return null;
     }

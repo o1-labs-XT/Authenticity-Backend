@@ -120,13 +120,7 @@ export class ProofPublishingService {
     const tokenOwner = tokenOwnerPrivate.toPublicKey();
     const feePayer = PrivateKey.fromBase58(this.feePayerKey);
 
-    const creatorPrivate = PrivateKey.fromBase58(task.creatorPrivateKey);
-    // Extract creator from proof's public input
     const creatorPublicKey = task.proof.publicInput.publicKey;
-    const derivedCreatorPubKey = creatorPrivate.toPublicKey();
-    if (!derivedCreatorPubKey.equals(creatorPublicKey).toBoolean()) {
-      throw new Error('Creator private key does not match the public key in the proof');
-    }
 
     console.log('Transaction participants:');
     console.log('- Fee payer:', feePayer.toPublicKey().toBase58());
@@ -139,7 +133,7 @@ export class ProofPublishingService {
       // Create transaction to verify and store the proof on-chain
       const txn = await Mina.transaction({ sender: feePayer.toPublicKey(), fee: 1e9 }, async () => {
         // Fund the new token account
-        // AccountUpdate.fundNewAccount(feePayer.toPublicKey());
+        AccountUpdate.fundNewAccount(feePayer.toPublicKey());
 
         // Call verifyAndStore on the zkApp
         // Pass the actual token owner address (not fee payer)
@@ -152,15 +146,8 @@ export class ProofPublishingService {
       console.log('Signing and sending transaction...');
       // Sign with all required parties:
       // 1. Fee payer (for paying fees)
-      // 2. Creator (required by AccountUpdate.createSigned(creator))
-      // 3. Token owner (for the new token account)
+      // 2. Token owner (for the new token account)
       const signers = [feePayer];
-
-      if (creatorPrivate) {
-        signers.push(creatorPrivate);
-      } else {
-        throw new Error('Creator private key is required to sign the transaction');
-      }
 
       signers.push(tokenOwnerPrivate);
 

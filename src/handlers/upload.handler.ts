@@ -203,7 +203,7 @@ export class UploadHandler {
       console.log(`Starting proof generation for ${task.sha256Hash}`);
 
       // Generate the proof
-      const { proof, publicInputs, creatorPrivateKey } = await this.proofGenerationService.generateProof(task);
+      const { proof, publicInputs } = await this.proofGenerationService.generateProof(task);
 
       // Store proof data temporarily
       await this.repository.updateRecordStatus(task.sha256Hash, {
@@ -230,7 +230,6 @@ export class UploadHandler {
         tokenOwnerAddress: task.tokenOwnerAddress,
         tokenOwnerPrivateKey: task.tokenOwnerPrivateKey,
         creatorPublicKey: task.publicKey,
-        creatorPrivateKey,
       });
 
       // Update record with transaction ID

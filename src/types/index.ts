@@ -71,7 +71,6 @@ export interface ProofPublishingTask {
   tokenOwnerAddress: string;
   tokenOwnerPrivateKey: string;
   creatorPublicKey: string;
-  creatorPrivateKey?: string; // Optional for now since it's generated in proof generation
 }
 
 /**
