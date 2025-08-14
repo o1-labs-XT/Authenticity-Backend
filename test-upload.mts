@@ -12,7 +12,7 @@ import { AuthenticityProgram, AuthenticityInputs, FinalRoundInputs, prepareImage
  
 // Configuration
 const API_URL = process.env.API_URL || 'http://localhost:3000';
-const IMAGE_PATH = '/Users/hattyhattington/code/o1labs/Authenticity-Zkapp/example/cat.png';
+const IMAGE_PATH = process.env.IMAGE_PATH || './test-image.jpg'; // Update this to your test image
 
 async function main(): Promise<void> {
   try {

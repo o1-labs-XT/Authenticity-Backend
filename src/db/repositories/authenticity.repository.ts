@@ -8,7 +8,7 @@ import {
 
 export class AuthenticityRepository {
   private db: Database.Database;
-  
+
   // Prepared statements for better performance
   private insertStmt!: Database.Statement;
   private checkExistingStmt!: Database.Statement;
@@ -27,8 +27,8 @@ export class AuthenticityRepository {
     // Prepare all statements at initialization for better performance
     this.insertStmt = this.db.prepare(`
       INSERT INTO authenticity_records 
-      (sha256_hash, token_owner_address, creator_public_key, signature, status)
-      VALUES (?, ?, ?, ?, 'pending')
+      (sha256_hash, token_owner_address, token_owner_private_key, creator_public_key, signature, status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
     `);
 
     this.checkExistingStmt = this.db.prepare(`
@@ -76,6 +76,7 @@ export class AuthenticityRepository {
       this.insertStmt.run(
         record.sha256Hash,
         record.tokenOwnerAddress,
+        record.tokenOwnerPrivate,
         record.creatorPublicKey,
         record.signature
       );
@@ -107,10 +108,7 @@ export class AuthenticityRepository {
   /**
    * Update the status of an authenticity record
    */
-  async updateRecordStatus(
-    sha256Hash: string,
-    update: StatusUpdate
-  ): Promise<void> {
+  async updateRecordStatus(sha256Hash: string, update: StatusUpdate): Promise<void> {
     const result = this.updateStatusStmt.run(
       update.status,
       update.status, // Used in CASE statement
@@ -143,7 +141,7 @@ export class AuthenticityRepository {
     errorMessage?: string;
   } | null> {
     const result = this.getStatusStmt.get(sha256Hash) as any;
-    
+
     if (!result) {
       return null;
     }

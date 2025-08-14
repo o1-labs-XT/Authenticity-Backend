@@ -64,13 +64,9 @@ export class UploadHandler {
 
       // Read image buffer
       const imageBuffer = fs.readFileSync(file.path);
-      
+
       // Validate inputs
-      const validation = this.verificationService.validateInputs(
-        publicKey,
-        signature,
-        imageBuffer
-      );
+      const validation = this.verificationService.validateInputs(publicKey, signature, imageBuffer);
 
       if (!validation.valid) {
         res.status(400).json({
@@ -92,10 +88,10 @@ export class UploadHandler {
       const existing = await this.repository.checkExistingImage(sha256Hash);
       if (existing.exists) {
         console.log(`Duplicate image detected: ${sha256Hash}`);
-        
+
         // Clean up uploaded file
         fs.unlinkSync(file.path);
-        
+
         res.json({
           tokenOwnerAddress: existing.tokenOwnerAddress!,
           status: 'duplicate',
@@ -106,11 +102,11 @@ export class UploadHandler {
       // Prepare image verification (extract SHA256 state)
       console.log('Preparing image verification...');
       const verificationInputs = this.verificationService.prepareForVerification(file.path);
-      
+
       // Parse signature and public key
       const sig = this.verificationService.parseSignature(signature);
       const pubKey = this.verificationService.parsePublicKey(publicKey);
-      
+
       // Verify signature matches expected hash (outside circuit for performance)
       const isValid = this.verificationService.verifySignature(
         sig,
@@ -132,13 +128,16 @@ export class UploadHandler {
       }
 
       // Generate random token owner address
-      const tokenOwnerAddress = this.verificationService.generateTokenOwnerAddress();
+      const tokenOwner = this.verificationService.generateTokenOwnerAddress();
+      const tokenOwnerAddress = tokenOwner.publicKey;
+      const tokenOwnerPrivate = tokenOwner.privateKey;
       console.log(`Generated token owner address: ${tokenOwnerAddress}`);
 
       // Insert pending record in database
       await this.repository.insertPendingRecord({
         sha256Hash,
         tokenOwnerAddress,
+        tokenOwnerPrivate,
         creatorPublicKey: publicKey,
         signature,
       });
@@ -148,11 +147,12 @@ export class UploadHandler {
       this.generateAndPublishProof({
         sha256Hash,
         tokenOwnerAddress,
+        tokenOwnerPrivateKey: tokenOwnerPrivate,
         publicKey,
         signature,
         verificationInputs,
         imagePath: file.path,
-      }).catch(error => {
+      }).catch((error) => {
         console.error(`Failed to generate/publish proof for ${sha256Hash}:`, error);
       });
 
@@ -162,10 +162,9 @@ export class UploadHandler {
         sha256Hash,
         status: 'pending',
       });
-
     } catch (error: any) {
       console.error('Upload error:', error);
-      
+
       // Clean up uploaded file if it exists
       if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
@@ -202,10 +201,10 @@ export class UploadHandler {
   private async generateAndPublishProof(task: ProofGenerationTask): Promise<void> {
     try {
       console.log(`Starting proof generation for ${task.sha256Hash}`);
-      
+
       // Generate the proof
       const { proof, publicInputs } = await this.proofGenerationService.generateProof(task);
-      
+
       // Store proof data temporarily
       await this.repository.updateRecordStatus(task.sha256Hash, {
         status: 'verified',
@@ -216,33 +215,33 @@ export class UploadHandler {
       });
 
       console.log(`Proof generated successfully for ${task.sha256Hash}, now publishing...`);
-      
+
       // Check if zkApp is deployed
       const isDeployed = await this.proofPublishingService.isDeployed();
       if (!isDeployed) {
         throw new Error('AuthenticityZkApp is not deployed. Please deploy the contract first.');
       }
-      
+
       // Publish the proof to blockchain
       const transactionId = await this.proofPublishingService.publishProof({
         sha256Hash: task.sha256Hash,
         proof,
         publicInputs,
         tokenOwnerAddress: task.tokenOwnerAddress,
+        tokenOwnerPrivateKey: task.tokenOwnerPrivateKey,
         creatorPublicKey: task.publicKey,
       });
-      
+
       // Update record with transaction ID
       await this.repository.updateRecordStatus(task.sha256Hash, {
         status: 'verified',
         transactionId,
       });
-      
+
       console.log(`Proof published successfully for ${task.sha256Hash}, tx: ${transactionId}`);
-      
     } catch (error: any) {
       console.error(`Failed to generate/publish proof for ${task.sha256Hash}:`, error);
-      
+
       // Delete the failed record to allow retry with same image
       const deleted = await this.repository.deleteRecord(task.sha256Hash);
       if (deleted) {

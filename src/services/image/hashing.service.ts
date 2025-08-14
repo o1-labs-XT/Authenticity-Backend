@@ -1,8 +1,5 @@
 import { Field, Poseidon } from 'o1js';
-import { 
-  hashImageOffCircuit, 
-  computeOnChainCommitment 
-} from 'authenticity-zkapp';
+import { hashImageOffCircuit, computeOnChainCommitment } from 'authenticity-zkapp';
 
 export class HashingService {
   /**
@@ -41,9 +38,9 @@ export class HashingService {
    * Helper function that computes the on-chain commitment directly from image data
    * This combines SHA256 hashing and Poseidon hashing
    */
-  computeOnChainCommitment(imageBuffer: Buffer): Field {
+  async computeOnChainCommitment(imageBuffer: Buffer): Promise<Field> {
     // Use the helper from authenticity-zkapp that combines both operations
-    return computeOnChainCommitment(imageBuffer);
+    return computeOnChainCommitment(imageBuffer).poseidon;
   }
 
   /**
