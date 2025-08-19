@@ -30,24 +30,24 @@ export class ProofGenerationService {
     const pubKey = PublicKey.fromBase58(task.publicKey);
     
     // Handle both signature types
-    let sig: Signature;
+    let signature: Signature;
     if (task.signatureType === 'auro' && typeof task.signature === 'string' && (task.signature.startsWith('{') || task.signature.includes('field'))) {
       // Auro signature (JSON format)
       console.log('Parsing Auro JSON signature for proof generation');
       const sigJson = typeof task.signature === 'string' ? JSON.parse(task.signature) : task.signature;
-      sig = Signature.fromJSON({
+      signature = Signature.fromJSON({
         r: sigJson.field,
         s: sigJson.scalar
       });
     } else {
       // Direct signature (base58 format)
-      sig = Signature.fromBase58(task.signature);
+      signature = Signature.fromBase58(task.signature);
     }
 
     // Create public inputs for the proof
     const publicInputs = new AuthenticityInputs({
       commitment: task.verificationInputs.expectedHash, // SHA256 of the image
-      signature: sig,
+      signature: signature,
       publicKey: pubKey,
     });
 
