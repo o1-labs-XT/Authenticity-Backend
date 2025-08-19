@@ -57,6 +57,7 @@ export interface ProofGenerationTask {
   tokenOwnerPrivateKey: string;
   publicKey: string;
   signature: string;
+  signatureType?: 'direct' | 'auro'; // Added to track signature format
   verificationInputs: VerificationInputs;
   imagePath?: string;
 }
