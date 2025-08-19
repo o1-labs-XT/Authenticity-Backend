@@ -15,7 +15,7 @@ dotenv.config();
 // Configuration
 // const API_URL = 'https://authenticity-backend-production.up.railway.app';
 const API_URL = 'http://localhost:3000';
-const IMAGE_PATH = process.env.IMAGE_PATH || './test-image.jpg'; // Update this to your test image
+const IMAGE_PATH = process.env.IMAGE_PATH || '../../../Desktop/demo.png'; // Update this to your test image
 
 async function main(): Promise<void> {
   try {

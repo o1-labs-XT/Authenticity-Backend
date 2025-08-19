@@ -2,6 +2,7 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+import { config } from '../config/index.js';
 import { createUploadRoutes } from './routes/upload.routes.js';
 import { createStatusRoutes } from './routes/status.routes.js';
 import { createTokenOwnerRoutes } from './routes/tokenOwner.routes.js';
@@ -27,7 +28,7 @@ export function createServer(dependencies: ServerDependencies): Express {
 
   // CORS configuration
   app.use(cors({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: config.corsOrigin,
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }));
@@ -48,7 +49,7 @@ export function createServer(dependencies: ServerDependencies): Express {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      environment: process.env.NODE_ENV,
+      environment: config.nodeEnv,
     });
   });
 
@@ -57,7 +58,7 @@ export function createServer(dependencies: ServerDependencies): Express {
     res.json({
       version: '1.0.0',
       api: 'Provenance Backend API',
-      zkApp: process.env.ZKAPP_ADDRESS || 'not configured',
+      zkApp: config.zkappAddress || 'not configured',
     });
   });
 

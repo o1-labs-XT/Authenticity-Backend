@@ -1,16 +1,15 @@
-import { prepareImageVerification, AuthenticityInputs, FinalRoundInputs } from 'authenticity-zkapp';
-import { Signature, PublicKey, Field, PrivateKey } from 'o1js';
-import fs from 'fs';
+import { prepareImageVerification } from 'authenticity-zkapp';
+import { Signature, PublicKey, Field, PrivateKey, UInt32 } from 'o1js';
 
 /**
  * Verification inputs from prepareImageVerification
  */
 export interface VerificationInputs {
   expectedHash: Field;
-  penultimateState: any[]; // UInt32[] from authenticity-zkapp
-  initialState: any[]; // UInt32[] from authenticity-zkapp
-  messageWord: any; // UInt32 from authenticity-zkapp
-  roundConstant: any; // UInt32 from authenticity-zkapp
+  penultimateState: UInt32[]; // SHA-256 state after round 62
+  initialState: UInt32[]; // Initial SHA-256 state (H0-H7 constants)
+  messageWord: UInt32; // Message word (W_t) for the final round
+  roundConstant: UInt32; // Round constant (K_t) for the final round
 }
 
 export class VerificationService {
@@ -30,25 +29,6 @@ export class VerificationService {
       messageWord: inputs.messageWord,
       roundConstant: inputs.roundConstant,
     };
-  }
-
-  /**
-   * Prepare image from buffer instead of file path
-   */
-  prepareFromBuffer(imageBuffer: Buffer): VerificationInputs {
-    // Write to temporary file since prepareImageVerification expects a path
-    const tempPath = `/tmp/temp_image_${Date.now()}.tmp`;
-    fs.writeFileSync(tempPath, imageBuffer);
-
-    try {
-      const inputs = this.prepareForVerification(tempPath);
-      return inputs;
-    } finally {
-      // Clean up temp file
-      if (fs.existsSync(tempPath)) {
-        fs.unlinkSync(tempPath);
-      }
-    }
   }
 
   /**
@@ -87,62 +67,4 @@ export class VerificationService {
     };
   }
 
-  /**
-   * Create AuthenticityInputs for the zkProgram
-   * These are the public inputs to the proof
-   */
-  createAuthenticityInputs(
-    commitment: Field,
-    signature: Signature,
-    publicKey: PublicKey
-  ): AuthenticityInputs {
-    return new AuthenticityInputs({
-      commitment,
-      signature,
-      publicKey,
-    });
-  }
-
-  /**
-   * Create FinalRoundInputs for the zkProgram
-   * These are the private inputs to the proof
-   */
-  createFinalRoundInputs(verificationInputs: VerificationInputs): FinalRoundInputs {
-    return new FinalRoundInputs({
-      state: verificationInputs.penultimateState,
-      initialState: verificationInputs.initialState,
-      messageWord: verificationInputs.messageWord,
-      roundConstant: verificationInputs.roundConstant,
-    });
-  }
-
-  /**
-   * Validate that all required inputs are present and valid
-   */
-  validateInputs(
-    publicKey: string,
-    signature: string,
-    imageBuffer: Buffer
-  ): { valid: boolean; error?: string } {
-    // Check image buffer
-    if (!imageBuffer || imageBuffer.length === 0) {
-      return { valid: false, error: 'Image buffer is empty' };
-    }
-
-    // Check public key format
-    try {
-      PublicKey.fromBase58(publicKey);
-    } catch {
-      return { valid: false, error: 'Invalid public key format' };
-    }
-
-    // Check signature format
-    try {
-      Signature.fromBase58(signature);
-    } catch {
-      return { valid: false, error: 'Invalid signature format' };
-    }
-
-    return { valid: true };
-  }
 }

@@ -1,48 +1,22 @@
-import { AuthenticityZkApp } from 'authenticity-zkapp';
+import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount } from 'o1js';
 
-/**
- * Task for proof publishing
- */
-export interface ProofPublishingTask {
-  sha256Hash: string;
-  proof: any; // AuthenticityProof
-  publicInputs: any; // AuthenticityInputs
-  tokenOwnerAddress: string;
-  tokenOwnerPrivateKey: string;
-  creatorPublicKey: string;
-}
-
 export class ProofPublishingService {
-  private zkApp: AuthenticityZkApp | null = null;
-  private zkAppAddress: string; 
+  private zkApp: AuthenticityZkApp;
+  private zkAppAddress: string;
   private feePayerKey: string;
 
-  constructor(
-    zkAppAddress: string, 
-    feePayerKey: string,
-    network: string = 'testnet'
-  ) {
-    this.zkAppAddress = zkAppAddress; 
+  constructor(zkAppAddress: string, feePayerKey: string, network: string) {
+    this.zkAppAddress = zkAppAddress;
     this.feePayerKey = feePayerKey;
 
     // Initialize network
     this.setupNetwork(network);
 
-    // Initialize zkApp instance if address is provided
-    if (zkAppAddress) {
-      try {
-        const zkAppPublicKey = PublicKey.fromBase58(this.zkAppAddress);
-        this.zkApp = new AuthenticityZkApp(zkAppPublicKey);
-        console.log(`ProofPublishingService initialized with zkApp at ${zkAppAddress}`);
-        console.log(`zkApp instance created:`, !!this.zkApp);
-      } catch (error: any) {
-        console.error(`Failed to create zkApp instance: ${error.message}`);
-        console.warn(`Invalid zkApp address provided: ${zkAppAddress}`);
-      }
-    } else {
-      console.warn('No zkApp address provided to ProofPublishingService');
-    }
+    // Initialize zkApp instance - will throw if address is invalid
+    const zkAppPublicKey = PublicKey.fromBase58(this.zkAppAddress);
+    this.zkApp = new AuthenticityZkApp(zkAppPublicKey);
+    console.log(`ProofPublishingService initialized with zkApp at ${zkAppAddress}`);
   }
 
   /**
@@ -51,11 +25,11 @@ export class ProofPublishingService {
    */
   private setupNetwork(network: string): void {
     if (network === 'testnet') {
-      const Berkeley = Mina.Network({
-        networkId: 'devnet',
+      const Testnet = Mina.Network({
+        networkId: 'testnet',
         mina: 'https://api.minascan.io/node/devnet/v1/graphql',
       });
-      Mina.setActiveInstance(Berkeley);
+      Mina.setActiveInstance(Testnet);
       console.log(
         'Connected to Mina testnet (devnet) at: https://api.minascan.io/node/devnet/v1/graphql'
       );
@@ -63,23 +37,19 @@ export class ProofPublishingService {
       const Mainnet = Mina.Network('https://api.minascan.io/node/mainnet/v1/graphql');
       Mina.setActiveInstance(Mainnet);
       console.log('Connected to Mina mainnet');
-    } else {
-      // Local blockchain for development
-      console.log('Using local Mina blockchain');
-      // Note: Local blockchain should be initialized in main app
-    }
+    } 
   }
-
 
   /**
    * Publish a proof of authenticity to the blockchain
    * This calls the deployed AuthenticityZkApp.verifyAndStore method
    */
-  async publishProof(task: ProofPublishingTask): Promise<string> {
-    if (!this.zkApp) {
-      throw new Error('zkApp not initialized. Please deploy the contract first.');
-    }
-
+  async publishProof(
+    sha256Hash: string,
+    proof: AuthenticityProof,
+    publicInputs: AuthenticityInputs,
+    tokenOwnerPrivateKey: string
+  ): Promise<string> {
     // Check if zkApp is deployed
     const isDeployed = await this.isDeployed();
     if (!isDeployed) {
@@ -90,22 +60,20 @@ export class ProofPublishingService {
       throw new Error('Fee payer private key not configured');
     }
 
-    console.log(`Publishing proof for SHA256: ${task.sha256Hash}`);
+    console.log(`Publishing proof for SHA256: ${sha256Hash}`);
 
     // Ensure contract is compiled (o1js caches this internally)
     await AuthenticityZkApp.compile();
 
     // Parse addresses and keys
-    const tokenOwnerPrivate = PrivateKey.fromBase58(task.tokenOwnerPrivateKey);
+    const tokenOwnerPrivate = PrivateKey.fromBase58(tokenOwnerPrivateKey);
     const tokenOwner = tokenOwnerPrivate.toPublicKey();
     const feePayer = PrivateKey.fromBase58(this.feePayerKey);
-
-    const creatorPublicKey = task.proof.publicInput.publicKey;
 
     console.log('Transaction participants:');
     console.log('- Fee payer:', feePayer.toPublicKey().toBase58());
     console.log('- Token owner:', tokenOwner.toBase58());
-    console.log('- Creator (from proof):', creatorPublicKey.toBase58());
+    console.log('- Creator (from proof):',  proof.publicInput.publicKey.toBase58());
 
     console.log('Creating transaction to publish proof...');
 
@@ -117,7 +85,7 @@ export class ProofPublishingService {
 
         // Call verifyAndStore on the zkApp
         // Pass the actual token owner address (not fee payer)
-        await this.zkApp!.verifyAndStore(tokenOwner, task.proof, task.publicInputs);
+        await this.zkApp.verifyAndStore(tokenOwner, proof, publicInputs);
       });
 
       console.log('Proving transaction...');
@@ -146,7 +114,6 @@ export class ProofPublishingService {
       throw new Error(`Failed to publish proof: ${error.message}`);
     }
   }
- 
 
   /**
    * Check if the zkApp is deployed and ready

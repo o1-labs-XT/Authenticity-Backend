@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { config } from '../../config/index.js';
 
 /**
  * API error response - used across all handlers and middleware
@@ -89,7 +90,7 @@ export function errorMiddleware(
   }
 
   // Add more details in development mode
-  if (process.env.NODE_ENV === 'development') {
+  if (config.nodeEnv === 'development') {
     console.error('Stack trace:', error.stack);
     // You could add stack trace to response in dev mode if needed
   }

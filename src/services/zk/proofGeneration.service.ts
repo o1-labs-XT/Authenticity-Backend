@@ -1,6 +1,7 @@
 import {
   AuthenticityProgram,
   AuthenticityInputs,
+  AuthenticityProof,
   FinalRoundInputs
 } from 'authenticity-zkapp'; 
 import fs from 'fs';
@@ -25,7 +26,7 @@ export class ProofGenerationService {
     verificationInputs: VerificationInputs,
     imagePath?: string
   ): Promise<{
-    proof: any;
+    proof: AuthenticityProof;
     publicInputs: AuthenticityInputs;
   }> {
     console.log(`Generating proof for SHA256: ${sha256Hash}`);

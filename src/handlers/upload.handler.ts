@@ -16,6 +16,16 @@ export interface UploadResponse {
   status: 'pending' | 'duplicate';
 }
 
+interface ValidationResult {
+  isValid: boolean;
+  error?: {
+    code: string;
+    message: string;
+    field?: string;
+  };
+  imageBuffer?: Buffer;
+}
+
 export class UploadHandler {
   constructor(
     private verificationService: VerificationService,
@@ -23,6 +33,97 @@ export class UploadHandler {
     private proofGenerationService: ProofGenerationService,
     private proofPublishingService: ProofPublishingService
   ) {}
+
+  /**
+   * Validate upload request data
+   */
+  private validateUploadRequest(
+    file: Express.Multer.File | undefined,
+    publicKey: string | undefined,
+    signature: string | undefined
+  ): ValidationResult {
+    // Validate required fields
+    if (!file) {
+      return {
+        isValid: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'No image file provided',
+          field: 'image',
+        },
+      };
+    }
+
+    if (!publicKey) {
+      return {
+        isValid: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Public key is required',
+          field: 'publicKey',
+        },
+      };
+    }
+
+    if (!signature) {
+      return {
+        isValid: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Signature is required',
+          field: 'signature',
+        },
+      };
+    }
+
+    // Read image buffer
+    const imageBuffer = fs.readFileSync(file.path);
+
+    // Validate image buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      return {
+        isValid: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Image buffer is empty',
+          field: 'image',
+        },
+      };
+    }
+
+    // Validate public key format
+    try {
+      this.verificationService.parsePublicKey(publicKey);
+    } catch {
+      return {
+        isValid: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid public key format',
+          field: 'publicKey',
+        },
+      };
+    }
+
+    // Validate signature format
+    try {
+      this.verificationService.parseSignature(signature);
+    } catch {
+      return {
+        isValid: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid signature format',
+          field: 'signature',
+        },
+      };
+    }
+
+    return {
+      isValid: true,
+      imageBuffer,
+    };
+  }
 
   /**
    * Handle image upload request
@@ -36,57 +137,17 @@ export class UploadHandler {
       const file = req.file;
       const { publicKey, signature } = req.body;
 
-      // Validate required fields
-      if (!file) {
-        res.status(400).json({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'No image file provided',
-            field: 'image',
-          },
-        });
+      // Validate request
+      const validation = this.validateUploadRequest(file, publicKey, signature);
+      if (!validation.isValid) {
+        res.status(400).json({ error: validation.error! });
+        if (file) {
+          fs.unlinkSync(file.path);
+        }
         return;
       }
 
-      if (!publicKey) {
-        res.status(400).json({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Public key is required',
-            field: 'publicKey',
-          },
-        });
-        return;
-      }
-
-      if (!signature) {
-        res.status(400).json({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Signature is required',
-            field: 'signature',
-          },
-        });
-        return;
-      }
-
-      // Read image buffer
-      const imageBuffer = fs.readFileSync(file.path);
-
-      // Validate inputs
-      const validation = this.verificationService.validateInputs(publicKey, signature, imageBuffer);
-
-      if (!validation.valid) {
-        res.status(400).json({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: validation.error || 'Invalid input',
-          },
-        });
-        // Clean up uploaded file
-        fs.unlinkSync(file.path);
-        return;
-      }
+      const imageBuffer = validation.imageBuffer!;
 
       // Compute SHA256 hash of image
       const sha256Hash = hashImageOffCircuit(imageBuffer);
@@ -98,7 +159,7 @@ export class UploadHandler {
         console.log(`Duplicate image detected: ${sha256Hash}`);
 
         // Clean up uploaded file
-        fs.unlinkSync(file.path);
+        fs.unlinkSync(file!.path);
 
         res.json({
           tokenOwnerAddress: existing.tokenOwnerAddress!,
@@ -109,7 +170,7 @@ export class UploadHandler {
 
       // Prepare image verification (extract SHA256 state)
       console.log('Preparing image verification...');
-      const verificationInputs = this.verificationService.prepareForVerification(file.path);
+      const verificationInputs = this.verificationService.prepareForVerification(file!.path);
 
       // Parse signature and public key
       const sig = this.verificationService.parseSignature(signature);
@@ -131,7 +192,7 @@ export class UploadHandler {
           },
         });
         // Clean up uploaded file
-        fs.unlinkSync(file.path);
+        fs.unlinkSync(file!.path);
         return;
       }
 
@@ -150,7 +211,7 @@ export class UploadHandler {
         publicKey,
         signature,
         verificationInputs,
-        file.path
+        file!.path
       ).catch((error) => {
         console.error(`Failed to generate/publish proof for ${sha256Hash}:`, error);
       });
@@ -209,7 +270,7 @@ export class UploadHandler {
     try {
       console.log(`Starting proof generation for ${sha256Hash}`);
 
-       // Insert pending record in database
+      // Insert pending record in database
       await this.repository.insertPendingRecord({
         sha256Hash,
         tokenOwnerAddress,
@@ -217,7 +278,7 @@ export class UploadHandler {
         creatorPublicKey: publicKey,
         signature,
       });
-      
+
       // Generate the proof
       const { proof, publicInputs } = await this.proofGenerationService.generateProof(
         sha256Hash,
@@ -228,6 +289,7 @@ export class UploadHandler {
       );
 
       // Store proof data temporarily
+      // todo: do we have any reason to store the proof? could be useful when implementing retry logic
       await this.repository.updateRecordStatus(sha256Hash, {
         status: 'pending',
         proofData: {
@@ -240,14 +302,12 @@ export class UploadHandler {
 
       // Publish the proof to blockchain
       // waits for the transaction to be published on chain
-      const transactionId = await this.proofPublishingService.publishProof({
+      const transactionId = await this.proofPublishingService.publishProof(
         sha256Hash,
         proof,
         publicInputs,
-        tokenOwnerAddress,
-        tokenOwnerPrivateKey,
-        creatorPublicKey: publicKey,
-      });
+        tokenOwnerPrivateKey
+      );
 
       // Update record with transaction ID
       await this.repository.updateRecordStatus(sha256Hash, {

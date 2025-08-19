@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import { config } from './config/index.js';
 import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
@@ -9,20 +9,15 @@ import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
 
-// Load environment variables
-dotenv.config();
-
 async function main() {
   console.log('🚀 Starting Authenticity Backend...');
-  console.log(`Environment: ${process.env.NODE_ENV}`);
-  console.log(`Network: ${process.env.MINA_NETWORK || 'local'}`);
+  console.log(`Environment: ${config.nodeEnv}`);
+  console.log(`Network: ${config.minaNetwork}`);
 
   try {
     // Initialize database
     console.log('Initializing database...');
-    const dbConnection = new DatabaseConnection(
-      process.env.DATABASE_PATH || './data/provenance.db'
-    );
+    const dbConnection = new DatabaseConnection(config.databasePath);
     const repository = new AuthenticityRepository(dbConnection.getDb());
 
     // Initialize services
@@ -32,9 +27,9 @@ async function main() {
     // Initialize ZK services
     const proofGenerationService = new ProofGenerationService();
     const proofPublishingService = new ProofPublishingService(
-      process.env.ZKAPP_ADDRESS || '',
-      process.env.FEE_PAYER_PRIVATE_KEY || '',
-      process.env.MINA_NETWORK || 'testnet'
+      config.zkappAddress,
+      config.feePayerPrivateKey,
+      config.minaNetwork
     );
 
     // Initialize handlers
@@ -54,7 +49,7 @@ async function main() {
       tokenOwnerHandler,
     });
 
-    const port = process.env.PORT || 3000;
+    const port = config.port;
 
     const server = app.listen(port, () => {
       console.log(`✅ Server running on port ${port}`);

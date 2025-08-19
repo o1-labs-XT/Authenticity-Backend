@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import crypto from 'crypto';
+import { config } from '../../config/index.js';
 import { UploadHandler } from '../../handlers/upload.handler.js';
 
 // Configure multer for file uploads
@@ -20,7 +21,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: parseInt(process.env.UPLOAD_MAX_SIZE || '10485760'), // Default 10MB
+    fileSize: config.uploadMaxSize,
   },
   fileFilter: (req, file, cb) => {
     // Accept only image files
@@ -73,7 +74,7 @@ export function createUploadRoutes(uploadHandler: UploadHandler): Router {
         return res.status(400).json({
           error: {
             code: 'FILE_TOO_LARGE',
-            message: `File size exceeds limit of ${process.env.UPLOAD_MAX_SIZE || '10MB'}`,
+            message: `File size exceeds limit of ${config.uploadMaxSize} bytes`,
             field: 'image',
           },
         });
