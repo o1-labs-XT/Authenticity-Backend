@@ -1,6 +1,15 @@
 import { Request, Response } from 'express';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
-import { TokenOwnerResponse, ErrorResponse } from '../types/index.js';
+import { ErrorResponse } from '../api/middleware/error.middleware.js';
+
+/**
+ * API response for token owner endpoint
+ */
+export interface TokenOwnerResponse {
+  tokenOwnerAddress?: string;
+  status?: 'pending' | 'verified';
+  found: boolean;
+}
 
 export class TokenOwnerHandler {
   constructor(private repository: AuthenticityRepository) {}
@@ -43,7 +52,7 @@ export class TokenOwnerHandler {
       // Return token owner address and status
       res.json({
         tokenOwnerAddress: record.token_owner_address,
-        status: record.status as 'pending' | 'verified' | 'failed',
+        status: record.status as 'pending' | 'verified',
         found: true,
       });
 

@@ -4,7 +4,7 @@ import {
   CreateAuthenticityRecordInput,
   ExistingImageResult,
   StatusUpdate,
-} from '../../types/index.js';
+} from '../types.js';
 
 export class AuthenticityRepository {
   private db: Database.Database;
@@ -15,7 +15,6 @@ export class AuthenticityRepository {
   private updateStatusStmt!: Database.Statement;
   private getByHashStmt!: Database.Statement;
   private getStatusStmt!: Database.Statement;
-  private deleteFailedStmt!: Database.Statement;
   private deleteRecordStmt!: Database.Statement;
 
   constructor(db: Database.Database) {
@@ -57,10 +56,6 @@ export class AuthenticityRepository {
       WHERE sha256_hash = ?
     `);
 
-    this.deleteFailedStmt = this.db.prepare(`
-      DELETE FROM authenticity_records 
-      WHERE sha256_hash = ? AND status = 'failed'
-    `);
 
     this.deleteRecordStmt = this.db.prepare(`
       DELETE FROM authenticity_records 
@@ -155,15 +150,7 @@ export class AuthenticityRepository {
   }
 
   /**
-   * Delete a failed record (for retry scenarios)
-   */
-  async deleteFailedRecord(sha256Hash: string): Promise<boolean> {
-    const result = this.deleteFailedStmt.run(sha256Hash);
-    return result.changes > 0;
-  }
-
-  /**
-   * Delete any record by hash (use with caution)
+   * Delete a record by hash (for retry scenarios)
    */
   async deleteRecord(sha256Hash: string): Promise<boolean> {
     const result = this.deleteRecordStmt.run(sha256Hash);

@@ -1,6 +1,16 @@
 import { Request, Response } from 'express';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
-import { StatusResponse, ErrorResponse } from '../types/index.js';
+import { ErrorResponse } from '../api/middleware/error.middleware.js';
+
+/**
+ * API response for status endpoint
+ */
+export interface StatusResponse {
+  status: 'pending' | 'verified';
+  tokenOwnerAddress?: string;
+  transactionId?: string;
+  errorMessage?: string;
+}
 
 export class StatusHandler {
   constructor(private repository: AuthenticityRepository) {}
@@ -43,7 +53,7 @@ export class StatusHandler {
 
       // Return status information
       res.json({
-        status: recordStatus.status as 'pending' | 'verified' | 'failed',
+        status: recordStatus.status as 'pending' | 'verified',
         tokenOwnerAddress: recordStatus.tokenOwnerAddress,
         transactionId: recordStatus.transactionId || undefined,
         errorMessage: recordStatus.errorMessage || undefined,

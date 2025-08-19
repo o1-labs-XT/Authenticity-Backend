@@ -8,7 +8,6 @@ import { ProofPublishingService } from './services/zk/proofPublishing.service.js
 import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
-import { Mina } from 'o1js';
 
 // Load environment variables
 dotenv.config();
@@ -19,13 +18,6 @@ async function main() {
   console.log(`Network: ${process.env.MINA_NETWORK || 'local'}`);
 
   try {
-    // Initialize local Mina network for tests
-    if (process.env.MINA_NETWORK === 'local') {
-      const Local = await Mina.LocalBlockchain({ proofsEnabled: true });
-      Mina.setActiveInstance(Local);
-      process.env.FEE_PAYER_PRIVATE_KEY = Local.testAccounts[1].key.toBase58(); 
-    }
-
     // Initialize database
     console.log('Initializing database...');
     const dbConnection = new DatabaseConnection(

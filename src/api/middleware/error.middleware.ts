@@ -1,5 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
-import { ErrorResponse } from '../../types/index.js';
+
+/**
+ * API error response - used across all handlers and middleware
+ */
+export interface ErrorResponse {
+  error: {
+    code: string;
+    message: string;
+    field?: string;
+  };
+}
 
 /**
  * Global error handling middleware

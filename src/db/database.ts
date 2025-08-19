@@ -70,7 +70,7 @@ export class DatabaseConnection {
           creator_public_key TEXT NOT NULL,
           creator_private_key TEXT,
           signature TEXT NOT NULL,
-          status TEXT NOT NULL CHECK(status IN ('pending', 'verified', 'failed')),
+          status TEXT NOT NULL CHECK(status IN ('pending', 'verified')),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           verified_at TIMESTAMP,
           transaction_id TEXT,

@@ -3,9 +3,9 @@ import {
   AuthenticityInputs,
   FinalRoundInputs
 } from 'authenticity-zkapp'; 
-import { ProofGenerationTask } from '../../types/index.js';
 import fs from 'fs';
 import { PublicKey, Signature } from 'o1js';
+import { VerificationInputs } from '../image/verification.service.js';
 
 export class ProofGenerationService {
 
@@ -18,21 +18,27 @@ export class ProofGenerationService {
    * Generate a proof of authenticity for an image
    * This matches the proof generation from the example backend
    */
-  async generateProof(task: ProofGenerationTask): Promise<{
+  async generateProof(
+    sha256Hash: string,
+    publicKey: string,
+    signature: string,
+    verificationInputs: VerificationInputs,
+    imagePath?: string
+  ): Promise<{
     proof: any;
     publicInputs: AuthenticityInputs;
   }> {
-    console.log(`Generating proof for SHA256: ${task.sha256Hash}`);
+    console.log(`Generating proof for SHA256: ${sha256Hash}`);
     
     // Ensure program is compiled (o1js caches this internally)
     await AuthenticityProgram.compile();
 
-    const pubKey = PublicKey.fromBase58(task.publicKey);
-    const sig = Signature.fromBase58(task.signature);
+    const pubKey = PublicKey.fromBase58(publicKey);
+    const sig = Signature.fromBase58(signature);
 
     // Create public inputs for the proof
     const publicInputs = new AuthenticityInputs({
-      commitment: task.verificationInputs.expectedHash, // SHA256 of the image
+      commitment: verificationInputs.expectedHash, // SHA256 of the image
       signature: sig,
       publicKey: pubKey,
     });
@@ -40,13 +46,13 @@ export class ProofGenerationService {
     // Create private inputs (SHA256 state from round 62)
     const privateInputs = new FinalRoundInputs({
       // SHA-256 state after round 62 (second-to-last round)
-      state: task.verificationInputs.penultimateState,
+      state: verificationInputs.penultimateState,
       // Initial SHA-256 state (H0-H7 constants)
-      initialState: task.verificationInputs.initialState,
+      initialState: verificationInputs.initialState,
       // Message word (W_t) for the final round
-      messageWord: task.verificationInputs.messageWord,
+      messageWord: verificationInputs.messageWord,
       // Round constant (K_t) for the final round
-      roundConstant: task.verificationInputs.roundConstant,
+      roundConstant: verificationInputs.roundConstant,
     });
 
     console.log('Generating authenticity proof...'); 
@@ -60,9 +66,9 @@ export class ProofGenerationService {
     );
  
     // Clean up the image file after proof generation
-    if (task.imagePath && fs.existsSync(task.imagePath)) {
-      fs.unlinkSync(task.imagePath);
-      console.log(`Cleaned up image file: ${task.imagePath}`);
+    if (imagePath && fs.existsSync(imagePath)) {
+      fs.unlinkSync(imagePath);
+      console.log(`Cleaned up image file: ${imagePath}`);
     }
 
     return { proof, publicInputs };

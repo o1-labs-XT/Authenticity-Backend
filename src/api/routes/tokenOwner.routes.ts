@@ -16,7 +16,7 @@ export function createTokenOwnerRoutes(tokenOwnerHandler: TokenOwnerHandler): Ro
    * Response:
    * - 200: {
    *     tokenOwnerAddress?: string,
-   *     status?: 'pending' | 'verified' | 'failed',
+   *     status?: 'pending' | 'verified',
    *     found: boolean
    *   }
    * - 400: Invalid hash format

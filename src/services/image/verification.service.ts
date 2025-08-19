@@ -1,7 +1,17 @@
 import { prepareImageVerification, AuthenticityInputs, FinalRoundInputs } from 'authenticity-zkapp';
 import { Signature, PublicKey, Field, PrivateKey } from 'o1js';
 import fs from 'fs';
-import { VerificationInputs } from '../../types/index.js';
+
+/**
+ * Verification inputs from prepareImageVerification
+ */
+export interface VerificationInputs {
+  expectedHash: Field;
+  penultimateState: any[]; // UInt32[] from authenticity-zkapp
+  initialState: any[]; // UInt32[] from authenticity-zkapp
+  messageWord: any; // UInt32 from authenticity-zkapp
+  roundConstant: any; // UInt32 from authenticity-zkapp
+}
 
 export class VerificationService {
   /**

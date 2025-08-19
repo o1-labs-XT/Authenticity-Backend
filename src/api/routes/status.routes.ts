@@ -15,7 +15,7 @@ export function createStatusRoutes(statusHandler: StatusHandler): Router {
    * 
    * Response:
    * - 200: {
-   *     status: 'pending' | 'verified' | 'failed',
+   *     status: 'pending' | 'verified',
    *     tokenOwnerAddress?: string,
    *     transactionId?: string,
    *     errorMessage?: string

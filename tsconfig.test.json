@@ -1,9 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "rootDir": ".",
-    "allowJs": true
-  },
-  "include": ["test-upload.mts", "src/**/*"],
-  "exclude": ["node_modules", "dist"]
-}
