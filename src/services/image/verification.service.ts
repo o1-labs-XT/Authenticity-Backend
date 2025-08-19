@@ -1,8 +1,11 @@
 import { prepareImageVerification, AuthenticityInputs, FinalRoundInputs } from 'authenticity-zkapp';
-import { Signature, PublicKey, Field, PrivateKey } from 'o1js';
+import { Signature, PublicKey, Field, PrivateKey, Bytes } from 'o1js';
 import Client from 'mina-signer';
 import fs from 'fs';
 import { VerificationInputs } from '../../types/index.js';
+
+// Create Bytes32 class for SHA256 handling
+class Bytes32 extends Bytes(32) {}
 
 export class VerificationService {
   /**
@@ -79,9 +82,17 @@ export class VerificationService {
       console.log('  Signature scalar:', signature.scalar?.substring(0, 20) + '...');
       console.log('  Network:', network);
       
+      // Convert SHA256 to Bytes32.toFields() format
+      // The frontend now sends the fields string for Auro to sign
+      const bytes32 = Bytes32.fromHex(sha256Hex);
+      const fields = bytes32.toFields();
+      const fieldsString = fields.map(f => f.toString()).join(',');
+      
+      console.log('  Fields string (what Auro signed):', fieldsString.substring(0, 50) + '...');
+      
       // Use mina-signer to verify (it handles the string→bits→Poseidon flow)
       const isValid = client.verifyMessage({
-        data: sha256Hex,        // Pass hex string as-is
+        data: fieldsString,      // Verify against the fields string
         signature: signature,    // Auro signature object
         publicKey: publicKeyBase58
       });
