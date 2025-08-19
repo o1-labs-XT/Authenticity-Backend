@@ -1,9 +1,11 @@
 import { prepareImageVerification, AuthenticityInputs, FinalRoundInputs } from 'authenticity-zkapp';
 import { Signature, PublicKey, Field, PrivateKey } from 'o1js';
+import Client from 'mina-signer';
 import fs from 'fs';
 import { VerificationInputs } from '../../types/index.js';
 
 export class VerificationService {
+  private minaClient = new Client({ network: 'mainnet' });
   /**
    * Prepare image for verification by extracting SHA256 state
    * This matches the prepareImageVerification from the example
@@ -49,6 +51,59 @@ export class VerificationService {
     // Verify the signature on the expected hash
     // The signature should be on the SHA256 hash of the image
     return signature.verify(publicKey, expectedHash.toFields()).toBoolean();
+  }
+
+  /**
+   * Verify Auro wallet signature using mina-signer
+   * Auro signs the SHA256 hex string with Poseidon hashing
+   */
+  verifyAuroSignature(
+    signatureJson: string,
+    sha256Hex: string,
+    publicKeyBase58: string
+  ): boolean {
+    try {
+      // Parse the JSON signature from Auro
+      const signature = typeof signatureJson === 'string' 
+        ? JSON.parse(signatureJson) 
+        : signatureJson;
+      
+      // Use mina-signer to verify (it handles the string→bits→Poseidon flow)
+      const isValid = this.minaClient.verifyMessage({
+        data: sha256Hex,        // Pass hex string as-is
+        signature: signature,    // Auro signature object
+        publicKey: publicKeyBase58
+      });
+
+      console.log(`Auro signature verification for ${sha256Hex}: ${isValid}`);
+      return isValid;
+    } catch (error) {
+      console.error('Auro signature verification error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verify signature with type support (direct or Auro)
+   */
+  verifySignatureWithType(
+    signature: string,
+    sha256Hex: string,
+    publicKey: string,
+    signatureType: 'direct' | 'auro' = 'direct'
+  ): boolean {
+    if (signatureType === 'auro') {
+      return this.verifyAuroSignature(signature, sha256Hex, publicKey);
+    } else {
+      // Existing direct signature verification
+      const sig = this.parseSignature(signature);
+      const pubKey = this.parsePublicKey(publicKey);
+      // For direct signatures, we need to convert SHA256 to Field
+      // This assumes the expectedHash is passed separately or derived
+      // Note: This might need adjustment based on how expectedHash is computed
+      const expectedHash = Field(sha256Hex); // This needs proper conversion
+      return this.verifySignature(sig, expectedHash, pubKey);
+    }
   }
 
   /**

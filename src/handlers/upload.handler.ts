@@ -22,10 +22,15 @@ export class UploadHandler {
   async handleUpload(req: Request, res: Response<UploadResponse | ErrorResponse>): Promise<void> {
     try {
       console.log('Processing upload request');
+      console.log('Request body:', { 
+        publicKey: req.body.publicKey?.substring(0, 10) + '...', 
+        signatureType: req.body.signatureType || 'direct',
+        hasSignature: !!req.body.signature 
+      });
 
       // Extract from multipart form data
       const file = req.file;
-      const { publicKey, signature } = req.body;
+      const { publicKey, signature, signatureType = 'direct' } = req.body;
 
       // Validate required fields
       if (!file) {
@@ -102,19 +107,33 @@ export class UploadHandler {
       console.log('Preparing image verification...');
       const verificationInputs = this.verificationService.prepareForVerification(file.path);
 
-      // Parse signature and public key
-      const sig = this.verificationService.parseSignature(signature);
-      const pubKey = this.verificationService.parsePublicKey(publicKey);
-
-      // Verify signature matches expected hash (outside circuit for performance)
-      const isValid = this.verificationService.verifySignature(
-        sig,
-        verificationInputs.expectedHash,
-        pubKey
-      );
+      // Verify signature based on type
+      let isValid = false;
+      
+      if (signatureType === 'auro') {
+        console.log('Verifying Auro wallet signature...');
+        // For Auro, pass the SHA256 hex string directly
+        isValid = this.verificationService.verifyAuroSignature(
+          signature,
+          sha256Hash,
+          publicKey
+        );
+      } else {
+        console.log('Verifying direct signature...');
+        // Parse signature and public key for direct verification
+        const sig = this.verificationService.parseSignature(signature);
+        const pubKey = this.verificationService.parsePublicKey(publicKey);
+        
+        // Verify signature matches expected hash (outside circuit for performance)
+        isValid = this.verificationService.verifySignature(
+          sig,
+          verificationInputs.expectedHash,
+          pubKey
+        );
+      }
 
       if (!isValid) {
-        console.log('Invalid signature for image hash');
+        console.log(`Invalid ${signatureType} signature for image hash`);
         res.status(400).json({
           error: {
             code: 'INVALID_SIGNATURE',
