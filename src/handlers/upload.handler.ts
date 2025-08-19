@@ -70,7 +70,7 @@ export class UploadHandler {
       const imageBuffer = fs.readFileSync(file.path);
 
       // Validate inputs
-      const validation = this.verificationService.validateInputs(publicKey, signature, imageBuffer);
+      const validation = this.verificationService.validateInputs(publicKey, signature, imageBuffer, signatureType);
 
       if (!validation.valid) {
         res.status(400).json({
@@ -159,6 +159,7 @@ export class UploadHandler {
         tokenOwnerPrivateKey: tokenOwnerPrivate,
         publicKey,
         signature,
+        signatureType: signatureType as 'direct' | 'auro',
         verificationInputs,
         imagePath: file.path,
       }).catch((error) => {

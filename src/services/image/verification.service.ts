@@ -5,7 +5,6 @@ import fs from 'fs';
 import { VerificationInputs } from '../../types/index.js';
 
 export class VerificationService {
-  private minaClient = new Client({ network: 'mainnet' });
   /**
    * Prepare image for verification by extracting SHA256 state
    * This matches the prepareImageVerification from the example
@@ -63,19 +62,31 @@ export class VerificationService {
     publicKeyBase58: string
   ): boolean {
     try {
+      // Create mina-signer client with testnet network
+      // IMPORTANT: Auro wallet signs with 'testnet' network even when connected to devnet
+      const network = 'testnet'; // Force testnet to match Auro's signing
+      const client = new Client({ network: network as any });
+      
       // Parse the JSON signature from Auro
       const signature = typeof signatureJson === 'string' 
         ? JSON.parse(signatureJson) 
         : signatureJson;
       
+      console.log('Auro signature verification details:');
+      console.log('  SHA256 hex:', sha256Hex);
+      console.log('  Public key:', publicKeyBase58);
+      console.log('  Signature field:', signature.field?.substring(0, 20) + '...');
+      console.log('  Signature scalar:', signature.scalar?.substring(0, 20) + '...');
+      console.log('  Network:', network);
+      
       // Use mina-signer to verify (it handles the string→bits→Poseidon flow)
-      const isValid = this.minaClient.verifyMessage({
+      const isValid = client.verifyMessage({
         data: sha256Hex,        // Pass hex string as-is
         signature: signature,    // Auro signature object
         publicKey: publicKeyBase58
       });
 
-      console.log(`Auro signature verification for ${sha256Hex}: ${isValid}`);
+      console.log(`Auro signature verification result: ${isValid}`);
       return isValid;
     } catch (error) {
       console.error('Auro signature verification error:', error);
@@ -167,7 +178,8 @@ export class VerificationService {
   validateInputs(
     publicKey: string,
     signature: string,
-    imageBuffer: Buffer
+    imageBuffer: Buffer,
+    signatureType: 'direct' | 'auro' = 'direct'
   ): { valid: boolean; error?: string } {
     // Check image buffer
     if (!imageBuffer || imageBuffer.length === 0) {
@@ -181,11 +193,24 @@ export class VerificationService {
       return { valid: false, error: 'Invalid public key format' };
     }
 
-    // Check signature format
-    try {
-      Signature.fromBase58(signature);
-    } catch {
-      return { valid: false, error: 'Invalid signature format' };
+    // Check signature format based on type
+    if (signatureType === 'auro') {
+      // For Auro, signature should be a JSON string with field and scalar
+      try {
+        const sig = typeof signature === 'string' ? JSON.parse(signature) : signature;
+        if (!sig.field || !sig.scalar) {
+          return { valid: false, error: 'Invalid Auro signature format - missing field or scalar' };
+        }
+      } catch {
+        return { valid: false, error: 'Invalid Auro signature format - not valid JSON' };
+      }
+    } else {
+      // For direct signatures, check base58 format
+      try {
+        Signature.fromBase58(signature);
+      } catch {
+        return { valid: false, error: 'Invalid signature format' };
+      }
     }
 
     return { valid: true };

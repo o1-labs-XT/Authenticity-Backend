@@ -28,7 +28,21 @@ export class ProofGenerationService {
     await AuthenticityProgram.compile();
 
     const pubKey = PublicKey.fromBase58(task.publicKey);
-    const sig = Signature.fromBase58(task.signature);
+    
+    // Handle both signature types
+    let sig: Signature;
+    if (task.signatureType === 'auro' && typeof task.signature === 'string' && (task.signature.startsWith('{') || task.signature.includes('field'))) {
+      // Auro signature (JSON format)
+      console.log('Parsing Auro JSON signature for proof generation');
+      const sigJson = typeof task.signature === 'string' ? JSON.parse(task.signature) : task.signature;
+      sig = Signature.fromJSON({
+        r: sigJson.field,
+        s: sigJson.scalar
+      });
+    } else {
+      // Direct signature (base58 format)
+      sig = Signature.fromBase58(task.signature);
+    }
 
     // Create public inputs for the proof
     const publicInputs = new AuthenticityInputs({
