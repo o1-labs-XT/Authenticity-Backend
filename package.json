@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec tsx src/index.ts",
     "build": "tsc",
-    "start": "tsx scripts/compile-zkapp.ts && node dist/index.js",
+    "start": "npm run db:migrate && tsx scripts/compile-zkapp.ts && node dist/index.js",
     "test": "jest --detectOpenHandles",
     "test:unit": "jest --testPathPattern=unit --detectOpenHandles",
     "test:integration": "jest --testPathPattern=integration --detectOpenHandles",
