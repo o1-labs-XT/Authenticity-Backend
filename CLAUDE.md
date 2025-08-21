@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev           # Start dev server with hot reload (uses tsx + nodemon)
 npm run build         # Build TypeScript to dist/
-npm start             # Start production server from dist/
+npm start             # Compile zkApp circuits then start production server
 ```
 
 ### Testing
@@ -18,6 +18,15 @@ npm run test:unit     # Run unit tests only
 npm run test:integration  # Run integration tests only
 npm run test:coverage # Run tests with coverage report
 npm run test:watch    # Run tests in watch mode
+```
+
+### Database Management
+```bash
+npm run db:migrate    # Run database migrations
+npm run db:migrate:dev # Run migrations for development environment
+npm run db:migrate:prod # Run migrations for production environment
+npm run db:rollback   # Rollback last migration
+npm run db:migrate:make # Create new migration file
 ```
 
 ### Code Quality
@@ -56,8 +65,12 @@ REST API → Handlers → Services → Database
   - `zk/proofPublishing.service.ts`: Publishes proofs to Mina blockchain
 
 - **Database** (`src/db/`):
-  - SQLite database stores proof records indexed by SHA256 hash
-  - `authenticity.repository.ts`: Data access layer for proof records
+  - Database abstraction layer supporting both PostgreSQL and SQLite
+  - `adapters/`: Database adapters implementing common interface
+    - `DatabaseAdapter.ts`: Common interface for all database operations
+    - `PostgresAdapter.ts`: PostgreSQL implementation using Knex
+    - `SqliteAdapter.ts`: SQLite implementation using Knex
+  - `authenticity.repository.ts`: Repository pattern for data access
 
 ### Environment Configuration
 
@@ -65,11 +78,13 @@ Key environment variables:
 - `MINA_NETWORK`: Network to use (local/testnet/mainnet)
 - `ZKAPP_ADDRESS`: Deployed zkApp contract address
 - `FEE_PAYER_PRIVATE_KEY`: Private key for transaction fees
-- `DATABASE_PATH`: Path to SQLite database (default: ./data/provenance.db)
+- `DATABASE_URL`: PostgreSQL connection string (when set, uses PostgreSQL)
+- `DATABASE_PATH`: Path to SQLite database (default: ./data/provenance.db when DATABASE_URL not set)
 - `PORT`: Server port (default: 3000)
 - `NODE_ENV`: Environment (development/production/test)
 - `UPLOAD_MAX_SIZE`: Maximum upload size in bytes (default: 10MB)
 - `CORS_ORIGIN`: CORS allowed origins
+- `CIRCUIT_CACHE_PATH`: Directory for circuit compilation cache (default: ./cache)
 
 ### API Endpoints
 
@@ -99,6 +114,9 @@ Key environment variables:
 - **SHA256 Verification**: Uses penultimate round state for efficient ZK verification
 - **Security Middleware**: Uses Helmet.js for security headers, compression for responses
 - **File Handling**: Temporary uploaded files are cleaned up after proof generation
+- **Circuit Compilation**: zkApp circuits are pre-compiled on startup for better performance
+- **Database Selection**: Automatically uses PostgreSQL if DATABASE_URL is set, otherwise SQLite
+- **Migrations**: Database schema managed through Knex migrations (auto-run on Railway deployment)
 
 ### TypeScript Configuration
 
@@ -111,5 +129,14 @@ Key environment variables:
 
 - Configured for Railway deployment (see `railway.json`)
 - Health checks configured with 3 restart attempts on failure
-- When deployed on Railway, use `/app/data/` path for database storage
+- Migrations run automatically during build process
+- Production uses PostgreSQL (DATABASE_URL auto-injected by Railway)
 - Requires Node.js >= 20.0.0 and npm >= 10.0.0
+
+### zkApp Circuit Compilation
+
+The `scripts/compile-zkapp.ts` script pre-compiles the AuthenticityProgram and AuthenticityZkApp circuits:
+- Clears existing cache (preserving .gitkeep)
+- Compiles both circuits with caching enabled
+- Runs automatically before production server starts
+- Cache directory configured via CIRCUIT_CACHE_PATH

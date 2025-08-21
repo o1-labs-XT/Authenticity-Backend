@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { DatabaseAdapter } from '../adapters/DatabaseAdapter.js';
 import {
   AuthenticityRecord,
   CreateAuthenticityRecordInput,
@@ -7,58 +7,10 @@ import {
 } from '../types.js';
 
 export class AuthenticityRepository {
-  private db: Database.Database;
+  private adapter: DatabaseAdapter;
 
-  // Prepared statements for better performance
-  private insertStmt!: Database.Statement;
-  private checkExistingStmt!: Database.Statement;
-  private updateStatusStmt!: Database.Statement;
-  private getByHashStmt!: Database.Statement;
-  private getStatusStmt!: Database.Statement;
-  private deleteRecordStmt!: Database.Statement;
-
-  constructor(db: Database.Database) {
-    this.db = db;
-    this.prepareStatements();
-  }
-
-  private prepareStatements(): void {
-    // Prepare all statements at initialization for better performance
-    this.insertStmt = this.db.prepare(`
-      INSERT INTO authenticity_records 
-      (sha256_hash, token_owner_address, token_owner_private_key, creator_public_key, signature, status)
-      VALUES (?, ?, ?, ?, ?, 'pending')
-    `);
-
-    this.checkExistingStmt = this.db.prepare(`
-      SELECT token_owner_address, status 
-      FROM authenticity_records 
-      WHERE sha256_hash = ?
-    `);
-
-    this.updateStatusStmt = this.db.prepare(`
-      UPDATE authenticity_records 
-      SET status = COALESCE(?, status), 
-          verified_at = CASE WHEN ? = 'verified' THEN datetime('now') ELSE verified_at END,
-          transaction_id = COALESCE(?, transaction_id)
-      WHERE sha256_hash = ?
-    `);
-
-    this.getByHashStmt = this.db.prepare(`
-      SELECT * FROM authenticity_records WHERE sha256_hash = ?
-    `);
-
-    this.getStatusStmt = this.db.prepare(`
-      SELECT status, token_owner_address, transaction_id
-      FROM authenticity_records 
-      WHERE sha256_hash = ?
-    `);
-
-
-    this.deleteRecordStmt = this.db.prepare(`
-      DELETE FROM authenticity_records 
-      WHERE sha256_hash = ?
-    `);
+  constructor(adapter: DatabaseAdapter) {
+    this.adapter = adapter;
   }
 
   /**
@@ -66,15 +18,18 @@ export class AuthenticityRepository {
    */
   async insertPendingRecord(record: CreateAuthenticityRecordInput): Promise<void> {
     try {
-      this.insertStmt.run(
-        record.sha256Hash,
-        record.tokenOwnerAddress,
-        record.tokenOwnerPrivate,
-        record.creatorPublicKey,
-        record.signature
-      );
+      await this.adapter.createRecord({
+        sha256_hash: record.sha256Hash,
+        token_owner_address: record.tokenOwnerAddress,
+        token_owner_private_key: record.tokenOwnerPrivate,
+        creator_public_key: record.creatorPublicKey,
+        signature: record.signature,
+        status: 'pending',
+        transaction_id: null,
+      });
     } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+      // Handle unique constraint violations
+      if (error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' || error.code === '23505') {
         throw new Error('Record with this SHA256 hash already exists');
       }
       throw error;
@@ -85,16 +40,16 @@ export class AuthenticityRepository {
    * Check if an image already exists in the database
    */
   async checkExistingImage(sha256Hash: string): Promise<ExistingImageResult> {
-    const result = this.checkExistingStmt.get(sha256Hash) as any;
+    const record = await this.adapter.getRecordByHash(sha256Hash);
 
-    if (!result) {
+    if (!record) {
       return { exists: false };
     }
 
     return {
       exists: true,
-      tokenOwnerAddress: result.token_owner_address,
-      status: result.status,
+      tokenOwnerAddress: record.token_owner_address,
+      status: record.status,
     };
   }
 
@@ -102,24 +57,30 @@ export class AuthenticityRepository {
    * Update the status of an authenticity record
    */
   async updateRecordStatus(sha256Hash: string, update: StatusUpdate): Promise<void> {
-    const result = this.updateStatusStmt.run(
-      update.status || null,
-      update.status || null, // Used in CASE statement
-      update.transactionId || null,
-      sha256Hash
-    );
-
-    if (result.changes === 0) {
+    const record = await this.adapter.getRecordByHash(sha256Hash);
+    
+    if (!record) {
       throw new Error(`No record found with hash: ${sha256Hash}`);
     }
+
+    const updates: Partial<AuthenticityRecord> = {};
+    
+    if (update.status) {
+      updates.status = update.status;
+    }
+    
+    if (update.transactionId) {
+      updates.transaction_id = update.transactionId;
+    }
+
+    await this.adapter.updateRecord(sha256Hash, updates);
   }
 
   /**
    * Get a complete record by SHA256 hash
    */
   async getRecordByHash(sha256Hash: string): Promise<AuthenticityRecord | null> {
-    const record = this.getByHashStmt.get(sha256Hash) as AuthenticityRecord | undefined;
-    return record || null;
+    return await this.adapter.getRecordByHash(sha256Hash);
   }
 
   /**
@@ -130,16 +91,16 @@ export class AuthenticityRepository {
     tokenOwnerAddress?: string;
     transactionId?: string;
   } | null> {
-    const result = this.getStatusStmt.get(sha256Hash) as any;
+    const record = await this.adapter.getRecordByHash(sha256Hash);
 
-    if (!result) {
+    if (!record) {
       return null;
     }
 
     return {
-      status: result.status,
-      tokenOwnerAddress: result.token_owner_address,
-      transactionId: result.transaction_id,
+      status: record.status,
+      tokenOwnerAddress: record.token_owner_address,
+      transactionId: record.transaction_id || undefined,
     };
   }
 
@@ -147,7 +108,18 @@ export class AuthenticityRepository {
    * Delete a record by hash (for retry scenarios)
    */
   async deleteRecord(sha256Hash: string): Promise<boolean> {
-    const result = this.deleteRecordStmt.run(sha256Hash);
-    return result.changes > 0;
+    try {
+      await this.adapter.deleteRecord(sha256Hash);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Execute a transaction
+   */
+  async transaction<T>(callback: (trx: any) => Promise<T>): Promise<T> {
+    return await this.adapter.transaction(callback);
   }
 }
