@@ -14,7 +14,12 @@
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts",
-    "db:migrate": "echo 'Skipping...' && exit 0"
+    "db:migrate": "tsx node_modules/.bin/knex migrate:latest",
+    "db:migrate:dev": "tsx node_modules/.bin/knex migrate:latest --env development",
+    "db:migrate:prod": "tsx node_modules/.bin/knex migrate:latest --env production",
+    "db:rollback": "tsx node_modules/.bin/knex migrate:rollback",
+    "db:migrate:make": "tsx node_modules/.bin/knex migrate:make",
+    "db:seed": "tsx node_modules/.bin/knex seed:run"
   },
   "keywords": [],
   "author": "",
