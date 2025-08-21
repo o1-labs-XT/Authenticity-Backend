@@ -5,15 +5,15 @@ dotenv.config();
 
 const config: { [key: string]: Knex.Config } = {
   development: {
-    // Use DEV_DATABASE_URL if available, otherwise DATABASE_URL, otherwise SQLite
-    client: (process.env.DEV_DATABASE_URL || process.env.DATABASE_URL) ? 'pg' : 'sqlite3',
-    connection: (process.env.DEV_DATABASE_URL || process.env.DATABASE_URL) ? {
-      connectionString: process.env.DEV_DATABASE_URL || process.env.DATABASE_URL,
+    // Use PostgreSQL if DATABASE_URL is set, otherwise SQLite
+    client: process.env.DATABASE_URL ? 'pg' : 'sqlite3',
+    connection: process.env.DATABASE_URL ? {
+      connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false }
     } : {
       filename: process.env.DATABASE_PATH || './data/provenance.db'
     },
-    pool: (process.env.DEV_DATABASE_URL || process.env.DATABASE_URL) ? { min: 2, max: 10 } : undefined,
+    pool: process.env.DATABASE_URL ? { min: 2, max: 10 } : undefined,
     migrations: {
       directory: './migrations',
       extension: 'ts'
@@ -21,7 +21,7 @@ const config: { [key: string]: Knex.Config } = {
     seeds: {
       directory: './seeds'
     },
-    useNullAsDefault: !(process.env.DEV_DATABASE_URL || process.env.DATABASE_URL) // Only needed for SQLite
+    useNullAsDefault: !process.env.DATABASE_URL // Only needed for SQLite
   },
 
   production: {
