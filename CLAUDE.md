@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Development
 ```bash
-npm run dev           # Start dev server with hot reload (uses nodemon)
+npm run dev           # Start dev server with hot reload (uses tsx + nodemon)
 npm run build         # Build TypeScript to dist/
 npm start             # Start production server from dist/
 ```
@@ -67,6 +67,21 @@ Key environment variables:
 - `FEE_PAYER_PRIVATE_KEY`: Private key for transaction fees
 - `DATABASE_PATH`: Path to SQLite database (default: ./data/provenance.db)
 - `PORT`: Server port (default: 3000)
+- `NODE_ENV`: Environment (development/production/test)
+- `UPLOAD_MAX_SIZE`: Maximum upload size in bytes (default: 10MB)
+- `CORS_ORIGIN`: CORS allowed origins
+
+### API Endpoints
+
+- `POST /api/upload` - Upload image with signature for proof generation
+  - Expects multipart form data with `image` file and `signature` field
+  - Returns: `{ sha256Hash, transactionId }` immediately, proof generation happens async
+- `GET /api/status/:sha256Hash` - Check proof generation/publishing status
+  - Returns: `{ status: "pending" | "verified", transactionId?, tokenOwner? }`
+- `GET /api/token-owner/:sha256Hash` - Get token owner address for verification
+  - Returns: `{ tokenOwner }` if verified
+- `GET /health` - Health check endpoint for deployment monitoring
+- `GET /api/version` - API version information
 
 ### Testing Strategy
 
@@ -79,9 +94,11 @@ Key environment variables:
 
 - **Async Proof Generation**: Proofs are generated asynchronously after upload response
 - **Token Owner Address**: Randomly generated for each unique image hash
-- **Database States**: Records have "pending" or "published" status
+- **Database States**: Records have "pending" or "verified" status
 - **Error Handling**: Failed verifications result in deleted database records
 - **SHA256 Verification**: Uses penultimate round state for efficient ZK verification
+- **Security Middleware**: Uses Helmet.js for security headers, compression for responses
+- **File Handling**: Temporary uploaded files are cleaned up after proof generation
 
 ### TypeScript Configuration
 
@@ -89,3 +106,10 @@ Key environment variables:
 - Strict mode enabled
 - Source maps and declarations generated
 - Module imports must use `.js` extensions (even for `.ts` files)
+
+### Deployment Notes
+
+- Configured for Railway deployment (see `railway.json`)
+- Health checks configured with 3 restart attempts on failure
+- When deployed on Railway, use `/app/data/` path for database storage
+- Requires Node.js >= 20.0.0 and npm >= 10.0.0
