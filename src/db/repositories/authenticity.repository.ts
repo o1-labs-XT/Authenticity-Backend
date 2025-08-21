@@ -38,7 +38,7 @@ export class AuthenticityRepository {
 
     this.updateStatusStmt = this.db.prepare(`
       UPDATE authenticity_records 
-      SET status = ?, 
+      SET status = COALESCE(?, status), 
           verified_at = CASE WHEN ? = 'verified' THEN datetime('now') ELSE verified_at END,
           transaction_id = COALESCE(?, transaction_id)
       WHERE sha256_hash = ?
@@ -103,8 +103,8 @@ export class AuthenticityRepository {
    */
   async updateRecordStatus(sha256Hash: string, update: StatusUpdate): Promise<void> {
     const result = this.updateStatusStmt.run(
-      update.status,
-      update.status, // Used in CASE statement
+      update.status || null,
+      update.status || null, // Used in CASE statement
       update.transactionId || null,
       sha256Hash
     );

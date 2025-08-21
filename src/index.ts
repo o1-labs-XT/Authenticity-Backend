@@ -29,7 +29,8 @@ async function main() {
     const proofPublishingService = new ProofPublishingService(
       config.zkappAddress,
       config.feePayerPrivateKey,
-      config.minaNetwork
+      config.minaNetwork,
+      repository
     );
 
     // Initialize handlers

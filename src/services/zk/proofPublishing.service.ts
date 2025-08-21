@@ -1,12 +1,18 @@
 import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount } from 'o1js';
+import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
 
 export class ProofPublishingService {
   private zkApp: AuthenticityZkApp;
   private zkAppAddress: string;
   private feePayerKey: string;
 
-  constructor(zkAppAddress: string, feePayerKey: string, network: string) {
+  constructor(
+    zkAppAddress: string, 
+    feePayerKey: string, 
+    network: string,
+    private repository?: AuthenticityRepository
+  ) {
     this.zkAppAddress = zkAppAddress;
     this.feePayerKey = feePayerKey;
 
@@ -43,6 +49,7 @@ export class ProofPublishingService {
   /**
    * Publish a proof of authenticity to the blockchain
    * This calls the deployed AuthenticityZkApp.verifyAndStore method
+   * Automatically saves the transaction ID to the database as soon as it's available
    */
   async publishProof(
     sha256Hash: string,
@@ -100,6 +107,14 @@ export class ProofPublishingService {
       const pendingTxn = await txn.sign(signers).send();
 
       console.log(`Transaction sent with hash: ${pendingTxn.hash}`);
+
+      // Save transaction ID to database immediately after sending
+      if (this.repository) {
+        await this.repository.updateRecordStatus(sha256Hash, {
+          transactionId: pendingTxn.hash,
+        });
+        console.log(`Transaction ID saved to database for ${sha256Hash}: ${pendingTxn.hash}`);
+      }
 
       // Wait for confirmation (optional - could be async)
       if (pendingTxn.wait) {
