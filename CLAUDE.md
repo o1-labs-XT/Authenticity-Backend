@@ -22,11 +22,12 @@ npm run test:watch    # Run tests in watch mode
 
 ### Database Management
 ```bash
-npm run db:migrate    # Run database migrations
+npm run db:migrate    # Run database migrations using Knex
 npm run db:migrate:dev # Run migrations for development environment
 npm run db:migrate:prod # Run migrations for production environment
 npm run db:rollback   # Rollback last migration
 npm run db:migrate:make # Create new migration file
+npm run db:seed       # Run database seeds
 ```
 
 ### Code Quality
@@ -65,45 +66,41 @@ REST API → Handlers → Services → Database
   - `zk/proofPublishing.service.ts`: Publishes proofs to Mina blockchain
 
 - **Database** (`src/db/`):
-  - Database abstraction layer supporting both PostgreSQL and SQLite
-  - `adapters/`: Database adapters implementing common interface
-    - `DatabaseAdapter.ts`: Common interface for all database operations
-    - `PostgresAdapter.ts`: PostgreSQL implementation using Knex
-    - `SqliteAdapter.ts`: SQLite implementation using Knex
+  - Dual database support via adapter pattern
+  - `adapters/DatabaseAdapter.ts`: Common interface for database operations
+  - `adapters/PostgresAdapter.ts`: PostgreSQL implementation using Knex
+  - `adapters/SqliteAdapter.ts`: SQLite implementation using Knex
   - `authenticity.repository.ts`: Repository pattern for data access
+  - Database selection: Uses PostgreSQL if DATABASE_URL is set, otherwise SQLite
 
 ### Environment Configuration
 
-Key environment variables:
-- `MINA_NETWORK`: Network to use (local/testnet/mainnet)
+Required environment variables:
+- `MINA_NETWORK`: Network to use (testnet/mainnet)
 - `ZKAPP_ADDRESS`: Deployed zkApp contract address
 - `FEE_PAYER_PRIVATE_KEY`: Private key for transaction fees
-- `DATABASE_URL`: PostgreSQL connection string (when set, uses PostgreSQL)
-- `DATABASE_PATH`: Path to SQLite database (default: ./data/provenance.db when DATABASE_URL not set)
-- `PORT`: Server port (default: 3000)
+- `PORT`: Server port
 - `NODE_ENV`: Environment (development/production/test)
-- `UPLOAD_MAX_SIZE`: Maximum upload size in bytes (default: 10MB)
 - `CORS_ORIGIN`: CORS allowed origins
+- `UPLOAD_MAX_SIZE`: Maximum upload size in bytes
+
+Optional environment variables:
+- `DATABASE_URL`: PostgreSQL connection string (when set, uses PostgreSQL)
+- `DATABASE_PATH`: Path to SQLite database (default: ./data/provenance.db)
 - `CIRCUIT_CACHE_PATH`: Directory for circuit compilation cache (default: ./cache)
 
 ### API Endpoints
 
 - `POST /api/upload` - Upload image with signature for proof generation
-  - Expects multipart form data with `image` file and `signature` field
-  - Returns: `{ sha256Hash, transactionId }` immediately, proof generation happens async
+  - Expects multipart form data with `image` file, `signature`, and `publicKey` fields
+  - Returns: `{ sha256Hash, tokenOwnerAddress, status }` immediately
+  - Proof generation happens asynchronously in background
 - `GET /api/status/:sha256Hash` - Check proof generation/publishing status
   - Returns: `{ status: "pending" | "verified", transactionId?, tokenOwner? }`
 - `GET /api/token-owner/:sha256Hash` - Get token owner address for verification
   - Returns: `{ tokenOwner }` if verified
 - `GET /health` - Health check endpoint for deployment monitoring
 - `GET /api/version` - API version information
-
-### Testing Strategy
-
-- Unit tests mock external dependencies (database, blockchain)
-- Integration tests use actual SQLite in-memory database
-- Tests run sequentially (`maxWorkers: 1`) to avoid database conflicts
-- Test setup in `tests/setup.ts` initializes test environment
 
 ### Important Implementation Details
 
@@ -115,8 +112,7 @@ Key environment variables:
 - **Security Middleware**: Uses Helmet.js for security headers, compression for responses
 - **File Handling**: Temporary uploaded files are cleaned up after proof generation
 - **Circuit Compilation**: zkApp circuits are pre-compiled on startup for better performance
-- **Database Selection**: Automatically uses PostgreSQL if DATABASE_URL is set, otherwise SQLite
-- **Migrations**: Database schema managed through Knex migrations (auto-run on Railway deployment)
+- **Database Migrations**: Schema managed through Knex migrations
 
 ### TypeScript Configuration
 
@@ -128,9 +124,9 @@ Key environment variables:
 ### Deployment Notes
 
 - Configured for Railway deployment (see `railway.json`)
-- Health checks configured with 3 restart attempts on failure
-- Migrations run automatically at startup (before server starts)
-- Production uses PostgreSQL (DATABASE_URL auto-injected by Railway at runtime)
+- Health checks configured with 3 restart attempts on failure (180s timeout)
+- Migrations run automatically at startup before server starts
+- Circuit compilation happens at startup (can take 30-60 seconds)
 - Requires Node.js >= 20.0.0 and npm >= 10.0.0
 
 ### zkApp Circuit Compilation
@@ -140,4 +136,12 @@ The `scripts/compile-zkapp.ts` script pre-compiles the AuthenticityProgram and A
 - Compiles both circuits with caching enabled
 - Runs automatically before production server starts
 - Cache directory configured via CIRCUIT_CACHE_PATH
-- Cache directory configured via CIRCUIT_CACHE_PATH
+- Compilation typically takes 30-60 seconds
+
+### Testing Upload Script
+
+Use `test-upload.mts` to test the upload endpoint:
+```bash
+IMAGE_PATH=./image.png API_URL=http://localhost:3000 tsx test-upload.mts
+```
+The script generates a random keypair, signs the image, and uploads it to the specified endpoint.
