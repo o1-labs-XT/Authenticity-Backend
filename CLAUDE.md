@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev           # Start dev server with hot reload (uses tsx + nodemon)
 npm run build         # Build TypeScript to dist/
-npm start             # Compile zkApp circuits then start production server
+npm start             # Run migrations, compile zkApp circuits, then start production server
 ```
 
 ### Testing
@@ -129,8 +129,8 @@ Key environment variables:
 
 - Configured for Railway deployment (see `railway.json`)
 - Health checks configured with 3 restart attempts on failure
-- Migrations run automatically during build process
-- Production uses PostgreSQL (DATABASE_URL auto-injected by Railway)
+- Migrations run automatically at startup (before server starts)
+- Production uses PostgreSQL (DATABASE_URL auto-injected by Railway at runtime)
 - Requires Node.js >= 20.0.0 and npm >= 10.0.0
 
 ### zkApp Circuit Compilation
@@ -139,4 +139,5 @@ The `scripts/compile-zkapp.ts` script pre-compiles the AuthenticityProgram and A
 - Clears existing cache (preserving .gitkeep)
 - Compiles both circuits with caching enabled
 - Runs automatically before production server starts
+- Cache directory configured via CIRCUIT_CACHE_PATH
 - Cache directory configured via CIRCUIT_CACHE_PATH
