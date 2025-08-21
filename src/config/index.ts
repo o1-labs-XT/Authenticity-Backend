@@ -68,10 +68,19 @@ function parseConfig(): Config {
     errors.push(`Invalid MINA_NETWORK: ${minaNetwork}. Must be testnet, or mainnet`);
   }
 
+  // Check for database configuration - either PGHOST or DATABASE_PATH
+  // Note: PGHOST is used for PostgreSQL, DATABASE_PATH for SQLite
+  // Note: DONT use DATABASE_URL as it leaks the database password
+  const databasePath = process.env.PGHOST || process.env.DATABASE_PATH;
+
+  if (!databasePath) {
+    errors.push('Missing required environment variable: DATABASE_PATH or PGHOST');
+  }
+
   const config: Config = {
     port: getRequiredNumber('PORT'),
     nodeEnv: nodeEnv as 'development' | 'production' | 'test',
-    databasePath: getRequired('DATABASE_PATH'),
+    databasePath: databasePath || '',
     minaNetwork: minaNetwork as 'testnet' | 'mainnet',
     zkappAddress: getRequired('ZKAPP_ADDRESS'),
     feePayerPrivateKey: getRequired('FEE_PAYER_PRIVATE_KEY'),
