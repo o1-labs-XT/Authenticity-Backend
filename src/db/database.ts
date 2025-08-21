@@ -68,14 +68,11 @@ export class DatabaseConnection {
           token_owner_address TEXT NOT NULL,
           token_owner_private_key TEXT,
           creator_public_key TEXT NOT NULL,
-          creator_private_key TEXT,
           signature TEXT NOT NULL,
           status TEXT NOT NULL CHECK(status IN ('pending', 'verified')),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           verified_at TIMESTAMP,
-          transaction_id TEXT,
-          error_message TEXT,
-          proof_data TEXT  -- JSON serialized proof data
+          transaction_id TEXT
         );
         
         -- Indexes for performance

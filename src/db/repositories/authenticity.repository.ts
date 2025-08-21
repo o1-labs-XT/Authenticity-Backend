@@ -40,9 +40,7 @@ export class AuthenticityRepository {
       UPDATE authenticity_records 
       SET status = ?, 
           verified_at = CASE WHEN ? = 'verified' THEN datetime('now') ELSE verified_at END,
-          transaction_id = COALESCE(?, transaction_id),
-          error_message = COALESCE(?, error_message),
-          proof_data = COALESCE(?, proof_data)
+          transaction_id = COALESCE(?, transaction_id)
       WHERE sha256_hash = ?
     `);
 
@@ -51,7 +49,7 @@ export class AuthenticityRepository {
     `);
 
     this.getStatusStmt = this.db.prepare(`
-      SELECT status, token_owner_address, transaction_id, error_message
+      SELECT status, token_owner_address, transaction_id
       FROM authenticity_records 
       WHERE sha256_hash = ?
     `);
@@ -108,8 +106,6 @@ export class AuthenticityRepository {
       update.status,
       update.status, // Used in CASE statement
       update.transactionId || null,
-      update.errorMessage || null,
-      update.proofData ? JSON.stringify(update.proofData) : null,
       sha256Hash
     );
 
@@ -133,7 +129,6 @@ export class AuthenticityRepository {
     status: string;
     tokenOwnerAddress?: string;
     transactionId?: string;
-    errorMessage?: string;
   } | null> {
     const result = this.getStatusStmt.get(sha256Hash) as any;
 
@@ -145,7 +140,6 @@ export class AuthenticityRepository {
       status: result.status,
       tokenOwnerAddress: result.token_owner_address,
       transactionId: result.transaction_id,
-      errorMessage: result.error_message,
     };
   }
 

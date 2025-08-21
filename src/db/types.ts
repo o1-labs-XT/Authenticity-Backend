@@ -6,14 +6,11 @@ export interface AuthenticityRecord {
   token_owner_address: string;
   token_owner_private_key?: string | null;
   creator_public_key: string;
-  creator_private_key?: string | null;
   signature: string;
   status: 'pending' | 'verified';
   created_at: string;
   verified_at?: string | null;
   transaction_id?: string | null;
-  error_message?: string | null;
-  proof_data?: string | null;
 }
 
 /**
@@ -42,6 +39,4 @@ export interface ExistingImageResult {
 export interface StatusUpdate {
   status?: 'pending' | 'verified';
   transactionId?: string;
-  errorMessage?: string;
-  proofData?: any;
 }

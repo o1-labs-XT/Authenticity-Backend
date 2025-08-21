@@ -288,16 +288,6 @@ export class UploadHandler {
         imagePath
       );
 
-      // Store proof data temporarily
-      // todo: do we have any reason to store the proof? could be useful when implementing retry logic
-      await this.repository.updateRecordStatus(sha256Hash, {
-        status: 'pending',
-        proofData: {
-          proof: JSON.stringify(proof),
-          publicInputs: JSON.stringify(publicInputs),
-        },
-      });
-
       console.log(`Proof generated successfully for ${sha256Hash}, now publishing...`);
 
       // Publish the proof to blockchain

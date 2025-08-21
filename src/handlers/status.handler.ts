@@ -9,7 +9,6 @@ export interface StatusResponse {
   status: 'pending' | 'verified';
   tokenOwnerAddress?: string;
   transactionId?: string;
-  errorMessage?: string;
 }
 
 export class StatusHandler {
@@ -56,7 +55,6 @@ export class StatusHandler {
         status: recordStatus.status as 'pending' | 'verified',
         tokenOwnerAddress: recordStatus.tokenOwnerAddress,
         transactionId: recordStatus.transactionId || undefined,
-        errorMessage: recordStatus.errorMessage || undefined,
       });
 
     } catch (error: any) {
