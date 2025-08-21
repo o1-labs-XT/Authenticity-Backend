@@ -1,100 +1,89 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import { DatabaseAdapter } from './adapters/DatabaseAdapter.js';
+import { SqliteAdapter } from './adapters/SqliteAdapter.js';
+import { PostgresAdapter } from './adapters/PostgresAdapter.js';
 
 export interface DatabaseConfig {
-  path: string;
+  type?: 'sqlite' | 'postgres';
+  connectionString?: string;
+  path?: string;
   busyTimeout?: number;
   walMode?: boolean;
   verbose?: boolean;
 }
 
 export class DatabaseConnection {
-  private db: Database.Database;
+  private adapter: DatabaseAdapter;
   private config: DatabaseConfig;
 
   constructor(config: DatabaseConfig | string) {
     if (typeof config === 'string') {
-      this.config = { path: config };
+      // Legacy support for string path
+      this.config = { type: 'sqlite', path: config };
     } else {
       this.config = config;
     }
 
-    // Ensure directory exists
-    const dir = path.dirname(this.config.path);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    // Determine which adapter to use based on environment
+    if (process.env.DATABASE_URL) {
+      // Use PostgreSQL if DATABASE_URL is set
+      this.adapter = new PostgresAdapter(process.env.DATABASE_URL);
+      console.log('Using PostgreSQL database');
+    } else if (this.config.type === 'postgres' && this.config.connectionString) {
+      // Use PostgreSQL if explicitly configured
+      this.adapter = new PostgresAdapter(this.config.connectionString);
+      console.log('Using PostgreSQL database');
+    } else {
+      // Default to SQLite
+      const dbPath = this.config.path || process.env.DATABASE_PATH || './data/provenance.db';
+      this.adapter = new SqliteAdapter(dbPath);
+      console.log('Using SQLite database');
     }
-
-    // Initialize database connection
-    this.db = new Database(this.config.path, {
-      verbose: this.config.verbose ? console.log : undefined,
-      fileMustExist: false,
-    });
-
-    // Configure database for better performance and concurrency
-    this.configurePragmas();
-    
-    // Run migrations
-    this.runMigrations();
   }
 
-  private configurePragmas(): void {
-    // Enable WAL mode for better concurrency
-    if (this.config.walMode !== false) {
-      this.db.pragma('journal_mode = WAL');
-    }
-
-    // Set busy timeout (default 5 seconds)
-    const busyTimeout = this.config.busyTimeout || 5000;
-    this.db.pragma(`busy_timeout = ${busyTimeout}`);
-
-    // Other performance optimizations
-    this.db.pragma('synchronous = NORMAL');
-    this.db.pragma('cache_size = 10000');
-    this.db.pragma('foreign_keys = ON');
-    this.db.pragma('temp_store = MEMORY');
+  /**
+   * Initialize the database connection and create tables
+   */
+  async initialize(): Promise<void> {
+    await this.adapter.initialize();
+    console.log('Database initialized successfully');
   }
 
-  private runMigrations(): void {
-    console.log('Initializing database schema...');
-
-    // Create the complete schema in a single transaction
-    this.db.transaction(() => {
-      // Main table for authenticity records with all columns
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS authenticity_records (
-          sha256_hash TEXT PRIMARY KEY,
-          token_owner_address TEXT NOT NULL,
-          token_owner_private_key TEXT,
-          creator_public_key TEXT NOT NULL,
-          signature TEXT NOT NULL,
-          status TEXT NOT NULL CHECK(status IN ('pending', 'verified')),
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          verified_at TIMESTAMP,
-          transaction_id TEXT
-        );
-        
-        -- Indexes for performance
-        CREATE INDEX IF NOT EXISTS idx_status ON authenticity_records(status);
-        CREATE INDEX IF NOT EXISTS idx_token_owner ON authenticity_records(token_owner_address);
-        CREATE INDEX IF NOT EXISTS idx_created_at ON authenticity_records(created_at);
-      `);
-    })();
-
-    console.log('Database schema initialized successfully');
+  /**
+   * Get the database adapter
+   */
+  getAdapter(): DatabaseAdapter {
+    return this.adapter;
   }
 
-  getDb(): Database.Database {
-    return this.db;
+  /**
+   * Get the underlying Knex instance for direct queries
+   */
+  getDb() {
+    return this.adapter.getKnex();
   }
 
   /**
    * Close the database connection
    */
-  close(): void {
+  async close(): Promise<void> {
     console.log('Closing database connection...');
-    this.db.close();
+    await this.adapter.close();
   }
+}
 
+// Create a singleton instance
+let dbConnection: DatabaseConnection | null = null;
+
+export function getDatabaseConnection(config?: DatabaseConfig | string): DatabaseConnection {
+  if (!dbConnection) {
+    dbConnection = new DatabaseConnection(config || {});
+  }
+  return dbConnection;
+}
+
+export async function closeDatabaseConnection(): Promise<void> {
+  if (dbConnection) {
+    await dbConnection.close();
+    dbConnection = null;
+  }
 }

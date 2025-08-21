@@ -18,7 +18,8 @@ async function main() {
     // Initialize database
     console.log('Initializing database...');
     const dbConnection = new DatabaseConnection(config.databasePath);
-    const repository = new AuthenticityRepository(dbConnection.getDb());
+    await dbConnection.initialize();
+    const repository = new AuthenticityRepository(dbConnection.getAdapter());
 
     // Initialize services
     console.log('Initializing services...');
@@ -71,7 +72,7 @@ async function main() {
       });
       
       // Close database
-      dbConnection.close();
+      await dbConnection.close();
       
       console.log('✅ Graceful shutdown complete');
       process.exit(0);

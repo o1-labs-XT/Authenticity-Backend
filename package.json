@@ -13,7 +13,13 @@
     "test:coverage": "jest --coverage --detectOpenHandles",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
-    "format": "prettier --write src/**/*.ts"
+    "format": "prettier --write src/**/*.ts",
+    "db:migrate": "tsx node_modules/.bin/knex migrate:latest",
+    "db:migrate:dev": "tsx node_modules/.bin/knex migrate:latest --env development",
+    "db:migrate:prod": "tsx node_modules/.bin/knex migrate:latest --env production",
+    "db:rollback": "tsx node_modules/.bin/knex migrate:rollback",
+    "db:migrate:make": "tsx node_modules/.bin/knex migrate:make",
+    "db:seed": "tsx node_modules/.bin/knex seed:run"
   },
   "keywords": [],
   "author": "",
@@ -24,19 +30,22 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
+    "@types/knex": "^0.15.2",
+    "@types/pg": "^8.15.5",
     "authenticity-zkapp": "0.1.3",
-    "better-sqlite3": "^12.2.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
+    "knex": "^3.1.0",
     "multer": "^2.0.2",
-    "o1js": "^2.8.0"
+    "o1js": "^2.8.0",
+    "pg": "^8.16.3",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
