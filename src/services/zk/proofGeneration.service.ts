@@ -5,7 +5,7 @@ import {
   FinalRoundInputs
 } from 'authenticity-zkapp'; 
 import fs from 'fs';
-import { PublicKey, Signature } from 'o1js';
+import { PublicKey, Signature, Cache } from 'o1js';
 import { VerificationInputs } from '../image/verification.service.js';
 
 export class ProofGenerationService {
@@ -31,8 +31,10 @@ export class ProofGenerationService {
   }> {
     console.log(`Generating proof for SHA256: ${sha256Hash}`);
     
-    // Ensure program is compiled (o1js caches this internally)
-    await AuthenticityProgram.compile();
+    // Use cached compilation if available
+    const cacheDir = process.env.CIRCUIT_CACHE_PATH || './cache';
+    const cache = Cache.FileSystem(cacheDir);
+    await AuthenticityProgram.compile({ cache });
 
     const pubKey = PublicKey.fromBase58(publicKey);
     const sig = Signature.fromBase58(signature);
