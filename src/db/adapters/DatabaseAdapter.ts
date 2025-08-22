@@ -77,4 +77,14 @@ export interface DatabaseAdapter {
    * Execute a transaction
    */
   transaction<T>(callback: (trx: Knex.Transaction) => Promise<T>): Promise<T>;
+
+  /**
+   * Get counts of records by status
+   */
+  getStatusCounts(): Promise<Record<string, number>>;
+
+  /**
+   * Get failed records with pagination
+   */
+  getFailedRecords(limit: number, offset: number): Promise<AuthenticityRecord[]>;
 }

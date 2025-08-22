@@ -9,6 +9,7 @@ import { ProofPublishingService } from './services/zk/proofPublishing.service.js
 import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
+import { AdminHandler } from './handlers/admin.handler.js';
 
 async function main() {
   console.log('🚀 Starting Authenticity Backend...');
@@ -50,12 +51,14 @@ async function main() {
     );
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
+    const adminHandler = new AdminHandler(jobQueue, repository);
 
     // Create and start server
     const app = createServer({
       uploadHandler,
       statusHandler,
       tokenOwnerHandler,
+      adminHandler,
     });
 
     const port = config.port;
@@ -67,6 +70,13 @@ async function main() {
       console.log(`   POST /api/upload - Upload image for proof generation`);
       console.log(`   GET  /api/status/:sha256Hash - Check proof status`);
       console.log(`   GET  /api/token-owner/:sha256Hash - Get token owner address`);
+      if (config.nodeEnv === 'development') {
+        console.log(`📍 Admin endpoints:`);
+        console.log(`   GET  /api/admin/jobs/stats - Job queue statistics`);
+        console.log(`   GET  /api/admin/jobs/failed - List failed jobs`);
+        console.log(`   GET  /api/admin/jobs/:jobId - Get job details`);
+        console.log(`   POST /api/admin/jobs/:jobId/retry - Retry a failed job`);
+      }
     });
 
     // Graceful shutdown

@@ -69,6 +69,7 @@ REST API → Handlers → Services → Database
   - `upload.handler.ts`: Manages image uploads, triggers proof generation
   - `status.handler.ts`: Returns proof generation status
   - `tokenOwner.handler.ts`: Returns token owner addresses for verification
+  - `admin.handler.ts`: Admin endpoints for job management and monitoring
 
 - **Services** (`src/services/`):
   - `image/verification.service.ts`: Computes SHA256 hashes and verifies signatures
@@ -112,6 +113,7 @@ Required environment variables:
 
 Optional environment variables:
 - `CIRCUIT_CACHE_PATH`: Directory for circuit compilation cache (default: ./cache)
+- `ADMIN_API_KEY`: API key for admin endpoints in production (development mode doesn't require it)
 
 For local development, use the provided docker-compose.yml:
 ```
@@ -120,16 +122,27 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/authenticity_dev
 
 ### API Endpoints
 
+#### Public Endpoints
 - `POST /api/upload` - Upload image with signature for proof generation
   - Expects multipart form data with `image` file, `signature`, and `publicKey` fields
   - Returns: `{ sha256Hash, tokenOwnerAddress, status }` immediately
-  - Proof generation happens asynchronously in background
+  - Proof generation happens asynchronously in background via pg-boss job queue
 - `GET /api/status/:sha256Hash` - Check proof generation/publishing status
-  - Returns: `{ status: "pending" | "verified", transactionId?, tokenOwner? }`
+  - Returns: `{ status: "pending" | "processing" | "verified" | "failed", transactionId?, tokenOwner? }`
 - `GET /api/token-owner/:sha256Hash` - Get token owner address for verification
   - Returns: `{ tokenOwner }` if verified
 - `GET /health` - Health check endpoint for deployment monitoring
 - `GET /api/version` - API version information
+
+#### Admin Endpoints (Development mode or with ADMIN_API_KEY)
+- `GET /api/admin/jobs/stats` - Get job queue statistics
+  - Returns queue counts (pending, active, completed, failed) and database status counts
+- `GET /api/admin/jobs/failed?limit=10&offset=0` - List failed jobs with pagination
+  - Returns failed job records with failure reasons and retry counts
+- `GET /api/admin/jobs/:jobId` - Get detailed information about a specific job
+  - Returns complete job data from pg-boss
+- `POST /api/admin/jobs/:jobId/retry` - Retry a failed job
+  - Requeues the job and resets status to pending
 
 ### Important Implementation Details
 
@@ -171,13 +184,33 @@ The `scripts/compile-zkapp.ts` script pre-compiles the AuthenticityProgram and A
 - Cache directory configured via CIRCUIT_CACHE_PATH
 - Compilation typically takes 30-60 seconds
 
-### Testing Upload Script
+### Testing Scripts
 
+#### Upload Testing
 Use `test-upload.mts` to test the upload endpoint:
 ```bash
 IMAGE_PATH=./image.png API_URL=http://localhost:3000 tsx test-upload.mts
 ```
 The script generates a random keypair, signs the image, and uploads it to the specified endpoint.
+
+#### Admin API Testing
+Use `test-admin.mts` to test admin endpoints:
+```bash
+# Get job queue statistics
+tsx test-admin.mts stats
+
+# List failed jobs
+tsx test-admin.mts failed
+
+# Get job details
+tsx test-admin.mts details <jobId>
+
+# Retry a failed job
+tsx test-admin.mts retry <jobId>
+
+# For production with auth
+ADMIN_API_KEY=your-key API_URL=https://api.example.com tsx test-admin.mts stats
+```
 
 ### Local Development Setup
 

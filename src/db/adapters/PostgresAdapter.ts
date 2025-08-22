@@ -121,4 +121,34 @@ export class PostgresAdapter implements DatabaseAdapter {
   async transaction<T>(callback: (trx: Knex.Transaction) => Promise<T>): Promise<T> {
     return await this.knex.transaction(callback);
   }
+
+  async getStatusCounts(): Promise<Record<string, number>> {
+    const results = await this.knex<AuthenticityRecord>('authenticity_records')
+      .select('status')
+      .count('* as count')
+      .groupBy('status');
+    
+    const counts: Record<string, number> = {};
+    for (const row of results) {
+      counts[row.status] = parseInt(row.count as string, 10);
+    }
+    
+    // Ensure all statuses are represented
+    const statuses = ['pending', 'processing', 'verified', 'failed'];
+    for (const status of statuses) {
+      if (!counts[status]) {
+        counts[status] = 0;
+      }
+    }
+    
+    return counts;
+  }
+
+  async getFailedRecords(limit: number, offset: number): Promise<AuthenticityRecord[]> {
+    return await this.knex<AuthenticityRecord>('authenticity_records')
+      .where('status', 'failed')
+      .orderBy('failed_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+  }
 }
