@@ -9,9 +9,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Prerequisites: Start PostgreSQL first
 docker-compose up -d  # Start PostgreSQL in Docker container
 
-npm run dev           # Start dev server with hot reload (uses tsx + nodemon)
+# Run in separate terminals:
+npm run dev           # Start API server with hot reload
+npm run dev:worker    # Start worker with hot reload
+
+# Production commands:
 npm run build         # Build TypeScript to dist/
-npm start             # Run migrations, compile zkApp circuits, then start production server
+npm run start:api     # Start API server only
+npm run start:worker  # Start worker only
 ```
 
 ### Testing
@@ -45,9 +50,11 @@ This is a zero-knowledge proof backend for image authenticity verification built
 
 ### Core Flow
 1. **Upload Phase**: Users upload images with cryptographic signatures
-2. **Proof Generation**: Backend generates zero-knowledge proofs asynchronously
-3. **On-chain Publishing**: Proofs are published to Mina blockchain
-4. **Verification**: Anyone can verify image authenticity via token owner address
+2. **Job Queue**: Upload handler enqueues proof generation job in pg-boss
+3. **Worker Processing**: Separate worker service processes jobs asynchronously
+4. **Proof Generation**: Worker generates zero-knowledge proofs
+5. **On-chain Publishing**: Worker publishes proofs to Mina blockchain
+6. **Verification**: Anyone can verify image authenticity via token owner address
 
 ### Service Architecture
 
@@ -77,8 +84,19 @@ REST API → Handlers → Services → Database
 
 - **Job Queue** (`src/services/queue/`):
   - `jobQueue.service.ts`: pg-boss integration for reliable async processing
+  - Creates 'proof-generation' queue on startup (required for pg-boss v10)
   - Handles proof generation jobs with automatic retries
+  - Uses singletonKey to prevent duplicate jobs for same image
   - Maintains job history for auditing
+
+- **Workers** (`src/workers/`):
+  - `proofGenerationWorker.ts`: Processes proof generation jobs from queue
+  - Updates database status throughout job lifecycle
+  - Handles retries and failure scenarios
+
+- **Entry Points**:
+  - `src/index.ts`: API server entry point
+  - `src/worker.ts`: Worker service entry point
 
 ### Environment Configuration
 
@@ -135,10 +153,13 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/authenticity_dev
 
 ### Deployment Notes
 
-- Configured for Railway deployment (see `railway.json`)
+- Configured for Railway deployment with separate services:
+  - **API Service**: Handles HTTP requests, lightweight (512MB RAM)
+  - **Worker Service**: Processes proof generation, heavy (2GB RAM)
 - Health checks configured with 3 restart attempts on failure (180s timeout)
-- Migrations run automatically at startup before server starts
-- Circuit compilation happens at startup (can take 30-60 seconds)
+- Migrations run automatically at API startup
+- Circuit compilation happens at worker startup (30-60 seconds)
+- pg-boss handles job distribution across multiple workers
 - Requires Node.js >= 20.0.0 and npm >= 10.0.0
 
 ### zkApp Circuit Compilation
