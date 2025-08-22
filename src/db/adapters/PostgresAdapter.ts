@@ -123,14 +123,14 @@ export class PostgresAdapter implements DatabaseAdapter {
   }
 
   async getStatusCounts(): Promise<Record<string, number>> {
-    const results = await this.knex<AuthenticityRecord>('authenticity_records')
+    const results = await this.knex('authenticity_records')
       .select('status')
       .count('* as count')
-      .groupBy('status');
+      .groupBy('status') as Array<{ status: string; count: string | number }>;
     
     const counts: Record<string, number> = {};
     for (const row of results) {
-      counts[row.status] = parseInt(row.count as string, 10);
+      counts[row.status] = parseInt(String(row.count), 10);
     }
     
     // Ensure all statuses are represented
