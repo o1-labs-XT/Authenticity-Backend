@@ -105,6 +105,13 @@ export class AuthenticityRepository {
   }
 
   /**
+   * Update a record with arbitrary fields
+   */
+  async updateRecord(sha256Hash: string, updates: Partial<AuthenticityRecord>): Promise<void> {
+    await this.adapter.updateRecord(sha256Hash, updates);
+  }
+
+  /**
    * Delete a record by hash (for retry scenarios)
    */
   async deleteRecord(sha256Hash: string): Promise<boolean> {
