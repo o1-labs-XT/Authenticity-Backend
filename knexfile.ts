@@ -5,23 +5,23 @@ dotenv.config();
 
 const config: { [key: string]: Knex.Config } = {
   development: {
-    // Use PostgreSQL if DATABASE_URL is set, otherwise SQLite
-    client: process.env.DATABASE_URL ? 'pg' : 'sqlite3',
-    connection: process.env.DATABASE_URL ? {
+    client: 'pg',
+    connection: {
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    } : {
-      filename: process.env.DATABASE_PATH || './data/provenance.db'
+      // Disable SSL for local development
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
     },
-    pool: process.env.DATABASE_URL ? { min: 2, max: 10 } : undefined,
+    pool: {
+      min: 2,
+      max: 10
+    },
     migrations: {
       directory: './migrations',
       extension: 'ts'
     },
     seeds: {
       directory: './seeds'
-    },
-    useNullAsDefault: !process.env.DATABASE_URL // Only needed for SQLite
+    }
   },
 
   production: {
@@ -44,16 +44,22 @@ const config: { [key: string]: Knex.Config } = {
   },
 
   test: {
-    client: 'sqlite3',
-    connection: ':memory:',
+    client: 'pg',
+    connection: {
+      connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/authenticity_test',
+      ssl: false
+    },
+    pool: {
+      min: 1,
+      max: 5
+    },
     migrations: {
       directory: './migrations',
       extension: 'ts'
     },
     seeds: {
       directory: './seeds'
-    },
-    useNullAsDefault: true
+    }
   }
 };
 

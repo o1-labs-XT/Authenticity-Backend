@@ -17,7 +17,9 @@ async function main() {
   try {
     // Initialize database
     console.log('Initializing database...');
-    const dbConnection = new DatabaseConnection(config.databasePath);
+    const dbConnection = new DatabaseConnection({ 
+      connectionString: config.databaseUrl 
+    });
     await dbConnection.initialize();
     const repository = new AuthenticityRepository(dbConnection.getAdapter());
 

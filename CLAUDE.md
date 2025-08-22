@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Development
 ```bash
+# Prerequisites: Start PostgreSQL first
+docker-compose up -d  # Start PostgreSQL in Docker container
+
 npm run dev           # Start dev server with hot reload (uses tsx + nodemon)
 npm run build         # Build TypeScript to dist/
 npm start             # Run migrations, compile zkApp circuits, then start production server
@@ -66,16 +69,21 @@ REST API → Handlers → Services → Database
   - `zk/proofPublishing.service.ts`: Publishes proofs to Mina blockchain
 
 - **Database** (`src/db/`):
-  - Dual database support via adapter pattern
+  - PostgreSQL-only implementation (required for pg-boss job queue)
   - `adapters/DatabaseAdapter.ts`: Common interface for database operations
   - `adapters/PostgresAdapter.ts`: PostgreSQL implementation using Knex
-  - `adapters/SqliteAdapter.ts`: SQLite implementation using Knex
   - `authenticity.repository.ts`: Repository pattern for data access
-  - Database selection: Uses PostgreSQL if DATABASE_URL is set, otherwise SQLite
+  - Migrations managed through Knex
+
+- **Job Queue** (`src/services/queue/`):
+  - `jobQueue.service.ts`: pg-boss integration for reliable async processing
+  - Handles proof generation jobs with automatic retries
+  - Maintains job history for auditing
 
 ### Environment Configuration
 
 Required environment variables:
+- `DATABASE_URL`: PostgreSQL connection string (e.g., `postgresql://user:pass@host:5432/db`)
 - `MINA_NETWORK`: Network to use (testnet/mainnet)
 - `ZKAPP_ADDRESS`: Deployed zkApp contract address
 - `FEE_PAYER_PRIVATE_KEY`: Private key for transaction fees
@@ -85,9 +93,12 @@ Required environment variables:
 - `UPLOAD_MAX_SIZE`: Maximum upload size in bytes
 
 Optional environment variables:
-- `DATABASE_URL`: PostgreSQL connection string (when set, uses PostgreSQL)
-- `DATABASE_PATH`: Path to SQLite database (default: ./data/provenance.db)
 - `CIRCUIT_CACHE_PATH`: Directory for circuit compilation cache (default: ./cache)
+
+For local development, use the provided docker-compose.yml:
+```
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/authenticity_dev
+```
 
 ### API Endpoints
 
@@ -104,10 +115,11 @@ Optional environment variables:
 
 ### Important Implementation Details
 
-- **Async Proof Generation**: Proofs are generated asynchronously after upload response
+- **Job Queue Processing**: pg-boss handles async proof generation with retries
 - **Token Owner Address**: Randomly generated for each unique image hash
-- **Database States**: Records have "pending" or "verified" status
-- **Error Handling**: Failed verifications result in deleted database records
+- **Database States**: Records have "pending", "processing", "verified", or "failed" status
+- **Error Handling**: Failed jobs are retried 3 times with exponential backoff
+- **Job Deduplication**: Same image hash won't create duplicate jobs within 24 hours
 - **SHA256 Verification**: Uses penultimate round state for efficient ZK verification
 - **Security Middleware**: Uses Helmet.js for security headers, compression for responses
 - **File Handling**: Temporary uploaded files are cleaned up after proof generation
@@ -145,3 +157,12 @@ Use `test-upload.mts` to test the upload endpoint:
 IMAGE_PATH=./image.png API_URL=http://localhost:3000 tsx test-upload.mts
 ```
 The script generates a random keypair, signs the image, and uploads it to the specified endpoint.
+
+### Local Development Setup
+
+1. **Start PostgreSQL**: `docker-compose up -d`
+2. **Copy environment**: `cp .env.example .env` and configure
+3. **Run migrations**: `npm run db:migrate:dev`
+4. **Start server**: `npm run dev`
+
+See `LOCAL_SETUP.md` for detailed instructions and troubleshooting.

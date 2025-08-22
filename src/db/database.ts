@@ -1,43 +1,20 @@
 import { DatabaseAdapter } from './adapters/DatabaseAdapter.js';
-import { SqliteAdapter } from './adapters/SqliteAdapter.js';
 import { PostgresAdapter } from './adapters/PostgresAdapter.js';
 
 export interface DatabaseConfig {
-  type?: 'sqlite' | 'postgres';
-  connectionString?: string;
-  path?: string;
-  busyTimeout?: number;
-  walMode?: boolean;
-  verbose?: boolean;
+  connectionString: string;
 }
 
 export class DatabaseConnection {
   private adapter: DatabaseAdapter;
   private config: DatabaseConfig;
 
-  constructor(config: DatabaseConfig | string) {
-    if (typeof config === 'string') {
-      // Legacy support for string path
-      this.config = { type: 'sqlite', path: config };
-    } else {
-      this.config = config;
-    }
-
-    // Determine which adapter to use based on environment
-    if (process.env.DATABASE_URL) {
-      // Use PostgreSQL if DATABASE_URL is set
-      this.adapter = new PostgresAdapter(process.env.DATABASE_URL);
-      console.log('Using PostgreSQL database');
-    } else if (this.config.type === 'postgres' && this.config.connectionString) {
-      // Use PostgreSQL if explicitly configured
-      this.adapter = new PostgresAdapter(this.config.connectionString);
-      console.log('Using PostgreSQL database');
-    } else {
-      // Default to SQLite
-      const dbPath = this.config.path || process.env.DATABASE_PATH || './data/provenance.db';
-      this.adapter = new SqliteAdapter(dbPath);
-      console.log('Using SQLite database');
-    }
+  constructor(config: DatabaseConfig) {
+    this.config = config;
+    
+    // PostgreSQL is the only supported database
+    this.adapter = new PostgresAdapter(config.connectionString);
+    console.log('Using PostgreSQL database');
   }
 
   /**
@@ -74,9 +51,9 @@ export class DatabaseConnection {
 // Create a singleton instance
 let dbConnection: DatabaseConnection | null = null;
 
-export function getDatabaseConnection(config?: DatabaseConfig | string): DatabaseConnection {
+export function getDatabaseConnection(config: DatabaseConfig): DatabaseConnection {
   if (!dbConnection) {
-    dbConnection = new DatabaseConnection(config || {});
+    dbConnection = new DatabaseConnection(config);
   }
   return dbConnection;
 }
