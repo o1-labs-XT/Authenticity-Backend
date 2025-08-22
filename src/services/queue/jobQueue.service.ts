@@ -61,17 +61,18 @@ export class JobQueueService {
 
   async getQueueStats(): Promise<any> {
     try {
-      const stats = await this.boss.getQueueSize('proof-generation');
-      const failed = await this.boss.getQueueSize('proof-generation', { state: 'failed' });
-      const active = await this.boss.getQueueSize('proof-generation', { state: 'active' });
-      const completed = await this.boss.getQueueSize('proof-generation', { state: 'completed' });
+      // In pg-boss v10, getQueueSize returns count of jobs in created state by default
+      const pending = await this.boss.getQueueSize('proof-generation');
+      const failed = await this.boss.getQueueSize('proof-generation', { before: 'failed' });
+      const active = await this.boss.getQueueSize('proof-generation', { before: 'active' });
+      const completed = await this.boss.getQueueSize('proof-generation', { before: 'completed' });
       
       return {
-        pending: stats,
+        pending,
         active,
         completed,
         failed,
-        total: stats + active + completed + failed,
+        total: pending + active + completed + failed,
       };
     } catch (error) {
       console.error('Failed to get queue stats:', error);
