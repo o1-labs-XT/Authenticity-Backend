@@ -3,6 +3,7 @@ import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { VerificationService } from './services/image/verification.service.js';
+import { JobQueueService } from './services/queue/jobQueue.service.js';
 import { ProofGenerationService } from './services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
 import { UploadHandler } from './handlers/upload.handler.js';
@@ -27,7 +28,12 @@ async function main() {
     console.log('Initializing services...');
     const verificationService = new VerificationService();
     
-    // Initialize ZK services
+    // Initialize job queue
+    console.log('Initializing job queue...');
+    const jobQueue = new JobQueueService(config.databaseUrl);
+    await jobQueue.start();
+    
+    // Initialize ZK services (will be used by workers, but keeping for backward compatibility)
     const proofGenerationService = new ProofGenerationService();
     const proofPublishingService = new ProofPublishingService(
       config.zkappAddress,
@@ -40,8 +46,7 @@ async function main() {
     const uploadHandler = new UploadHandler(
       verificationService,
       repository,
-      proofGenerationService,
-      proofPublishingService
+      jobQueue
     );
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
@@ -72,6 +77,9 @@ async function main() {
       server.close(() => {
         console.log('HTTP server closed');
       });
+      
+      // Stop job queue
+      await jobQueue.stop();
       
       // Close database
       await dbConnection.close();

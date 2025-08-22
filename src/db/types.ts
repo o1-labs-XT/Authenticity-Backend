@@ -7,10 +7,15 @@ export interface AuthenticityRecord {
   token_owner_private_key?: string | null;
   creator_public_key: string;
   signature: string;
-  status: 'pending' | 'verified';
+  status: 'pending' | 'processing' | 'verified' | 'failed';
   created_at: string;
   verified_at?: string | null;
   transaction_id?: string | null;
+  job_id?: string | null;
+  processing_started_at?: string | null;
+  failed_at?: string | null;
+  failure_reason?: string | null;
+  retry_count?: number;
 }
 
 /**
@@ -30,13 +35,13 @@ export interface CreateAuthenticityRecordInput {
 export interface ExistingImageResult {
   exists: boolean;
   tokenOwnerAddress?: string;
-  status?: 'pending' | 'verified';
+  status?: 'pending' | 'processing' | 'verified' | 'failed';
 }
 
 /**
  * Status update for an authenticity record
  */
 export interface StatusUpdate {
-  status?: 'pending' | 'verified';
+  status?: 'pending' | 'processing' | 'verified' | 'failed';
   transactionId?: string;
 }
