@@ -1,0 +1,23 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm install && npm run build"
+
+# API Service Configuration
+[[services]]
+name = "api"
+buildCommand = "npm install && npm run build"
+startCommand = "npm run start:api"
+healthcheckPath = "/health"
+healthcheckTimeout = 180
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 3
+numReplicas = 2
+
+# Worker Service Configuration
+[[services]]
+name = "worker"
+buildCommand = "npm install && npm run build && tsx scripts/compile-zkapp.ts"
+startCommand = "npm run start:worker"
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 3
+numReplicas = 1
