@@ -58,4 +58,34 @@ export class JobQueueService {
     // pg-boss getJobById requires queue name as well
     return await this.boss.getJobById('proof-generation', jobId);
   }
+
+  async getQueueStats(): Promise<any> {
+    try {
+      const stats = await this.boss.getQueueSize('proof-generation');
+      const failed = await this.boss.getQueueSize('proof-generation', { state: 'failed' });
+      const active = await this.boss.getQueueSize('proof-generation', { state: 'active' });
+      const completed = await this.boss.getQueueSize('proof-generation', { state: 'completed' });
+      
+      return {
+        pending: stats,
+        active,
+        completed,
+        failed,
+        total: stats + active + completed + failed,
+      };
+    } catch (error) {
+      console.error('Failed to get queue stats:', error);
+      throw error;
+    }
+  }
+
+  async retryJob(jobId: string): Promise<void> {
+    try {
+      await this.boss.retry('proof-generation', jobId);
+      console.log(`🔄 Retried job ${jobId}`);
+    } catch (error) {
+      console.error('Failed to retry job:', error);
+      throw error;
+    }
+  }
 }
