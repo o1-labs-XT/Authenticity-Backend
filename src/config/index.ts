@@ -12,7 +12,7 @@ export interface Config {
   nodeEnv: 'development' | 'production' | 'test';
 
   // Database
-  databasePath: string;
+  databaseUrl: string;
 
   // Mina Network
   minaNetwork: 'testnet' | 'mainnet';
@@ -22,6 +22,9 @@ export interface Config {
   // API Configuration
   corsOrigin: string;
   uploadMaxSize: number; // in bytes
+  
+  // Optional configurations
+  circuitCachePath?: string;
 }
 
 /**
@@ -68,24 +71,22 @@ function parseConfig(): Config {
     errors.push(`Invalid MINA_NETWORK: ${minaNetwork}. Must be testnet, or mainnet`);
   }
 
-  // Check for database configuration - either PGHOST or DATABASE_PATH
-  // Note: PGHOST is used for PostgreSQL, DATABASE_PATH for SQLite
-  // Note: DONT use DATABASE_URL as it leaks the database password
-  const databasePath = process.env.PGHOST || process.env.DATABASE_PATH;
-
-  if (!databasePath) {
-    errors.push('Missing required environment variable: DATABASE_PATH or PGHOST');
+  // Database configuration - DATABASE_URL is required for PostgreSQL
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    errors.push('Missing required environment variable: DATABASE_URL');
   }
 
   const config: Config = {
     port: getRequiredNumber('PORT'),
     nodeEnv: nodeEnv as 'development' | 'production' | 'test',
-    databasePath: databasePath || '',
+    databaseUrl: databaseUrl || '',
     minaNetwork: minaNetwork as 'testnet' | 'mainnet',
     zkappAddress: getRequired('ZKAPP_ADDRESS'),
     feePayerPrivateKey: getRequired('FEE_PAYER_PRIVATE_KEY'),
     corsOrigin: getRequired('CORS_ORIGIN'),
     uploadMaxSize: getRequiredNumber('UPLOAD_MAX_SIZE'),
+    circuitCachePath: process.env.CIRCUIT_CACHE_PATH || './cache',
   };
 
   // Throw if any errors
@@ -106,10 +107,11 @@ export const config = parseConfig();
 console.log('🔧 Configuration loaded:', {
   port: config.port,
   nodeEnv: config.nodeEnv,
-  databasePath: config.databasePath,
+  databaseUrl: config.databaseUrl.replace(/\/\/[^@]+@/, '//*****@'), // Mask credentials
   minaNetwork: config.minaNetwork,
   zkappAddress: config.zkappAddress,
   feePayerPrivateKey: '******',
   corsOrigin: config.corsOrigin,
   uploadMaxSize: `${(config.uploadMaxSize / 1024 / 1024).toFixed(2)}MB`,
+  circuitCachePath: config.circuitCachePath,
 });

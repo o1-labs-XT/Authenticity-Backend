@@ -17,6 +17,8 @@ const API_URL = process.env.API_URL || 'http://localhost:3000';
 // Production URL: https://authenticity-backend-production.up.railway.app
 const IMAGE_PATH = process.env.IMAGE_PATH || '../../../Desktop/demo.png'; // Update this to your test image
 
+console.log(`Using API URL: ${API_URL}`);
+
 async function main(): Promise<void> {
   try {
     const privateKey = PrivateKey.random();

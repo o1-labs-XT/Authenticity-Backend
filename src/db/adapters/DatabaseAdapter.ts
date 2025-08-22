@@ -6,10 +6,15 @@ export interface AuthenticityRecord {
   token_owner_private_key?: string | null;
   creator_public_key: string;
   signature: string;
-  status: 'pending' | 'verified';
+  status: 'pending' | 'processing' | 'verified' | 'failed';
   created_at: string;
   verified_at?: string | null;
   transaction_id?: string | null;
+  job_id?: string | null;
+  processing_started_at?: string | null;
+  failed_at?: string | null;
+  failure_reason?: string | null;
+  retry_count?: number;
 }
 
 export interface DatabaseAdapter {
@@ -72,4 +77,14 @@ export interface DatabaseAdapter {
    * Execute a transaction
    */
   transaction<T>(callback: (trx: Knex.Transaction) => Promise<T>): Promise<T>;
+
+  /**
+   * Get counts of records by status
+   */
+  getStatusCounts(): Promise<Record<string, number>>;
+
+  /**
+   * Get failed records with pagination
+   */
+  getFailedRecords(limit: number, offset: number): Promise<AuthenticityRecord[]>;
 }

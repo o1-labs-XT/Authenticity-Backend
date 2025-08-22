@@ -6,9 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Development
 ```bash
-npm run dev           # Start dev server with hot reload (uses tsx + nodemon)
+# Prerequisites: Start PostgreSQL first
+docker-compose up -d  # Start PostgreSQL in Docker container
+
+# Run in separate terminals:
+npm run dev           # Start API server with hot reload
+npm run dev:worker    # Start worker with hot reload
+
+# Production commands:
 npm run build         # Build TypeScript to dist/
-npm start             # Run migrations, compile zkApp circuits, then start production server
+npm run start:api     # Start API server only
+npm run start:worker  # Start worker only
 ```
 
 ### Testing
@@ -42,9 +50,11 @@ This is a zero-knowledge proof backend for image authenticity verification built
 
 ### Core Flow
 1. **Upload Phase**: Users upload images with cryptographic signatures
-2. **Proof Generation**: Backend generates zero-knowledge proofs asynchronously
-3. **On-chain Publishing**: Proofs are published to Mina blockchain
-4. **Verification**: Anyone can verify image authenticity via token owner address
+2. **Job Queue**: Upload handler enqueues proof generation job in pg-boss
+3. **Worker Processing**: Separate worker service processes jobs asynchronously
+4. **Proof Generation**: Worker generates zero-knowledge proofs
+5. **On-chain Publishing**: Worker publishes proofs to Mina blockchain
+6. **Verification**: Anyone can verify image authenticity via token owner address
 
 ### Service Architecture
 
@@ -59,6 +69,7 @@ REST API → Handlers → Services → Database
   - `upload.handler.ts`: Manages image uploads, triggers proof generation
   - `status.handler.ts`: Returns proof generation status
   - `tokenOwner.handler.ts`: Returns token owner addresses for verification
+  - `admin.handler.ts`: Admin endpoints for job management and monitoring
 
 - **Services** (`src/services/`):
   - `image/verification.service.ts`: Computes SHA256 hashes and verifies signatures
@@ -66,16 +77,32 @@ REST API → Handlers → Services → Database
   - `zk/proofPublishing.service.ts`: Publishes proofs to Mina blockchain
 
 - **Database** (`src/db/`):
-  - Dual database support via adapter pattern
+  - PostgreSQL-only implementation (required for pg-boss job queue)
   - `adapters/DatabaseAdapter.ts`: Common interface for database operations
   - `adapters/PostgresAdapter.ts`: PostgreSQL implementation using Knex
-  - `adapters/SqliteAdapter.ts`: SQLite implementation using Knex
   - `authenticity.repository.ts`: Repository pattern for data access
-  - Database selection: Uses PostgreSQL if DATABASE_URL is set, otherwise SQLite
+  - Migrations managed through Knex
+
+- **Job Queue** (`src/services/queue/`):
+  - `jobQueue.service.ts`: pg-boss integration for reliable async processing
+  - Creates 'proof-generation' queue on startup (required for pg-boss v10)
+  - Handles proof generation jobs with automatic retries
+  - Uses singletonKey to prevent duplicate jobs for same image
+  - Maintains job history for auditing
+
+- **Workers** (`src/workers/`):
+  - `proofGenerationWorker.ts`: Processes proof generation jobs from queue
+  - Updates database status throughout job lifecycle
+  - Handles retries and failure scenarios
+
+- **Entry Points**:
+  - `src/index.ts`: API server entry point
+  - `src/worker.ts`: Worker service entry point
 
 ### Environment Configuration
 
 Required environment variables:
+- `DATABASE_URL`: PostgreSQL connection string (e.g., `postgresql://user:pass@host:5432/db`)
 - `MINA_NETWORK`: Network to use (testnet/mainnet)
 - `ZKAPP_ADDRESS`: Deployed zkApp contract address
 - `FEE_PAYER_PRIVATE_KEY`: Private key for transaction fees
@@ -85,29 +112,45 @@ Required environment variables:
 - `UPLOAD_MAX_SIZE`: Maximum upload size in bytes
 
 Optional environment variables:
-- `DATABASE_URL`: PostgreSQL connection string (when set, uses PostgreSQL)
-- `DATABASE_PATH`: Path to SQLite database (default: ./data/provenance.db)
 - `CIRCUIT_CACHE_PATH`: Directory for circuit compilation cache (default: ./cache)
+- `ADMIN_API_KEY`: API key for admin endpoints in production (development mode doesn't require it)
+
+For local development, use the provided docker-compose.yml:
+```
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/authenticity_dev
+```
 
 ### API Endpoints
 
+#### Public Endpoints
 - `POST /api/upload` - Upload image with signature for proof generation
   - Expects multipart form data with `image` file, `signature`, and `publicKey` fields
   - Returns: `{ sha256Hash, tokenOwnerAddress, status }` immediately
-  - Proof generation happens asynchronously in background
+  - Proof generation happens asynchronously in background via pg-boss job queue
 - `GET /api/status/:sha256Hash` - Check proof generation/publishing status
-  - Returns: `{ status: "pending" | "verified", transactionId?, tokenOwner? }`
+  - Returns: `{ status: "pending" | "processing" | "verified" | "failed", transactionId?, tokenOwner? }`
 - `GET /api/token-owner/:sha256Hash` - Get token owner address for verification
   - Returns: `{ tokenOwner }` if verified
 - `GET /health` - Health check endpoint for deployment monitoring
 - `GET /api/version` - API version information
 
+#### Admin Endpoints (Development mode or with ADMIN_API_KEY)
+- `GET /api/admin/jobs/stats` - Get job queue statistics
+  - Returns queue counts (pending, active, completed, failed) and database status counts
+- `GET /api/admin/jobs/failed?limit=10&offset=0` - List failed jobs with pagination
+  - Returns failed job records with failure reasons and retry counts
+- `GET /api/admin/jobs/:jobId` - Get detailed information about a specific job
+  - Returns complete job data from pg-boss
+- `POST /api/admin/jobs/:jobId/retry` - Retry a failed job
+  - Requeues the job and resets status to pending
+
 ### Important Implementation Details
 
-- **Async Proof Generation**: Proofs are generated asynchronously after upload response
+- **Job Queue Processing**: pg-boss handles async proof generation with retries
 - **Token Owner Address**: Randomly generated for each unique image hash
-- **Database States**: Records have "pending" or "verified" status
-- **Error Handling**: Failed verifications result in deleted database records
+- **Database States**: Records have "pending", "processing", "verified", or "failed" status
+- **Error Handling**: Failed jobs are retried 3 times with exponential backoff
+- **Job Deduplication**: Same image hash won't create duplicate jobs within 24 hours
 - **SHA256 Verification**: Uses penultimate round state for efficient ZK verification
 - **Security Middleware**: Uses Helmet.js for security headers, compression for responses
 - **File Handling**: Temporary uploaded files are cleaned up after proof generation
@@ -123,10 +166,13 @@ Optional environment variables:
 
 ### Deployment Notes
 
-- Configured for Railway deployment (see `railway.json`)
+- Configured for Railway deployment with separate services:
+  - **API Service**: Handles HTTP requests, lightweight (512MB RAM)
+  - **Worker Service**: Processes proof generation, heavy (2GB RAM)
 - Health checks configured with 3 restart attempts on failure (180s timeout)
-- Migrations run automatically at startup before server starts
-- Circuit compilation happens at startup (can take 30-60 seconds)
+- Migrations run automatically at API startup
+- Circuit compilation happens at worker startup (30-60 seconds)
+- pg-boss handles job distribution across multiple workers
 - Requires Node.js >= 20.0.0 and npm >= 10.0.0
 
 ### zkApp Circuit Compilation
@@ -138,10 +184,39 @@ The `scripts/compile-zkapp.ts` script pre-compiles the AuthenticityProgram and A
 - Cache directory configured via CIRCUIT_CACHE_PATH
 - Compilation typically takes 30-60 seconds
 
-### Testing Upload Script
+### Testing Scripts
 
+#### Upload Testing
 Use `test-upload.mts` to test the upload endpoint:
 ```bash
 IMAGE_PATH=./image.png API_URL=http://localhost:3000 tsx test-upload.mts
 ```
 The script generates a random keypair, signs the image, and uploads it to the specified endpoint.
+
+#### Admin API Testing
+Use `test-admin.mts` to test admin endpoints:
+```bash
+# Get job queue statistics
+tsx test-admin.mts stats
+
+# List failed jobs
+tsx test-admin.mts failed
+
+# Get job details
+tsx test-admin.mts details <jobId>
+
+# Retry a failed job
+tsx test-admin.mts retry <jobId>
+
+# For production with auth
+ADMIN_API_KEY=your-key API_URL=https://api.example.com tsx test-admin.mts stats
+```
+
+### Local Development Setup
+
+1. **Start PostgreSQL**: `docker-compose up -d`
+2. **Copy environment**: `cp .env.example .env` and configure
+3. **Run migrations**: `npm run db:migrate:dev`
+4. **Start server**: `npm run dev`
+
+See `LOCAL_SETUP.md` for detailed instructions and troubleshooting.

@@ -1,9 +1,8 @@
 import { Request, Response } from 'express';
 import { hashImageOffCircuit } from 'authenticity-zkapp';
-import { VerificationService, VerificationInputs } from '../services/image/verification.service.js';
+import { VerificationService } from '../services/image/verification.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
-import { ProofGenerationService } from '../services/zk/proofGeneration.service.js';
-import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
+import { JobQueueService } from '../services/queue/jobQueue.service.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
 import fs from 'fs';
 
@@ -30,8 +29,7 @@ export class UploadHandler {
   constructor(
     private verificationService: VerificationService,
     private repository: AuthenticityRepository,
-    private proofGenerationService: ProofGenerationService,
-    private proofPublishingService: ProofPublishingService
+    private jobQueue: JobQueueService
   ) {}
 
   /**
@@ -202,19 +200,37 @@ export class UploadHandler {
       const tokenOwnerPrivate = tokenOwner.privateKey;
       console.log(`Generated token owner address: ${tokenOwnerAddress}`);
 
-      // Start proof generation and publishing asynchronously
-      // We don't await this - it runs in the background
-      this.generateAndPublishProof(
+      // Insert pending record in database first
+      await this.repository.insertPendingRecord({
         sha256Hash,
         tokenOwnerAddress,
         tokenOwnerPrivate,
-        publicKey,
+        creatorPublicKey: publicKey,
         signature,
-        verificationInputs,
-        file!.path
-      ).catch((error) => {
-        console.error(`Failed to generate/publish proof for ${sha256Hash}:`, error);
       });
+
+      // Enqueue job for proof generation
+      try {
+        const jobId = await this.jobQueue.enqueueProofGeneration({
+          sha256Hash,
+          signature,
+          publicKey,
+          imagePath: file!.path,
+          tokenOwnerAddress,
+          tokenOwnerPrivateKey: tokenOwnerPrivate,
+          uploadedAt: new Date(),
+        });
+
+        // Update record with job ID for tracking
+        await this.repository.updateRecord(sha256Hash, { job_id: jobId });
+
+        console.log(`Enqueued proof generation job ${jobId} for ${sha256Hash}`);
+      } catch (error) {
+        console.error(`Failed to enqueue job for ${sha256Hash}:`, error);
+        // Clean up the record if job enqueue fails
+        await this.repository.deleteRecord(sha256Hash);
+        throw error;
+      }
 
       // Return token owner address immediately
       res.json({
@@ -255,67 +271,4 @@ export class UploadHandler {
     }
   }
 
-  /**
-   * Generate and publish proof (runs asynchronously in background)
-   */
-  private async generateAndPublishProof(
-    sha256Hash: string,
-    tokenOwnerAddress: string,
-    tokenOwnerPrivateKey: string,
-    publicKey: string,
-    signature: string,
-    verificationInputs: VerificationInputs,
-    imagePath?: string
-  ): Promise<void> {
-    try {
-      console.log(`Starting proof generation for ${sha256Hash}`);
-
-      // Insert pending record in database
-      await this.repository.insertPendingRecord({
-        sha256Hash,
-        tokenOwnerAddress,
-        tokenOwnerPrivate: tokenOwnerPrivateKey,
-        creatorPublicKey: publicKey,
-        signature,
-      });
-
-      // Generate the proof
-      const { proof, publicInputs } = await this.proofGenerationService.generateProof(
-        sha256Hash,
-        publicKey,
-        signature,
-        verificationInputs,
-        imagePath
-      );
-
-      console.log(`Proof generated successfully for ${sha256Hash}, now publishing...`);
-
-      // Publish the proof to blockchain
-      // waits for the transaction to be published on chain
-      const transactionId = await this.proofPublishingService.publishProof(
-        sha256Hash,
-        proof,
-        publicInputs,
-        tokenOwnerPrivateKey
-      );
-
-      // Update record with transaction ID
-      await this.repository.updateRecordStatus(sha256Hash, {
-        status: 'verified',
-        transactionId,
-      });
-
-      console.log(`Proof published successfully for ${sha256Hash}, tx: ${transactionId}`);
-    } catch (error: any) {
-      console.error(`Failed to generate/publish proof for ${sha256Hash}:`, error);
-
-      // Delete the failed record to allow retry with same image
-      const deleted = await this.repository.deleteRecord(sha256Hash);
-      if (deleted) {
-        console.log(`Deleted failed record for ${sha256Hash} to allow retry`);
-      } else {
-        console.warn(`Could not delete record for ${sha256Hash} - may already be deleted`);
-      }
-    }
-  }
 }

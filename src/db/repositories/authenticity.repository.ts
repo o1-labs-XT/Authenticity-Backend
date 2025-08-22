@@ -105,6 +105,13 @@ export class AuthenticityRepository {
   }
 
   /**
+   * Update a record with arbitrary fields
+   */
+  async updateRecord(sha256Hash: string, updates: Partial<AuthenticityRecord>): Promise<void> {
+    await this.adapter.updateRecord(sha256Hash, updates);
+  }
+
+  /**
    * Delete a record by hash (for retry scenarios)
    */
   async deleteRecord(sha256Hash: string): Promise<boolean> {
@@ -121,5 +128,41 @@ export class AuthenticityRepository {
    */
   async transaction<T>(callback: (trx: any) => Promise<T>): Promise<T> {
     return await this.adapter.transaction(callback);
+  }
+
+  /**
+   * Get counts of records by status
+   */
+  async getStatusCounts(): Promise<Record<string, number>> {
+    return await this.adapter.getStatusCounts();
+  }
+
+  /**
+   * Get failed records with pagination
+   */
+  async getFailedRecords(limit: number, offset: number): Promise<AuthenticityRecord[]> {
+    return await this.adapter.getFailedRecords(limit, offset);
+  }
+
+  /**
+   * Update a record (alias for updateRecord for compatibility)
+   */
+  async update(sha256Hash: string, updates: any): Promise<void> {
+    await this.updateRecord(sha256Hash, updates);
+  }
+
+  /**
+   * Create a record (alias for insertPendingRecord for compatibility)
+   */
+  async create(data: { sha256Hash: string; status: string; tokenOwner: string }): Promise<any> {
+    // This is a simplified version for compatibility
+    await this.insertPendingRecord({
+      sha256Hash: data.sha256Hash,
+      tokenOwnerAddress: data.tokenOwner,
+      tokenOwnerPrivate: '', // Will be updated by the upload handler
+      creatorPublicKey: '', // Will be updated by the upload handler
+      signature: '', // Will be updated by the upload handler
+    });
+    return { sha256Hash: data.sha256Hash };
   }
 }

@@ -3,11 +3,13 @@ import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { VerificationService } from './services/image/verification.service.js';
+import { JobQueueService } from './services/queue/jobQueue.service.js';
 import { ProofGenerationService } from './services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
 import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
+import { AdminHandler } from './handlers/admin.handler.js';
 
 async function main() {
   console.log('🚀 Starting Authenticity Backend...');
@@ -17,7 +19,9 @@ async function main() {
   try {
     // Initialize database
     console.log('Initializing database...');
-    const dbConnection = new DatabaseConnection(config.databasePath);
+    const dbConnection = new DatabaseConnection({ 
+      connectionString: config.databaseUrl 
+    });
     await dbConnection.initialize();
     const repository = new AuthenticityRepository(dbConnection.getAdapter());
 
@@ -25,7 +29,12 @@ async function main() {
     console.log('Initializing services...');
     const verificationService = new VerificationService();
     
-    // Initialize ZK services
+    // Initialize job queue
+    console.log('Initializing job queue...');
+    const jobQueue = new JobQueueService(config.databaseUrl);
+    await jobQueue.start();
+    
+    // Initialize ZK services (will be used by workers, but keeping for backward compatibility)
     const proofGenerationService = new ProofGenerationService();
     const proofPublishingService = new ProofPublishingService(
       config.zkappAddress,
@@ -38,17 +47,18 @@ async function main() {
     const uploadHandler = new UploadHandler(
       verificationService,
       repository,
-      proofGenerationService,
-      proofPublishingService
+      jobQueue
     );
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
+    const adminHandler = new AdminHandler(jobQueue, repository);
 
     // Create and start server
     const app = createServer({
       uploadHandler,
       statusHandler,
       tokenOwnerHandler,
+      adminHandler,
     });
 
     const port = config.port;
@@ -60,6 +70,13 @@ async function main() {
       console.log(`   POST /api/upload - Upload image for proof generation`);
       console.log(`   GET  /api/status/:sha256Hash - Check proof status`);
       console.log(`   GET  /api/token-owner/:sha256Hash - Get token owner address`);
+      if (config.nodeEnv === 'development') {
+        console.log(`📍 Admin endpoints:`);
+        console.log(`   GET  /api/admin/jobs/stats - Job queue statistics`);
+        console.log(`   GET  /api/admin/jobs/failed - List failed jobs`);
+        console.log(`   GET  /api/admin/jobs/:jobId - Get job details`);
+        console.log(`   POST /api/admin/jobs/:jobId/retry - Retry a failed job`);
+      }
     });
 
     // Graceful shutdown
@@ -70,6 +87,9 @@ async function main() {
       server.close(() => {
         console.log('HTTP server closed');
       });
+      
+      // Stop job queue
+      await jobQueue.stop();
       
       // Close database
       await dbConnection.close();
