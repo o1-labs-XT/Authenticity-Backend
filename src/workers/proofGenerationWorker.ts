@@ -3,9 +3,9 @@ import { AuthenticityRepository } from '../db/repositories/authenticity.reposito
 import { VerificationService } from '../services/image/verification.service.js';
 import { ProofGenerationService } from '../services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
-import { ProofGenerationJobData } from '../services/queue/jobQueue.service.js';
+import { ProofGenerationJob, ProofGenerationJobData } from '../services/queue/jobQueue.service.js';
+import { config } from '../config/index.js';
 import fs from 'fs/promises';
-
 export class ProofGenerationWorker {
   private workerName: string;
 
@@ -20,28 +20,31 @@ export class ProofGenerationWorker {
   }
 
   async start(): Promise<void> {
-    await this.boss.work<ProofGenerationJobData>(
-      'proof-generation',
-      async (jobs) => {
-        // Process jobs one at a time (batch size is 1)
-        for (const job of jobs) {
-          console.log(`👷 Worker ${this.workerName} processing job ${job.id} for hash ${job.data.sha256Hash}`);
-          
-          const { 
-            sha256Hash, 
-            signature, 
-            publicKey, 
-            imagePath, 
-            tokenOwnerAddress,
-            tokenOwnerPrivateKey 
-          } = job.data;
-          
+    const numWorkers = config.numWorkers;
+    console.log(`🔧 Starting ${numWorkers} concurrent workers for proof generation`);
+
+    // Start multiple independent workers
+    for (let i = 0; i < numWorkers; i++) {
+      const workerId = `${this.workerName}-${i}`;
+
+      await this.boss.work<ProofGenerationJobData>(
+        'proof-generation',
+        { batchSize: 1 },
+        async (jobs) => {
+          // Process single job (batchSize is 1)
+          const job = jobs[0] as ProofGenerationJob;
+          console.log(
+            `👷 Worker ${workerId} processing job ${job.id} for hash ${job.data.sha256Hash}`
+          );
+
+          const { sha256Hash, signature, publicKey, imagePath, tokenOwnerPrivateKey } = job.data;
+
           try {
             // Update status to processing
             await this.repository.updateRecord(sha256Hash, {
               status: 'processing',
               processing_started_at: new Date().toISOString(),
-              retry_count: (job as any).retryCount || 0,
+              retry_count: job.retryCount || 0,
             });
 
             // Step 1: Prepare verification data
@@ -83,15 +86,14 @@ export class ProofGenerationWorker {
             }
 
             console.log(`✅ Proof completed for ${sha256Hash}: ${transactionId}`);
-
           } catch (error: any) {
             console.error(`❌ Proof generation failed for ${sha256Hash}:`, error);
-            
+
             // Check if this is the final retry
-            const retryCount = (job as any).retryCount || 0;
+            const retryCount = job.retryCount || 0;
             const retryLimit = 3; // Default retry limit
             const isLastRetry = retryCount >= retryLimit - 1;
-            
+
             // Update failure status
             await this.repository.updateRecord(sha256Hash, {
               status: isLastRetry ? 'failed' : 'pending',
@@ -114,10 +116,12 @@ export class ProofGenerationWorker {
             throw error;
           }
         }
-      }
-    );
+      );
 
-    console.log(`👷 Proof generation worker ${this.workerName} started`);
+      console.log(`👷 Started worker ${workerId}`);
+    }
+
+    console.log(`✅ All ${numWorkers} workers started successfully`);
   }
 
   async stop(): Promise<void> {

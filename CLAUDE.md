@@ -10,13 +10,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 docker-compose up -d  # Start PostgreSQL in Docker container
 
 # Run in separate terminals:
-npm run dev           # Start API server with hot reload
+npm run dev           # Start API server with hot reload (alias for dev:api)
+npm run dev:api       # Start API server with hot reload
 npm run dev:worker    # Start worker with hot reload
 
 # Production commands:
 npm run build         # Build TypeScript to dist/
-npm run start:api     # Start API server only
-npm run start:worker  # Start worker only
+npm run start         # Start API with migrations and circuit compilation (legacy)
+npm run start:api     # Start API server only (with migrations)
+npm run start:worker  # Start worker only (with circuit compilation)
 ```
 
 ### Testing
@@ -26,6 +28,10 @@ npm run test:unit     # Run unit tests only
 npm run test:integration  # Run integration tests only
 npm run test:coverage # Run tests with coverage report
 npm run test:watch    # Run tests in watch mode
+
+# Test specific endpoints
+tsx test-upload.mts   # Test image upload (set IMAGE_PATH and API_URL env vars)
+tsx test-admin.mts    # Test admin endpoints (see script for usage)
 ```
 
 ### Database Management
@@ -34,8 +40,11 @@ npm run db:migrate    # Run database migrations using Knex
 npm run db:migrate:dev # Run migrations for development environment
 npm run db:migrate:prod # Run migrations for production environment
 npm run db:rollback   # Rollback last migration
-npm run db:migrate:make # Create new migration file
+npm run db:migrate:make <name> # Create new migration file
 npm run db:seed       # Run database seeds
+
+# Direct database access for monitoring
+docker exec -it authenticity-postgres psql -U postgres -d authenticity_dev
 ```
 
 ### Code Quality
@@ -114,6 +123,7 @@ Required environment variables:
 Optional environment variables:
 - `CIRCUIT_CACHE_PATH`: Directory for circuit compilation cache (default: ./cache)
 - `ADMIN_API_KEY`: API key for admin endpoints in production (development mode doesn't require it)
+- `NUM_WORKERS`: Number of concurrent workers for parallel job processing (default: 1)
 
 For local development, use the provided docker-compose.yml:
 ```
@@ -166,14 +176,17 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/authenticity_dev
 
 ### Deployment Notes
 
-- Configured for Railway deployment with separate services:
-  - **API Service**: Handles HTTP requests, lightweight (512MB RAM)
-  - **Worker Service**: Processes proof generation, heavy (2GB RAM)
-- Health checks configured with 3 restart attempts on failure (180s timeout)
-- Migrations run automatically at API startup
-- Circuit compilation happens at worker startup (30-60 seconds)
-- pg-boss handles job distribution across multiple workers
+- Uses `railway.toml` for multi-service deployment on Railway:
+  - **API Service**: 2 replicas, handles HTTP requests, runs migrations on startup
+  - **Worker Service**: 1 replica (important: avoid duplicate job processing), compiles circuits on startup
+- Health checks on API service only (180s timeout, 3 retries)
+- Both services share the same PostgreSQL database via DATABASE_URL
+- pg-boss creates required tables automatically on first run
+- Circuit compilation takes 30-60 seconds (cached after first compile)
+- **Worker Scaling**: Use `NUM_WORKERS` environment variable to run multiple concurrent workers within the single replica (default: 1)
 - Requires Node.js >= 20.0.0 and npm >= 10.0.0
+
+See `RAILWAY_DEPLOYMENT.md` for detailed deployment instructions.
 
 ### zkApp Circuit Compilation
 
@@ -217,6 +230,23 @@ ADMIN_API_KEY=your-key API_URL=https://api.example.com tsx test-admin.mts stats
 1. **Start PostgreSQL**: `docker-compose up -d`
 2. **Copy environment**: `cp .env.example .env` and configure
 3. **Run migrations**: `npm run db:migrate:dev`
-4. **Start server**: `npm run dev`
+4. **Start services in separate terminals**:
+   - Terminal 1: `npm run dev:api`
+   - Terminal 2: `npm run dev:worker`
 
-See `LOCAL_SETUP.md` for detailed instructions and troubleshooting.
+### Monitoring and Debugging
+
+- **Job Queue Stats**: `curl http://localhost:3000/api/admin/jobs/stats` (dev mode)
+- **Database Monitoring**: See `claude_MONITORING_GUIDE.md` for SQL queries
+- **Worker Logs**: Check for "Worker processing job" messages
+- **Failed Jobs**: Use admin API or check database `status='failed'`
+
+### Project Files Reference
+
+- `railway.toml` - Multi-service deployment configuration
+- `knexfile.ts` - Database migration configuration
+- `docker-compose.yml` - Local PostgreSQL setup
+- `test-upload.mts` - Upload endpoint testing script
+- `test-admin.mts` - Admin API testing script
+- `RAILWAY_DEPLOYMENT.md` - Production deployment guide
+- `claude_MONITORING_GUIDE.md` - Monitoring queries and strategies
