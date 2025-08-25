@@ -20,4 +20,4 @@ buildCommand = "npm install && npm run build && tsx scripts/compile-zkapp.ts"
 startCommand = "npm run start:worker"
 restartPolicyType = "on-failure"
 restartPolicyMaxRetries = 3
-numReplicas = 2
+numReplicas = 1

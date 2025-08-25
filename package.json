@@ -10,7 +10,7 @@
     "build": "tsc",
     "start": "npm run db:migrate && tsx scripts/compile-zkapp.ts && node dist/index.js",
     "start:api": "npm run db:migrate && node dist/index.js",
-    "start:worker": "tsx scripts/compile-zkapp.ts && node dist/worker.js",
+    "start:worker": "node dist/worker.js",
     "test": "jest --detectOpenHandles",
     "test:unit": "jest --testPathPattern=unit --detectOpenHandles",
     "test:integration": "jest --testPathPattern=integration --detectOpenHandles",

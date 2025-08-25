@@ -22,9 +22,10 @@ export interface Config {
   // API Configuration
   corsOrigin: string;
   uploadMaxSize: number; // in bytes
-  
+
   // Optional configurations
   circuitCachePath?: string;
+  numWorkers: number;
 }
 
 /**
@@ -59,6 +60,20 @@ function parseConfig(): Config {
     return parsed;
   };
 
+  // Helper to parse optional number with default
+  const getOptionalNumber = (key: string, defaultValue: number): number => {
+    const value = process.env[key];
+    if (!value || value.trim() === '') {
+      return defaultValue;
+    }
+    const parsed = parseInt(value, 10);
+    if (isNaN(parsed)) {
+      errors.push(`Invalid number for ${key}: ${value}`);
+      return defaultValue;
+    }
+    return parsed;
+  };
+
   // Parse NODE_ENV
   const nodeEnv = getRequired('NODE_ENV');
   if (!['development', 'production', 'test'].includes(nodeEnv)) {
@@ -87,6 +102,7 @@ function parseConfig(): Config {
     corsOrigin: getRequired('CORS_ORIGIN'),
     uploadMaxSize: getRequiredNumber('UPLOAD_MAX_SIZE'),
     circuitCachePath: process.env.CIRCUIT_CACHE_PATH || './cache',
+    numWorkers: getOptionalNumber('NUM_WORKERS', 1),
   };
 
   // Throw if any errors
@@ -114,4 +130,5 @@ console.log('🔧 Configuration loaded:', {
   corsOrigin: config.corsOrigin,
   uploadMaxSize: `${(config.uploadMaxSize / 1024 / 1024).toFixed(2)}MB`,
   circuitCachePath: config.circuitCachePath,
+  numWorkers: config.numWorkers,
 });
