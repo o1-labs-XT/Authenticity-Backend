@@ -26,6 +26,9 @@ export class AuthenticityRepository {
         signature: record.signature,
         status: 'pending',
         transaction_id: null,
+        image_data: record.imageData || null,
+        original_filename: record.originalFilename || null,
+        file_size: record.fileSize || null,
       });
     } catch (error: any) {
       // Handle unique constraint violations

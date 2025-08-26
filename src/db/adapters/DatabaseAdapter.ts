@@ -15,6 +15,9 @@ export interface AuthenticityRecord {
   failed_at?: string | null;
   failure_reason?: string | null;
   retry_count?: number;
+  image_data?: Buffer | null;
+  original_filename?: string | null;
+  file_size?: number | null;
 }
 
 export interface DatabaseAdapter {
