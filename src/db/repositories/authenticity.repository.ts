@@ -168,4 +168,11 @@ export class AuthenticityRepository {
     });
     return { sha256Hash: data.sha256Hash };
   }
+
+  /**
+   * Get the database adapter (for advanced queries)
+   */
+  getAdapter(): DatabaseAdapter {
+    return this.adapter;
+  }
 }

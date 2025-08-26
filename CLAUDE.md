@@ -160,10 +160,13 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/authenticity_dev
 - **Token Owner Address**: Randomly generated for each unique image hash
 - **Database States**: Records have "pending", "processing", "verified", or "failed" status
 - **Error Handling**: Failed jobs are retried 3 times with exponential backoff
+- **Job Failure Consistency**: Worker ensures database records are marked as "failed" when pg-boss retries are exhausted
+- **Orphaned Job Cleanup**: Automatic cleanup of jobs stuck in "pending"/"processing" for >10 minutes
 - **Job Deduplication**: Same image hash won't create duplicate jobs within 24 hours
 - **SHA256 Verification**: Uses penultimate round state for efficient ZK verification
 - **Security Middleware**: Uses Helmet.js for security headers, compression for responses
-- **File Handling**: Temporary uploaded files are cleaned up after proof generation
+- **Image Storage**: Images stored as BYTEA in PostgreSQL database for cross-service access
+- **File Handling**: Temporary files created during processing are automatically cleaned up
 - **Circuit Compilation**: zkApp circuits are pre-compiled on startup for better performance
 - **Database Migrations**: Schema managed through Knex migrations
 

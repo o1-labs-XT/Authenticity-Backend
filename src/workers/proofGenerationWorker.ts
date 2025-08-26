@@ -1,5 +1,6 @@
 import PgBoss from 'pg-boss';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { DatabaseAdapter } from '../db/adapters/DatabaseAdapter.js';
 import { VerificationService } from '../services/image/verification.service.js';
 import { ProofGenerationService } from '../services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
@@ -25,6 +26,9 @@ export class ProofGenerationWorker {
   async start(): Promise<void> {
     const numWorkers = config.numWorkers;
     console.log(`🔧 Starting worker with ${numWorkers} concurrent job processing`);
+
+    // Note: pg-boss v10 doesn't have a 'failed' event, so we rely on our improved retry logic
+    // and orphaned job cleanup to ensure database consistency
 
     // Start single worker handler that processes jobs with specified concurrency
     const workerId = await this.boss.work<ProofGenerationJobData>(
@@ -111,20 +115,14 @@ export class ProofGenerationWorker {
         } catch (error: any) {
           console.error(`❌ Proof generation failed for ${sha256Hash}:`, error);
 
-          // Check if this is the final retry
+          // Check if this is the final retry (pg-boss retryLimit is set to 3 in jobQueue.service.ts)
           const retryCount = job.retryCount || 0;
-          const retryLimit = 3; // Default retry limit
+          const retryLimit = 3; // Must match jobQueue.service.ts retryLimit
           const isLastRetry = retryCount >= retryLimit - 1;
 
-          // Update failure status
-          await this.repository.updateRecord(sha256Hash, {
-            status: isLastRetry ? 'failed' : 'pending',
-            failed_at: isLastRetry ? new Date().toISOString() : null,
-            failure_reason: error.message || 'Unknown error',
-            retry_count: retryCount + 1,
-          });
+          console.log(`🔄 Job retry info: attempt ${retryCount + 1}/${retryLimit}, isLastRetry: ${isLastRetry}`);
 
-          // Clean up temp file on final failure or always clean up temp files
+          // Always clean up temp files
           if (tempImagePath) {
             try {
               await fs.unlink(tempImagePath);
@@ -134,8 +132,30 @@ export class ProofGenerationWorker {
             }
           }
 
-          // Re-throw error to trigger pg-boss retry
-          throw error;
+          if (isLastRetry) {
+            // Final failure - mark as failed and don't re-throw (let job complete)
+            console.log(`💀 Final retry failed for ${sha256Hash}, marking as failed in database`);
+            await this.repository.updateRecord(sha256Hash, {
+              status: 'failed',
+              failed_at: new Date().toISOString(),
+              failure_reason: error.message || 'Unknown error',
+              retry_count: retryCount + 1,
+            });
+            
+            // Don't re-throw - let the job complete as "failed" without triggering pg-boss retry
+            console.log(`✅ Job marked as failed in database for ${sha256Hash}`);
+          } else {
+            // Not final retry - update retry count and re-throw for pg-boss to retry
+            console.log(`🔄 Updating retry count and re-throwing for pg-boss retry (${sha256Hash})`);
+            await this.repository.updateRecord(sha256Hash, {
+              status: 'pending', // Keep as pending for next retry
+              failure_reason: error.message || 'Unknown error',
+              retry_count: retryCount + 1,
+            });
+            
+            // Re-throw to trigger pg-boss retry
+            throw error;
+          }
         }
       }
     );
@@ -143,15 +163,56 @@ export class ProofGenerationWorker {
     console.log(`✅ Worker started successfully with ID: ${workerId}`);
     console.log(`👀 Worker is now polling for jobs every 2 seconds with ${numWorkers} concurrent jobs...`);
 
-    // Start periodic status logging
+    // Start periodic status logging and cleanup
     this.statusInterval = setInterval(async () => {
       try {
         const stats = await this.boss.getQueueSize('proof-generation');
-        console.log(`🔍 Worker status check - Queue size: ${stats} jobs pending`);
+        const dbStats = await this.repository.getStatusCounts();
+        
+        console.log(`🔍 Worker status check - pg-boss queue: ${stats} jobs, DB: ${JSON.stringify(dbStats)}`);
+        
+        // Check for orphaned pending jobs (pending in DB but not processing for > 10 minutes)
+        await this.checkOrphanedJobs();
       } catch (error) {
-        console.error('Failed to get queue stats:', error);
+        console.error('Failed to get status or cleanup orphaned jobs:', error);
       }
     }, 30000); // Log every 30 seconds
+  }
+
+  /**
+   * Check for orphaned jobs that are stuck in pending/processing state
+   */
+  private async checkOrphanedJobs(): Promise<void> {
+    try {
+      // Get all pending/processing records older than 10 minutes
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      
+      // This requires a custom query since we need to filter by created_at/processing_started_at
+      const knex = this.repository.getAdapter().getKnex();
+      const orphanedJobs = await knex('authenticity_records')
+        .where('status', 'pending')
+        .where('created_at', '<', tenMinutesAgo)
+        .orWhere(function() {
+          this.where('status', 'processing')
+              .where('processing_started_at', '<', tenMinutesAgo);
+        });
+
+      if (orphanedJobs.length > 0) {
+        console.log(`🧹 Found ${orphanedJobs.length} potentially orphaned jobs, marking as failed`);
+        
+        for (const job of orphanedJobs) {
+          await this.repository.updateRecord(job.sha256_hash, {
+            status: 'failed',
+            failed_at: new Date().toISOString(),
+            failure_reason: 'Job orphaned - stuck in pending/processing state for >10 minutes',
+          });
+          
+          console.log(`💀 Marked orphaned job as failed: ${job.sha256_hash}`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check for orphaned jobs:', error);
+    }
   }
 
   async stop(): Promise<void> {
