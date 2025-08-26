@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import type { Express } from 'express';
 import { hashImageOffCircuit } from 'authenticity-zkapp';
 import { VerificationService } from '../services/image/verification.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
@@ -200,14 +201,20 @@ export class UploadHandler {
       const tokenOwnerPrivate = tokenOwner.privateKey;
       console.log(`Generated token owner address: ${tokenOwnerAddress}`);
 
-      // Insert pending record in database first
+      // Insert pending record in database with image data
       await this.repository.insertPendingRecord({
         sha256Hash,
         tokenOwnerAddress,
         tokenOwnerPrivate,
         creatorPublicKey: publicKey,
         signature,
+        imageData: imageBuffer,
+        originalFilename: file!.originalname,
+        fileSize: imageBuffer.length,
       });
+
+      // Clean up uploaded file now that data is stored in database
+      fs.unlinkSync(file!.path);
 
       // Enqueue job for proof generation
       try {
@@ -215,7 +222,6 @@ export class UploadHandler {
           sha256Hash,
           signature,
           publicKey,
-          imagePath: file!.path,
           tokenOwnerAddress,
           tokenOwnerPrivateKey: tokenOwnerPrivate,
           uploadedAt: new Date(),

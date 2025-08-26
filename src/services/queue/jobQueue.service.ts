@@ -4,7 +4,6 @@ export interface ProofGenerationJobData {
   sha256Hash: string;
   signature: string;
   publicKey: string;
-  imagePath: string;
   tokenOwnerAddress: string;
   tokenOwnerPrivateKey: string;
   uploadedAt: Date;
@@ -37,6 +36,8 @@ export class JobQueueService {
 
   async enqueueProofGeneration(data: ProofGenerationJobData): Promise<string> {
     try {
+      console.log(`📝 Enqueueing proof generation job for hash ${data.sha256Hash}...`);
+      
       const jobId = await this.boss.send('proof-generation', data, {
         retryLimit: 3,
         retryDelay: 60,
@@ -44,7 +45,16 @@ export class JobQueueService {
         singletonKey: data.sha256Hash,
       });
 
-      console.log(`📋 Enqueued proof generation job ${jobId} for hash ${data.sha256Hash}`);
+      console.log(`📋 Successfully enqueued proof generation job ${jobId} for hash ${data.sha256Hash}`);
+      
+      // Get queue stats immediately after enqueueing
+      try {
+        const queueSize = await this.boss.getQueueSize('proof-generation');
+        console.log(`📊 Current queue size after enqueueing: ${queueSize} jobs`);
+      } catch (statsError) {
+        console.error('Failed to get queue stats after enqueueing:', statsError);
+      }
+      
       return jobId || '';
     } catch (error) {
       console.error('❌ Failed to enqueue job:', error);
