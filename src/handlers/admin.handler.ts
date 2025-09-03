@@ -53,7 +53,7 @@ export class AdminHandler {
       
       // Update database status back to pending
       if (job.data?.sha256Hash) {
-        await this.repository.update(job.data.sha256Hash, {
+        await this.repository.updateRecord(job.data.sha256Hash, {
           status: 'pending',
           failed_at: null,
           failure_reason: null,

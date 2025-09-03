@@ -110,8 +110,8 @@ export class ProofPublishingService {
 
       // Save transaction ID to database immediately after sending
       if (this.repository) {
-        await this.repository.updateRecordStatus(sha256Hash, {
-          transactionId: pendingTxn.hash,
+        await this.repository.updateRecord(sha256Hash, {
+          transaction_id: pendingTxn.hash,
         });
         console.log(`Transaction ID saved to database for ${sha256Hash}: ${pendingTxn.hash}`);
       }

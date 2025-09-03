@@ -22,44 +22,6 @@ const config: { [key: string]: Knex.Config } = {
     seeds: {
       directory: './seeds'
     }
-  },
-
-  production: {
-    client: 'pg',
-    connection: {
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    },
-    pool: {
-      min: 2,
-      max: 10
-    },
-    migrations: {
-      directory: './migrations',
-      extension: 'ts'
-    },
-    seeds: {
-      directory: './seeds'
-    }
-  },
-
-  test: {
-    client: 'pg',
-    connection: {
-      connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/authenticity_test',
-      ssl: false
-    },
-    pool: {
-      min: 1,
-      max: 5
-    },
-    migrations: {
-      directory: './migrations',
-      extension: 'ts'
-    },
-    seeds: {
-      directory: './seeds'
-    }
   }
 };
 

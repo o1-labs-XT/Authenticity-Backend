@@ -3,9 +3,7 @@ import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { VerificationService } from './services/image/verification.service.js';
-import { JobQueueService } from './services/queue/jobQueue.service.js';
-import { ProofGenerationService } from './services/zk/proofGeneration.service.js';
-import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
+import { JobQueueService } from './services/queue/jobQueue.service.js'; 
 import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
@@ -34,15 +32,6 @@ async function main() {
     const jobQueue = new JobQueueService(config.databaseUrl);
     await jobQueue.start();
     
-    // Initialize ZK services (will be used by workers, but keeping for backward compatibility)
-    const proofGenerationService = new ProofGenerationService();
-    const proofPublishingService = new ProofPublishingService(
-      config.zkappAddress,
-      config.feePayerPrivateKey,
-      config.minaNetwork,
-      repository
-    );
-
     // Initialize handlers
     const uploadHandler = new UploadHandler(
       verificationService,

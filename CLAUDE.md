@@ -9,9 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Prerequisites: Start PostgreSQL first
 docker-compose up -d  # Start PostgreSQL in Docker container
 
-# Run in separate terminals:
-npm run dev           # Start API server with hot reload
+# Run both services (in separate terminals):
+npm run dev           # Start API server with hot reload (or npm run dev:api)
 npm run dev:worker    # Start worker with hot reload
+
+# Alternative: run only one service
+npm run dev:api       # API server only
+npm run dev:worker    # Worker only
 
 # Production commands:
 npm run build         # Build TypeScript to dist/
@@ -21,12 +25,14 @@ npm run start:worker  # Start worker only
 
 ### Testing
 ```bash
-npm test              # Run all tests with open handles detection
+npm test              # Run all tests with open handles detection  
 npm run test:unit     # Run unit tests only
 npm run test:integration  # Run integration tests only
 npm run test:coverage # Run tests with coverage report
 npm run test:watch    # Run tests in watch mode
 ```
+
+**Note**: Test configuration uses Jest defaults. No Jest config file is present in the project.
 
 ### Database Management
 ```bash
@@ -217,6 +223,8 @@ ADMIN_API_KEY=your-key API_URL=https://api.example.com tsx test-admin.mts stats
 1. **Start PostgreSQL**: `docker-compose up -d`
 2. **Copy environment**: `cp .env.example .env` and configure
 3. **Run migrations**: `npm run db:migrate:dev`
-4. **Start server**: `npm run dev`
+4. **Start services** (in separate terminals):
+   - API: `npm run dev` (or `npm run dev:api`)
+   - Worker: `npm run dev:worker`
 
 See `LOCAL_SETUP.md` for detailed instructions and troubleshooting.

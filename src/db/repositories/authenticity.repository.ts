@@ -1,15 +1,15 @@
-import { DatabaseAdapter } from '../adapters/DatabaseAdapter.js';
+import { Knex } from 'knex';
+import { PostgresAdapter } from '../adapters/PostgresAdapter.js';
 import {
   AuthenticityRecord,
   CreateAuthenticityRecordInput,
   ExistingImageResult,
-  StatusUpdate,
 } from '../types.js';
 
 export class AuthenticityRepository {
-  private adapter: DatabaseAdapter;
+  private adapter: PostgresAdapter;
 
-  constructor(adapter: DatabaseAdapter) {
+  constructor(adapter: PostgresAdapter) {
     this.adapter = adapter;
   }
 
@@ -51,29 +51,6 @@ export class AuthenticityRepository {
       tokenOwnerAddress: record.token_owner_address,
       status: record.status,
     };
-  }
-
-  /**
-   * Update the status of an authenticity record
-   */
-  async updateRecordStatus(sha256Hash: string, update: StatusUpdate): Promise<void> {
-    const record = await this.adapter.getRecordByHash(sha256Hash);
-    
-    if (!record) {
-      throw new Error(`No record found with hash: ${sha256Hash}`);
-    }
-
-    const updates: Partial<AuthenticityRecord> = {};
-    
-    if (update.status) {
-      updates.status = update.status;
-    }
-    
-    if (update.transactionId) {
-      updates.transaction_id = update.transactionId;
-    }
-
-    await this.adapter.updateRecord(sha256Hash, updates);
   }
 
   /**
@@ -126,7 +103,7 @@ export class AuthenticityRepository {
   /**
    * Execute a transaction
    */
-  async transaction<T>(callback: (trx: any) => Promise<T>): Promise<T> {
+  async transaction<T>(callback: (trx: Knex.Transaction) => Promise<T>): Promise<T> {
     return await this.adapter.transaction(callback);
   }
 
@@ -142,27 +119,5 @@ export class AuthenticityRepository {
    */
   async getFailedRecords(limit: number, offset: number): Promise<AuthenticityRecord[]> {
     return await this.adapter.getFailedRecords(limit, offset);
-  }
-
-  /**
-   * Update a record (alias for updateRecord for compatibility)
-   */
-  async update(sha256Hash: string, updates: any): Promise<void> {
-    await this.updateRecord(sha256Hash, updates);
-  }
-
-  /**
-   * Create a record (alias for insertPendingRecord for compatibility)
-   */
-  async create(data: { sha256Hash: string; status: string; tokenOwner: string }): Promise<any> {
-    // This is a simplified version for compatibility
-    await this.insertPendingRecord({
-      sha256Hash: data.sha256Hash,
-      tokenOwnerAddress: data.tokenOwner,
-      tokenOwnerPrivate: '', // Will be updated by the upload handler
-      creatorPublicKey: '', // Will be updated by the upload handler
-      signature: '', // Will be updated by the upload handler
-    });
-    return { sha256Hash: data.sha256Hash };
   }
 }

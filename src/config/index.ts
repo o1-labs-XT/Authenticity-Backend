@@ -101,7 +101,7 @@ function parseConfig(): Config {
  * Singleton config instance
  * Parsed and validated at module load time
  */
-export const config = parseConfig();
+export const config: Config = parseConfig();
 
 // Log configuration on startup (without sensitive data)
 console.log('🔧 Configuration loaded:', {

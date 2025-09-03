@@ -1,25 +1,23 @@
 import knex, { Knex } from 'knex';
-import { DatabaseAdapter, AuthenticityRecord } from './DatabaseAdapter.js';
-
-export class PostgresAdapter implements DatabaseAdapter {
+import { AuthenticityRecord } from '../types.js';
+ 
+export class PostgresAdapter  {
   private knex: Knex;
   private connectionString: string;
 
   constructor(connectionString: string) {
     this.connectionString = connectionString;
-    
+
     this.knex = knex({
       client: 'pg',
       connection: {
         connectionString: this.connectionString,
-        ssl: process.env.NODE_ENV === 'production' 
-          ? { rejectUnauthorized: false }
-          : false
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       },
       pool: {
         min: 2,
-        max: 10
-      }
+        max: 10,
+      },
     });
   }
 
@@ -43,60 +41,21 @@ export class PostgresAdapter implements DatabaseAdapter {
     await this.knex.destroy();
   }
 
-  async createTable(): Promise<void> {
-    const exists = await this.knex.schema.hasTable('authenticity_records');
-    
-    if (!exists) {
-      await this.knex.schema.createTable('authenticity_records', (table) => {
-        table.string('sha256_hash').primary();
-        table.string('token_owner_address').notNullable();
-        table.string('token_owner_private_key').nullable();
-        table.string('creator_public_key').notNullable();
-        table.string('signature').notNullable();
-        table.string('status').notNullable().checkIn(['pending', 'verified']).index();
-        table.timestamp('created_at').notNullable().defaultTo(this.knex.fn.now());
-        table.timestamp('verified_at').nullable();
-        table.string('transaction_id').nullable();
-        table.index('token_owner_address');
-        table.index('created_at');
-      });
-      console.log('Created authenticity_records table in PostgreSQL');
-    }
-  }
-
-  async getAllRecords(): Promise<AuthenticityRecord[]> {
-    return await this.knex<AuthenticityRecord>('authenticity_records')
-      .select('*')
-      .orderBy('created_at', 'desc');
-  }
-
   async getRecordByHash(sha256Hash: string): Promise<AuthenticityRecord | null> {
     const record = await this.knex<AuthenticityRecord>('authenticity_records')
       .where('sha256_hash', sha256Hash)
       .first();
-    
+
     return record || null;
   }
 
-  async getRecordsByStatus(status: 'pending' | 'verified'): Promise<AuthenticityRecord[]> {
-    return await this.knex<AuthenticityRecord>('authenticity_records')
-      .where('status', status)
-      .orderBy('created_at', 'desc');
-  }
-
-  async getRecordsByTokenOwner(tokenOwner: string): Promise<AuthenticityRecord | null> {
-    const record = await this.knex<AuthenticityRecord>('authenticity_records')
-      .where('token_owner_address', tokenOwner)
-      .first();
-    
-    return record || null;
-  }
-
-  async createRecord(record: Omit<AuthenticityRecord, 'created_at' | 'verified_at'>): Promise<void> {
+  async createRecord(
+    record: Omit<AuthenticityRecord, 'created_at' | 'verified_at'>
+  ): Promise<void> {
     const now = new Date().toISOString();
     await this.knex<AuthenticityRecord>('authenticity_records').insert({
       ...record,
-      created_at: now
+      created_at: now,
     });
   }
 
@@ -106,7 +65,7 @@ export class PostgresAdapter implements DatabaseAdapter {
     if (updates.status === 'verified' && !updates.verified_at) {
       updateData.verified_at = new Date().toISOString();
     }
-    
+
     await this.knex<AuthenticityRecord>('authenticity_records')
       .where('sha256_hash', sha256Hash)
       .update(updateData);
@@ -123,16 +82,16 @@ export class PostgresAdapter implements DatabaseAdapter {
   }
 
   async getStatusCounts(): Promise<Record<string, number>> {
-    const results = await this.knex('authenticity_records')
+    const results = (await this.knex('authenticity_records')
       .select('status')
       .count('* as count')
-      .groupBy('status') as Array<{ status: string; count: string | number }>;
-    
+      .groupBy('status')) as Array<{ status: string; count: string | number }>;
+
     const counts: Record<string, number> = {};
     for (const row of results) {
       counts[row.status] = parseInt(String(row.count), 10);
     }
-    
+
     // Ensure all statuses are represented
     const statuses = ['pending', 'processing', 'verified', 'failed'];
     for (const status of statuses) {
@@ -140,7 +99,7 @@ export class PostgresAdapter implements DatabaseAdapter {
         counts[status] = 0;
       }
     }
-    
+
     return counts;
   }
 
