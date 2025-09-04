@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-import { hashImageOffCircuit } from 'authenticity-zkapp';
-import { VerificationService } from '../services/image/verification.service.js';
+import type { } from 'multer';
+import { Signature, PublicKey, PrivateKey } from 'o1js';
+import { ImageAuthenticityService } from '../services/image/verification.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
@@ -27,7 +28,7 @@ interface ValidationResult {
 
 export class UploadHandler {
   constructor(
-    private verificationService: VerificationService,
+    private verificationService: ImageAuthenticityService,
     private repository: AuthenticityRepository,
     private jobQueue: JobQueueService
   ) {}
@@ -91,7 +92,7 @@ export class UploadHandler {
 
     // Validate public key format
     try {
-      this.verificationService.parsePublicKey(publicKey);
+      PublicKey.fromBase58(publicKey);
     } catch {
       return {
         isValid: false,
@@ -105,7 +106,7 @@ export class UploadHandler {
 
     // Validate signature format
     try {
-      this.verificationService.parseSignature(signature);
+      Signature.fromBase58(signature);
     } catch {
       return {
         isValid: false,
@@ -148,7 +149,7 @@ export class UploadHandler {
       const imageBuffer = validation.imageBuffer!;
 
       // Compute SHA256 hash of image
-      const sha256Hash = hashImageOffCircuit(imageBuffer);
+      const sha256Hash = this.verificationService.hashImage(imageBuffer);
       console.log(`Image SHA256: ${sha256Hash}`);
 
       // Check for existing record (duplicate detection)
@@ -166,27 +167,20 @@ export class UploadHandler {
         return;
       }
 
-      // Prepare image verification (extract SHA256 state)
-      console.log('Preparing image verification...');
-      const verificationInputs = this.verificationService.prepareForVerification(file!.path);
-
-      // Parse signature and public key
-      const sig = this.verificationService.parseSignature(signature);
-      const pubKey = this.verificationService.parsePublicKey(publicKey);
-
-      // Verify signature matches expected hash (outside circuit for performance)
-      const isValid = this.verificationService.verifySignature(
-        sig,
-        verificationInputs.expectedHash,
-        pubKey
+      // Verify signature and prepare image for proof generation
+      console.log('Verifying signature and preparing image...');
+      const verificationResult = this.verificationService.verifyAndPrepareImage(
+        file!.path,
+        signature,
+        publicKey
       );
 
-      if (!isValid) {
-        console.log('Invalid signature for image hash');
+      if (!verificationResult.isValid) {
+        console.log('Invalid signature for image hash:', verificationResult.error);
         res.status(400).json({
           error: {
             code: 'INVALID_SIGNATURE',
-            message: 'Signature does not match image hash',
+            message: verificationResult.error || 'Signature verification failed',
           },
         });
         // Clean up uploaded file
@@ -195,9 +189,9 @@ export class UploadHandler {
       }
 
       // Generate random token owner address
-      const tokenOwner = this.verificationService.generateTokenOwnerAddress();
-      const tokenOwnerAddress = tokenOwner.publicKey;
-      const tokenOwnerPrivate = tokenOwner.privateKey;
+      const tokenOwnerKey = PrivateKey.random();
+      const tokenOwnerAddress = tokenOwnerKey.toPublicKey().toBase58();
+      const tokenOwnerPrivate = tokenOwnerKey.toBase58();
       console.log(`Generated token owner address: ${tokenOwnerAddress}`);
 
       // Insert pending record in database first
@@ -238,7 +232,7 @@ export class UploadHandler {
         sha256Hash,
         status: 'pending',
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Upload error:', error);
 
       // Clean up uploaded file if it exists
@@ -247,7 +241,7 @@ export class UploadHandler {
       }
 
       // Check if it's a database constraint error
-      if (error.message?.includes('already exists')) {
+      if (error instanceof Error && error.message?.includes('already exists')) {
         // This shouldn't happen as we check for duplicates, but handle it anyway
         const sha256Hash = error.message.match(/hash ([\w\d]+)/)?.[1];
         if (sha256Hash) {

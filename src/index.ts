@@ -2,7 +2,7 @@ import { config } from './config/index.js';
 import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
-import { VerificationService } from './services/image/verification.service.js';
+import { ImageAuthenticityService } from './services/image/verification.service.js';
 import { JobQueueService } from './services/queue/jobQueue.service.js'; 
 import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
@@ -25,7 +25,7 @@ async function main() {
 
     // Initialize services
     console.log('Initializing services...');
-    const verificationService = new VerificationService();
+    const verificationService = new ImageAuthenticityService();
     
     // Initialize job queue
     console.log('Initializing job queue...');

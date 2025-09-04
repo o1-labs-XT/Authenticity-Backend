@@ -1,5 +1,5 @@
-import { prepareImageVerification } from 'authenticity-zkapp';
-import { Signature, PublicKey, Field, PrivateKey, UInt32 } from 'o1js';
+import { prepareImageVerification, hashImageOffCircuit } from 'authenticity-zkapp';
+import { Signature, PublicKey, Field, UInt32 } from 'o1js';
 
 /**
  * Verification inputs from prepareImageVerification
@@ -12,59 +12,60 @@ export interface VerificationInputs {
   roundConstant: UInt32; // Round constant (K_t) for the final round
 }
 
-export class VerificationService {
+export class ImageAuthenticityService {
   /**
-   * Prepare image for verification by extracting SHA256 state
-   * This matches the prepareImageVerification from the example
+   * Compute SHA256 hash of image buffer
    */
-  prepareForVerification(imagePath: string): VerificationInputs {
-    // Use the prepareImageVerification function from authenticity-zkapp
-    // This extracts the penultimate SHA256 state needed for the ZK proof
-    const inputs = prepareImageVerification(imagePath);
-
-    return {
-      expectedHash: inputs.expectedHash,
-      penultimateState: inputs.penultimateState,
-      initialState: inputs.initialState,
-      messageWord: inputs.messageWord,
-      roundConstant: inputs.roundConstant,
-    };
+  hashImage(imageBuffer: Buffer): string {
+    return hashImageOffCircuit(imageBuffer);
   }
 
   /**
-   * Verify signature matches the image hash
-   * This is done outside the circuit for performance
+   * Verify image signature and prepare for proof generation
    */
-  verifySignature(signature: Signature, expectedHash: Field, publicKey: PublicKey): boolean {
-    // Verify the signature on the expected hash
-    // The signature should be on the SHA256 hash of the image
-    return signature.verify(publicKey, expectedHash.toFields()).toBoolean();
-  }
+  verifyAndPrepareImage(
+    imagePath: string,
+    signatureString: string,
+    publicKeyString: string
+  ): {
+    isValid: boolean;
+    verificationInputs?: VerificationInputs;
+    error?: string;
+  } {
+    try {
+      const signature = Signature.fromBase58(signatureString);
+      const publicKey = PublicKey.fromBase58(publicKeyString);
+      
+      // Extract SHA256 state for ZK proof
+      const inputs = prepareImageVerification(imagePath);
+      const verificationInputs: VerificationInputs = {
+        expectedHash: inputs.expectedHash,
+        penultimateState: inputs.penultimateState,
+        initialState: inputs.initialState,
+        messageWord: inputs.messageWord,
+        roundConstant: inputs.roundConstant,
+      };
 
-  /**
-   * Parse signature from base58 string
-   */
-  parseSignature(signatureString: string): Signature {
-    return Signature.fromBase58(signatureString);
-  }
+      // Verify signature matches hash
+      const isValid = signature.verify(publicKey, verificationInputs.expectedHash.toFields()).toBoolean();
 
-  /**
-   * Parse public key from base58 string
-   */
-  parsePublicKey(publicKeyString: string): PublicKey {
-    return PublicKey.fromBase58(publicKeyString);
-  }
+      if (!isValid) {
+        return {
+          isValid: false,
+          error: 'Signature does not match image hash',
+        };
+      }
 
-  /**
-   * Generate random token owner address
-   * This creates a new random keypair for token ownership
-   */
-  generateTokenOwnerAddress(): { privateKey: string; publicKey: string } {
-    const randomKey = PrivateKey.random();
-    return {
-      privateKey: randomKey.toBase58(),
-      publicKey: randomKey.toPublicKey().toBase58(),
-    };
+      return {
+        isValid: true,
+        verificationInputs,
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        error: error instanceof Error ? error.message : 'Verification failed',
+      };
+    }
   }
 
 }

@@ -1,7 +1,7 @@
 import { config } from './config/index.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
-import { VerificationService } from './services/image/verification.service.js';
+import { ImageAuthenticityService } from './services/image/verification.service.js';
 import { ProofGenerationService } from './services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
 import { ProofGenerationWorker } from './workers/proofGenerationWorker.js';
@@ -31,7 +31,7 @@ async function startWorker() {
 
     // Initialize services
     console.log('Initializing services...');
-    const verificationService = new VerificationService();
+    const verificationService = new ImageAuthenticityService();
     
     console.log('Initializing proof generation service...');
     const proofGenerationService = new ProofGenerationService();

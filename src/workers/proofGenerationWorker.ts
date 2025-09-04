@@ -1,6 +1,6 @@
 import PgBoss from 'pg-boss';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
-import { VerificationService } from '../services/image/verification.service.js';
+import { ImageAuthenticityService } from '../services/image/verification.service.js';
 import { ProofGenerationService } from '../services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
 import { ProofGenerationJobData } from '../services/queue/jobQueue.service.js';
@@ -12,7 +12,7 @@ export class ProofGenerationWorker {
   constructor(
     private boss: PgBoss,
     private repository: AuthenticityRepository,
-    private verificationService: VerificationService,
+    private imageAuthenticityService: ImageAuthenticityService,
     private proofGenerationService: ProofGenerationService,
     private proofPublishingService: ProofPublishingService
   ) {
@@ -44,9 +44,17 @@ export class ProofGenerationWorker {
               retry_count: (job as any).retryCount || 0,
             });
 
-            // Step 1: Prepare verification data
-            console.log(`🔍 Preparing verification for ${sha256Hash}`);
-            const verificationInputs = this.verificationService.prepareForVerification(imagePath);
+            // Step 1: Verify and prepare image
+            console.log(`🔍 Verifying and preparing image for ${sha256Hash}`);
+            const { isValid, verificationInputs, error } = this.imageAuthenticityService.verifyAndPrepareImage(
+              imagePath,
+              signature,
+              publicKey
+            );
+
+            if (!isValid || !verificationInputs) {
+              throw new Error(`Image verification failed: ${error || 'Unknown error'}`);
+            }
 
             // Step 2: Generate proof
             console.log(`🔐 Generating proof for ${sha256Hash}`);
