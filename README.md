@@ -41,6 +41,12 @@ The system uses a job queue architecture with two separate services:
 ```shell
 # Connect to PostgreSQL CLI
 docker-compose exec postgres psql -U postgres authenticity_dev
+
+# Delete and recreate the db
+docker-compose down -v
+docker-compose up -d
+# Wait a few seconds for PostgreSQL to start
+npm run db:migrate
 ```
 
 ### pg-boss Admin
