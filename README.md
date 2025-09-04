@@ -1,94 +1,84 @@
 # Provenance Backend
 
-Zero-knowledge proof-based image authenticity verification backend for Project Tapestry.
+## Quick Start
 
-## Features
-
-- Image upload with SHA256 commitment
-- Zero-knowledge proof generation using Mina Protocol
-- On-chain authenticity verification
-- Token account deployment for image records
-- REST API for provers and verifiers
-
-## Prerequisites
-
-- Node.js 18.14.0+
-- npm or yarn
-- Access to Mina testnet
-
-## Installation
-
-1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd provenance-backend
-```
+# 1. Start PostgreSQL
+docker-compose up -d
 
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Configure environment:
-```bash
+# 2. Setup environment
 cp .env.example .env
-# Edit .env with your configuration
+# Configure required variables:
+# - ZKAPP_ADDRESS: Your deployed zkApp contract address
+# - FEE_PAYER_PRIVATE_KEY: Private key for Mina transaction fees
+
+# 3. Install dependencies
+npm install
+
+# 4. Run database migrations
+npm run db:migrate
+
+# 5. Start services (in separate terminals)
+npm run dev:api      # API server on port 3000
+npm run dev:worker   # Background worker for proof generation
 ```
 
-## Development
+## Architecture
 
-Run in development mode with hot reload:
-```bash
-npm run dev
+The system uses a job queue architecture with two separate services:
+
+- **API Server**: Handles HTTP requests, image uploads, and status queries
+- **Worker Service**: Processes proof generation jobs asynchronously via pg-boss queue
+
+### Flow
+1. Client uploads image with cryptographic signature
+2. API validates and enqueues proof generation job
+3. Worker generates zero-knowledge proof
+4. Worker publishes proof to Mina blockchain
+5. Client can verify authenticity via token owner address
+
+## DB
+```shell
+# Connect to PostgreSQL CLI
+docker-compose exec postgres psql -U postgres authenticity_dev
 ```
 
-## Build
+### pg-boss Admin
 
-Build for production:
-```bash
-npm run build
+pg-boss creates its own schema (`pgboss`) with tables for job management:
+
+```sql
+-- Connect to database
+docker-compose exec postgres psql -U postgres authenticity_dev
+
+-- View job queue tables
+\dt pgboss.*
+
+-- Check pending jobs
+SELECT id, name, state, created_on, retry_count 
+FROM pgboss.job 
+WHERE state IN ('created', 'retry')
+ORDER BY created_on DESC;
+
+-- View failed jobs
+SELECT id, name, state, completed_on, output
+FROM pgboss.job
+WHERE state = 'failed'
+ORDER BY completed_on DESC
+LIMIT 10;
 ```
 
-## Production
-
-Start production server:
-```bash
-npm start
-```
 
 ## API Endpoints
 
-### Prover Endpoints
+### Public
+- `POST /api/upload` - Upload image for proof generation (multipart form: image, signature, publicKey)
+- `GET /api/status/:sha256Hash` - Check proof status
+- `GET /api/token-owner/:sha256Hash` - Get token owner for verification
+- `GET /health` - Health check
 
-- `POST /api/upload` - Upload image with signature
-- `GET /api/status/:sha256Hash` - Check proof generation status
-
-### Verifier Endpoints
-
-- `GET /api/token-owner/:sha256Hash` - Get token owner address for image
-
-## Project Structure
-
-```
-src/
-├── api/          # Express routes and middleware
-├── handlers/     # Request handlers
-├── services/     # Business logic
-│   ├── zk/       # Zero-knowledge proof services
-│   ├── image/    # Image processing
-│   └── queue/    # Task queue management
-├── db/           # Database layer
-├── types/        # TypeScript definitions
-└── utils/        # Utility functions
-```
-
-## Testing
-
-Run tests:
-```bash
-npm test
-```
-
-## License
-
-ISC
+### Admin (requires ADMIN_API_KEY in production)
+- `GET /api/admin/jobs/stats` - Job queue statistics
+- `GET /api/admin/jobs/failed` - List failed jobs
+- `POST /api/admin/jobs/:jobId/retry` - Retry failed job
+ 

@@ -8,8 +8,8 @@ const config: { [key: string]: Knex.Config } = {
     client: 'pg',
     connection: {
       connectionString: process.env.DATABASE_URL,
-      // Disable SSL for local development
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      // Always disable SSL for development environment
+      ssl: false
     },
     pool: {
       min: 2,
