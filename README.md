@@ -37,7 +37,15 @@ The system uses a job queue architecture with two separate services:
 4. Worker publishes proof to Mina blockchain
 5. Client can verify authenticity via token owner address
 
-## DB
+## Database Management
+
+### pgweb UI
+Access the database through pgweb interface at http://localhost:8081
+- Automatically connects to the development database
+- No additional configuration needed
+- Started automatically with `docker-compose up -d`
+
+### PostgreSQL CLI
 ```shell
 # Connect to PostgreSQL CLI
 docker-compose exec postgres psql -U postgres authenticity_dev
