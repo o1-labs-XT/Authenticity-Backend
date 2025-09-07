@@ -67,12 +67,6 @@ export class ProofGenerationService {
       publicInputs,
       privateInputs
     );
- 
-    // Clean up the image file after proof generation
-    if (imagePath && fs.existsSync(imagePath)) {
-      fs.unlinkSync(imagePath);
-      console.log(`Cleaned up image file: ${imagePath}`);
-    }
 
     return { proof, publicInputs };
   }

@@ -94,7 +94,6 @@ export class ProofGenerationWorker {
 
           } catch (error: any) {
             console.error(`❌ Proof generation failed for ${sha256Hash}:`, error);
-            
             // Check if this is the final retry
             const retryCount = (job as any).retryCount || 0;
             const retryLimit = 3; // Default retry limit
