@@ -1,4 +1,5 @@
 import PgBoss from 'pg-boss';
+import { logger } from '../../utils/logger.js';
 
 export interface ProofGenerationJobData {
   sha256Hash: string;
@@ -23,14 +24,12 @@ export class JobQueueService {
     
     // Create queue if it doesn't exist
     await this.boss.createQueue('proof-generation');
-    console.log('✅ Queue created/verified: proof-generation');
-    
-    console.log('🚀 Job queue started');
+    logger.info('Job queue started');
   }
 
   async stop(): Promise<void> {
     await this.boss.stop();
-    console.log('🛑 Job queue stopped');
+    logger.info('Job queue stopped');
   }
 
   async enqueueProofGeneration(data: ProofGenerationJobData): Promise<string> {
@@ -46,10 +45,10 @@ export class JobQueueService {
         }
       );
 
-      console.log(`📋 Enqueued proof generation job ${jobId} for hash ${data.sha256Hash}`);
+      logger.debug({ jobId, sha256Hash: data.sha256Hash }, 'Job enqueued');
       return jobId || '';
     } catch (error) {
-      console.error('❌ Failed to enqueue job:', error);
+      logger.error({ err: error }, 'Failed to enqueue job');
       throw error;
     }
   }
@@ -75,7 +74,7 @@ export class JobQueueService {
         total: pending + active + completed + failed,
       };
     } catch (error) {
-      console.error('Failed to get queue stats:', error);
+      logger.error({ err: error }, 'Failed to get queue stats');
       throw error;
     }
   }
@@ -83,9 +82,9 @@ export class JobQueueService {
   async retryJob(jobId: string): Promise<void> {
     try {
       await this.boss.retry('proof-generation', jobId);
-      console.log(`🔄 Retried job ${jobId}`);
+      logger.info({ jobId }, 'Job retried successfully');
     } catch (error) {
-      console.error('Failed to retry job:', error);
+      logger.error({ err: error, jobId }, 'Failed to retry job');
       throw error;
     }
   }

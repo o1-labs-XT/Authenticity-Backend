@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { config } from '../../config/index.js';
+import { logger } from '../../utils/logger.js';
 
 /**
  * API error response - used across all handlers and middleware
@@ -22,8 +23,18 @@ export function errorMiddleware(
   res: Response<ErrorResponse>,
   _next: NextFunction
 ): void {
-  // Log the error
-  console.error(`Error handling ${req.method} ${req.path}:`, error);
+  // Log the error with structured logging
+  logger.error({
+    err: error,
+    method: req.method,
+    path: req.path,
+    query: req.query,
+    body: req.body,
+    headers: {
+      'user-agent': req.headers['user-agent'],
+      'content-type': req.headers['content-type'],
+    },
+  }, 'Request error');
 
   // Default error response
   let statusCode = 500;
@@ -90,8 +101,8 @@ export function errorMiddleware(
   }
 
   // Add more details in development mode
-  if (config.nodeEnv === 'development') {
-    console.error('Stack trace:', error.stack);
+  if (config.nodeEnv === 'development' && error.stack) {
+    logger.debug({ stack: error.stack }, 'Error stack trace');
     // You could add stack trace to response in dev mode if needed
   }
 

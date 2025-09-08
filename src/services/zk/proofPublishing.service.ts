@@ -1,6 +1,7 @@
 import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount } from 'o1js';
 import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
+import { logger } from '../../utils/logger.js';
 
 export class ProofPublishingService {
   private zkApp: AuthenticityZkApp;
@@ -22,7 +23,7 @@ export class ProofPublishingService {
     // Initialize zkApp instance - will throw if address is invalid
     const zkAppPublicKey = PublicKey.fromBase58(this.zkAppAddress);
     this.zkApp = new AuthenticityZkApp(zkAppPublicKey);
-    console.log(`ProofPublishingService initialized with zkApp at ${zkAppAddress}`);
+    logger.info(`ProofPublishingService initialized with zkApp at ${zkAppAddress}`);
   }
 
   /**
@@ -36,13 +37,11 @@ export class ProofPublishingService {
         mina: 'https://api.minascan.io/node/devnet/v1/graphql',
       });
       Mina.setActiveInstance(Testnet);
-      console.log(
-        'Connected to Mina testnet (devnet) at: https://api.minascan.io/node/devnet/v1/graphql'
-      );
+      logger.info('Connected to Mina testnet at https://api.minascan.io/node/devnet/v1/graphql');
     } else if (network === 'mainnet') {
       const Mainnet = Mina.Network('https://api.minascan.io/node/mainnet/v1/graphql');
       Mina.setActiveInstance(Mainnet);
-      console.log('Connected to Mina mainnet');
+      logger.info('Connected to Mina mainnet');
     } 
   }
 
@@ -67,7 +66,7 @@ export class ProofPublishingService {
       throw new Error('Fee payer private key not configured');
     }
 
-    console.log(`Publishing proof for SHA256: ${sha256Hash}`);
+    logger.info({ sha256Hash }, 'Publishing proof to blockchain');
 
     // Ensure contract is compiled (o1js caches this internally)
     await AuthenticityZkApp.compile();
@@ -77,12 +76,13 @@ export class ProofPublishingService {
     const tokenOwner = tokenOwnerPrivate.toPublicKey();
     const feePayer = PrivateKey.fromBase58(this.feePayerKey);
 
-    console.log('Transaction participants:');
-    console.log('- Fee payer:', feePayer.toPublicKey().toBase58());
-    console.log('- Token owner:', tokenOwner.toBase58());
-    console.log('- Creator (from proof):',  proof.publicInput.publicKey.toBase58());
+    logger.debug({ 
+      feePayer: feePayer.toPublicKey().toBase58(),
+      tokenOwner: tokenOwner.toBase58(),
+      creator: proof.publicInput.publicKey.toBase58()
+    }, 'Transaction participants');
 
-    console.log('Creating transaction to publish proof...');
+    logger.debug('Creating transaction...');
 
     try {
       // Create transaction to verify and store the proof on-chain
@@ -95,37 +95,37 @@ export class ProofPublishingService {
         await this.zkApp.verifyAndStore(tokenOwner, proof, publicInputs);
       });
 
-      console.log('Proving transaction...');
+      logger.debug('Proving transaction...');
       await txn.prove();
 
-      console.log('Signing and sending transaction...');
+      logger.debug('Signing and sending transaction...');
       // Sign with all required parties:
       // 1. Fee payer (for paying fees)
       // 2. Token owner (for the new token account)
       const signers = [feePayer, tokenOwnerPrivate];
-      console.log(`Signing transaction with ${signers.length} signers`);
+      logger.debug(`Signing transaction with ${signers.length} signers`);
       const pendingTxn = await txn.sign(signers).send();
 
-      console.log(`Transaction sent with hash: ${pendingTxn.hash}`);
+      logger.info({ transactionHash: pendingTxn.hash }, 'Transaction sent');
 
       // Save transaction ID to database immediately after sending
       if (this.repository) {
         await this.repository.updateRecord(sha256Hash, {
           transaction_id: pendingTxn.hash,
         });
-        console.log(`Transaction ID saved to database for ${sha256Hash}: ${pendingTxn.hash}`);
+        logger.debug({ sha256Hash, transactionHash: pendingTxn.hash }, 'Transaction ID saved to database');
       }
 
       // Wait for confirmation (optional - could be async)
       if (pendingTxn.wait) {
-        console.log('Waiting for transaction confirmation...');
+        logger.debug('Waiting for transaction confirmation...');
         await pendingTxn.wait();
-        console.log('Transaction confirmed on blockchain');
+        logger.info('Transaction confirmed on blockchain');
       }
 
       return pendingTxn.hash;
     } catch (error: any) {
-      console.error('Failed to publish proof:', error);
+      logger.error({ err: error }, 'Failed to publish proof');
       throw new Error(`Failed to publish proof: ${error.message}`);
     }
   }
@@ -136,21 +136,21 @@ export class ProofPublishingService {
   async isDeployed(): Promise<boolean> {
     try {
       const zkAppPublicKey = PublicKey.fromBase58(this.zkAppAddress);
-      console.log(`Checking deployment for zkApp at: ${this.zkAppAddress}`);
+      logger.debug(`Checking zkApp deployment at ${this.zkAppAddress}`);
 
       await fetchAccount({ publicKey: zkAppPublicKey });
       const account = Mina.getAccount(zkAppPublicKey);
-      console.log('Account fetched:', {
+      logger.debug({
         address: zkAppPublicKey.toBase58(),
         balance: account.balance.toString(),
         nonce: account.nonce.toString(),
         hasZkapp: !!account.zkapp,
         zkappState: account.zkapp?.appState?.map((s) => s.toString()),
-      });
+      }, 'Account fetched');
 
       return !!account.zkapp;
     } catch (error: any) {
-      console.error('Error checking deployment:', error.message);
+      logger.error({ err: error }, 'Error checking deployment');
       return false;
     }
   }

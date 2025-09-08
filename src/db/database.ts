@@ -1,4 +1,5 @@
 import { PostgresAdapter } from './adapters/PostgresAdapter.js';
+import { logger } from '../utils/logger.js';
 
 export interface DatabaseConfig {
   connectionString: string;
@@ -16,7 +17,7 @@ export class DatabaseConnection {
    */
   async initialize(): Promise<void> {
     await this.adapter.initialize();
-    console.log('Database initialized successfully');
+    logger.debug('Database initialized successfully');
   }
 
   /**
@@ -30,7 +31,7 @@ export class DatabaseConnection {
    * Close the database connection
    */
   async close(): Promise<void> {
-    console.log('Closing database connection...');
+    logger.debug('Closing database connection...');
     await this.adapter.close();
   }
 }

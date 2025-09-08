@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * API response for status endpoint
@@ -58,7 +59,7 @@ export class StatusHandler {
       });
 
     } catch (error: any) {
-      console.error('Status handler error:', error);
+      logger.error({ err: error, sha256Hash }, 'Status handler error');
       
       res.status(500).json({
         error: {

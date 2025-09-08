@@ -5,19 +5,16 @@ import { ProofGenerationService } from '../services/zk/proofGeneration.service.j
 import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
 import { ProofGenerationJobData } from '../services/queue/jobQueue.service.js';
 import fs from 'fs/promises';
+import { logger } from '../utils/logger.js';
 
 export class ProofGenerationWorker {
-  private workerName: string;
-
   constructor(
     private boss: PgBoss,
     private repository: AuthenticityRepository,
     private imageAuthenticityService: ImageAuthenticityService,
     private proofGenerationService: ProofGenerationService,
     private proofPublishingService: ProofPublishingService
-  ) {
-    this.workerName = `worker-${process.pid}-${Date.now()}`;
-  }
+  ) {}
 
   async start(): Promise<void> {
     await this.boss.work<ProofGenerationJobData>(
@@ -25,7 +22,7 @@ export class ProofGenerationWorker {
       async (jobs) => {
         // Process jobs one at a time (batch size is 1)
         for (const job of jobs) {
-          console.log(`👷 Worker ${this.workerName} processing job ${job.id} for hash ${job.data.sha256Hash}`);
+          const startTime = Date.now();
           
           const { 
             sha256Hash, 
@@ -36,6 +33,8 @@ export class ProofGenerationWorker {
             tokenOwnerPrivateKey 
           } = job.data;
           
+          logger.info({ jobId: job.id, sha256Hash }, 'Starting proof generation job');
+          
           try {
             // Update status to processing
             await this.repository.updateRecord(sha256Hash, {
@@ -45,7 +44,7 @@ export class ProofGenerationWorker {
             });
 
             // Step 1: Verify and prepare image
-            console.log(`🔍 Verifying and preparing image for ${sha256Hash}`);
+            logger.info({ sha256Hash }, 'Verifying and preparing image');
             const { isValid, verificationInputs, error } = this.imageAuthenticityService.verifyAndPrepareImage(
               imagePath,
               signature,
@@ -57,7 +56,7 @@ export class ProofGenerationWorker {
             }
 
             // Step 2: Generate proof
-            console.log(`🔐 Generating proof for ${sha256Hash}`);
+            logger.info({ sha256Hash }, 'Generating zero-knowledge proof');
             const { proof, publicInputs } = await this.proofGenerationService.generateProof(
               sha256Hash,
               publicKey,
@@ -67,7 +66,7 @@ export class ProofGenerationWorker {
             );
 
             // Step 3: Publish to blockchain
-            console.log(`📡 Publishing proof for ${sha256Hash}`);
+            logger.info({ sha256Hash }, 'Publishing proof to Mina blockchain');
             const transactionId = await this.proofPublishingService.publishProof(
               sha256Hash,
               proof,
@@ -85,19 +84,25 @@ export class ProofGenerationWorker {
             // Clean up temp file
             try {
               await fs.unlink(imagePath);
-              console.log(`🧹 Cleaned up temp file for ${sha256Hash}`);
+              logger.debug({ sha256Hash }, 'Cleaned up temporary file');
             } catch (cleanupError) {
-              console.error(`Failed to clean up temp file ${imagePath}:`, cleanupError);
+              logger.warn({ err: cleanupError, sha256Hash }, 'Failed to clean up temporary file');
             }
 
-            console.log(`✅ Proof completed for ${sha256Hash}: ${transactionId}`);
+            const duration = Date.now() - startTime;
+            logger.info({ sha256Hash, transactionId, duration }, 'Proof generation completed successfully');
 
           } catch (error: any) {
-            console.error(`❌ Proof generation failed for ${sha256Hash}:`, error);
-            // Check if this is the final retry
             const retryCount = (job as any).retryCount || 0;
             const retryLimit = 3; // Default retry limit
             const isLastRetry = retryCount >= retryLimit - 1;
+            
+            logger.error({ 
+              err: error,
+              sha256Hash,
+              jobId: job.id,
+              isLastRetry
+            }, 'Proof generation failed');
             
             // Update failure status
             await this.repository.updateRecord(sha256Hash, {
@@ -111,9 +116,9 @@ export class ProofGenerationWorker {
             if (isLastRetry) {
               try {
                 await fs.unlink(imagePath);
-                console.log(`🧹 Cleaned up temp file after final failure for ${sha256Hash}`);
+                logger.debug({ sha256Hash }, 'Cleaned up temp file after final failure');
               } catch (cleanupError) {
-                console.error(`Failed to clean up temp file ${imagePath}:`, cleanupError);
+                logger.warn({ err: cleanupError, sha256Hash }, 'Failed to clean up temp file after failure');
               }
             }
 
@@ -124,11 +129,11 @@ export class ProofGenerationWorker {
       }
     );
 
-    console.log(`👷 Proof generation worker ${this.workerName} started`);
+    logger.info('Proof generation worker started');
   }
 
   async stop(): Promise<void> {
     // pg-boss handles stopping workers gracefully
-    console.log(`👷 Stopping worker ${this.workerName}...`);
+    logger.info('Stopping worker...');
   }
 }

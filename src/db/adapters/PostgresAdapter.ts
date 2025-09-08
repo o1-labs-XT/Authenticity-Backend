@@ -1,4 +1,5 @@
 import knex, { Knex } from 'knex';
+import { logger } from '../../utils/logger.js';
 import { AuthenticityRecord } from '../types.js';
  
 export class PostgresAdapter  {
@@ -29,10 +30,10 @@ export class PostgresAdapter  {
     // Test the connection
     try {
       await this.knex.raw('SELECT 1');
-      console.log('PostgreSQL database connection established');
+      logger.debug('PostgreSQL connection established');
       // Table creation is now handled by migrations
     } catch (error) {
-      console.error('Failed to connect to PostgreSQL:', error);
+      logger.error({ err: error }, 'Failed to connect to PostgreSQL');
       throw error;
     }
   }

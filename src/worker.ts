@@ -6,18 +6,17 @@ import { ProofGenerationService } from './services/zk/proofGeneration.service.js
 import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
 import { ProofGenerationWorker } from './workers/proofGenerationWorker.js';
 import PgBoss from 'pg-boss';
+import { logger } from './utils/logger.js';
 
 async function startWorker() {
-  console.log('🚀 Starting Authenticity Worker...');
-  console.log(`Environment: ${config.nodeEnv}`);
-  console.log(`Network: ${config.minaNetwork}`);
+  logger.info('Starting Authenticity Worker...');
 
   let boss: PgBoss | null = null;
   let dbConnection: DatabaseConnection | null = null;
 
   try {
     // Initialize database
-    console.log('Initializing database connection...');
+    logger.info('Initializing database connection...');
     dbConnection = new DatabaseConnection({ 
       connectionString: config.databaseUrl 
     });
@@ -25,18 +24,18 @@ async function startWorker() {
     const repository = new AuthenticityRepository(dbConnection.getAdapter());
 
     // Initialize pg-boss
-    console.log('Initializing pg-boss...');
+    logger.info('Initializing pg-boss...');
     boss = new PgBoss(config.databaseUrl);
     await boss.start();
 
     // Initialize services
-    console.log('Initializing services...');
+    logger.info('Initializing services...');
     const verificationService = new ImageAuthenticityService();
     
-    console.log('Initializing proof generation service...');
+    logger.info('Initializing proof generation service...');
     const proofGenerationService = new ProofGenerationService();
     
-    console.log('Initializing proof publishing service...');
+    logger.info('Initializing proof publishing service...');
     const proofPublishingService = new ProofPublishingService(
       config.zkappAddress,
       config.feePayerPrivateKey,
@@ -54,11 +53,11 @@ async function startWorker() {
     );
 
     await worker.start();
-    console.log('✅ Worker started successfully');
+    logger.info('Worker started successfully');
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
-      console.log(`\n${signal} received, starting graceful shutdown...`);
+      logger.info(`Received ${signal}, starting graceful shutdown...`);
       
       if (worker) {
         await worker.stop();
@@ -66,15 +65,15 @@ async function startWorker() {
       
       if (boss) {
         await boss.stop();
-        console.log('Job queue stopped');
+        logger.info('Job queue stopped');
       }
       
       if (dbConnection) {
         await dbConnection.close();
-        console.log('Database connection closed');
+        logger.info('Database connection closed');
       }
       
-      console.log('✅ Worker shutdown complete');
+      logger.info('Worker shutdown complete');
       process.exit(0);
     };
 
@@ -82,7 +81,7 @@ async function startWorker() {
     process.on('SIGINT', () => shutdown('SIGINT'));
 
   } catch (error) {
-    console.error('❌ Failed to start worker:', error);
+    logger.fatal({ err: error }, 'Failed to start worker');
     
     // Clean up on error
     if (boss) {
@@ -98,14 +97,17 @@ async function startWorker() {
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  logger.fatal({ err: error }, 'Uncaught Exception');
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.fatal({ reason, promise }, 'Unhandled Rejection');
   process.exit(1);
 });
 
 // Start the worker
-startWorker().catch(console.error);
+startWorker().catch((error) => {
+  logger.fatal({ err: error }, 'Failed to start worker');
+  process.exit(1);
+});

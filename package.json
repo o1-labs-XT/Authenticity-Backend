@@ -4,7 +4,6 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/index.ts",
     "dev:api": "tsx src/index.ts",
     "dev:worker": "tsx src/worker.ts",
     "build": "tsc",
@@ -12,8 +11,8 @@
     "start:api": "npm run db:migrate && node dist/index.js",
     "start:worker": "tsx scripts/compile-zkapp.ts && node dist/worker.js",
     "lint": "eslint src/**/*.ts",
-    "format": "prettier --write src/**/*.ts", 
-    "db:migrate": "tsx node_modules/.bin/knex migrate:latest --env development", 
+    "format": "prettier --write src/**/*.ts",
+    "db:migrate": "tsx node_modules/.bin/knex migrate:latest --env development",
     "db:rollback": "tsx node_modules/.bin/knex migrate:rollback --env development",
     "db:migrate:make": "tsx node_modules/.bin/knex migrate:make"
   },
@@ -38,7 +37,10 @@
     "multer": "^2.0.2",
     "o1js": "^2.8.0",
     "pg": "^8.16.3",
-    "pg-boss": "^10.3.2"
+    "pg-boss": "^10.3.2",
+    "pino": "^9.9.4",
+    "pino-http": "^10.5.0",
+    "pino-pretty": "^13.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

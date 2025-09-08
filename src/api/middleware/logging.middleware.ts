@@ -1,33 +1,35 @@
-import { Request, Response, NextFunction } from 'express';
+import pinoHttp from 'pino-http';
+import { logger } from '../../utils/logger.js';
 
 /**
- * Request logging middleware
- * Logs incoming requests and response times
+ * HTTP request/response logging middleware
  */
-export function loggingMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  const startTime = Date.now();
-  const { method, path, ip } = req;
-
-  // Log request
-  console.log(`[${new Date().toISOString()}] ${method} ${path} - IP: ${ip}`);
-
-  // Log response when finished
-  res.on('finish', () => {
-    const duration = Date.now() - startTime;
-    const { statusCode } = res;
-    
-    const logLevel = statusCode >= 500 ? 'ERROR' : 
-                     statusCode >= 400 ? 'WARN' : 
-                     'INFO';
-    
-    console.log(
-      `[${new Date().toISOString()}] ${logLevel}: ${method} ${path} - Status: ${statusCode} - Duration: ${duration}ms`
-    );
-  });
-
-  next();
-}
+export const loggingMiddleware = pinoHttp({
+  logger,
+  
+  // Customize log level based on status code
+  customLogLevel: (req, res, err) => {
+    if (err || res.statusCode >= 500) return 'error';
+    if (res.statusCode >= 400) return 'warn';
+    return 'info';
+  },
+  
+  // Simplify serializers to reduce verbosity
+  serializers: {
+    req: (req) => ({
+      method: req.method,
+      url: req.url,
+      // Only include essential headers
+      headers: {
+        'user-agent': req.headers['user-agent'],
+        'content-type': req.headers['content-type'],
+      },
+    }),
+    res: (res) => ({
+      statusCode: res.statusCode,
+    }),
+  },
+  
+  // Redact sensitive headers
+  redact: ['req.headers.authorization', 'req.headers.cookie'],
+});

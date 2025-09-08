@@ -4,6 +4,7 @@ import { Signature, PublicKey, PrivateKey } from 'o1js';
 import { ImageAuthenticityService } from '../services/image/verification.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
+import { logger } from '../utils/logger.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
 import fs from 'fs';
 
@@ -130,7 +131,7 @@ export class UploadHandler {
    */
   async handleUpload(req: Request, res: Response<UploadResponse | ErrorResponse>): Promise<void> {
     try {
-      console.log('Processing upload request');
+      logger.debug('Processing upload request');
 
       // Extract from multipart form data
       const file = req.file;
@@ -150,12 +151,12 @@ export class UploadHandler {
 
       // Compute SHA256 hash of image
       const sha256Hash = this.verificationService.hashImage(imageBuffer);
-      console.log(`Image SHA256: ${sha256Hash}`);
+      logger.debug({ sha256Hash }, 'Image hash calculated');
 
       // Check for existing record (duplicate detection)
       const existing = await this.repository.checkExistingImage(sha256Hash);
       if (existing.exists) {
-        console.log(`Duplicate image detected: ${sha256Hash}`);
+        logger.info({ sha256Hash }, 'Duplicate image detected');
 
         // Clean up uploaded file
         fs.unlinkSync(file!.path);
@@ -168,7 +169,7 @@ export class UploadHandler {
       }
 
       // Verify signature and prepare image for proof generation
-      console.log('Verifying signature and preparing image...');
+      logger.debug('Verifying signature');
       const verificationResult = this.verificationService.verifyAndPrepareImage(
         file!.path,
         signature,
@@ -176,7 +177,7 @@ export class UploadHandler {
       );
 
       if (!verificationResult.isValid) {
-        console.log('Invalid signature for image hash:', verificationResult.error);
+        logger.warn({ sha256Hash, error: verificationResult.error }, 'Invalid signature');
         res.status(400).json({
           error: {
             code: 'INVALID_SIGNATURE',
@@ -192,7 +193,7 @@ export class UploadHandler {
       const tokenOwnerKey = PrivateKey.random();
       const tokenOwnerAddress = tokenOwnerKey.toPublicKey().toBase58();
       const tokenOwnerPrivate = tokenOwnerKey.toBase58();
-      console.log(`Generated token owner address: ${tokenOwnerAddress}`);
+      logger.debug({ tokenOwnerAddress }, 'Generated token owner');
 
       // Insert pending record in database first
       await this.repository.insertPendingRecord({
@@ -218,9 +219,9 @@ export class UploadHandler {
         // Update record with job ID for tracking
         await this.repository.updateRecord(sha256Hash, { job_id: jobId });
 
-        console.log(`Enqueued proof generation job ${jobId} for ${sha256Hash}`);
+        logger.info({ jobId, sha256Hash }, 'Proof generation job enqueued');
       } catch (error) {
-        console.error(`Failed to enqueue job for ${sha256Hash}:`, error);
+        logger.error({ err: error, sha256Hash }, 'Failed to enqueue job');
         // Clean up the record if job enqueue fails
         await this.repository.deleteRecord(sha256Hash);
         throw error;
@@ -233,7 +234,7 @@ export class UploadHandler {
         status: 'pending',
       });
     } catch (error) {
-      console.error('Upload error:', error);
+      logger.error({ err: error }, 'Upload handler error');
 
       // Clean up uploaded file if it exists
       if (req.file && fs.existsSync(req.file.path)) {

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { logger } from '../utils/logger.js';
 
 export class AdminHandler {
   constructor(
@@ -21,7 +22,7 @@ export class AdminHandler {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error('Failed to get job stats:', error);
+      logger.error({ err: error }, 'Failed to get job stats');
       res.status(500).json({
         error: {
           code: 'STATS_ERROR',
@@ -65,7 +66,7 @@ export class AdminHandler {
         jobId,
       });
     } catch (error) {
-      console.error('Failed to retry job:', error);
+      logger.error({ err: error, jobId }, 'Failed to retry job');
       res.status(500).json({
         error: {
           code: 'RETRY_ERROR',
@@ -88,7 +89,7 @@ export class AdminHandler {
         offset,
       });
     } catch (error) {
-      console.error('Failed to get failed jobs:', error);
+      logger.error({ err: error }, 'Failed to get failed jobs');
       res.status(500).json({
         error: {
           code: 'FAILED_JOBS_ERROR',
@@ -116,7 +117,7 @@ export class AdminHandler {
 
       res.json(job);
     } catch (error) {
-      console.error('Failed to get job details:', error);
+      logger.error({ err: error, jobId }, 'Failed to get job details');
       res.status(500).json({
         error: {
           code: 'JOB_DETAILS_ERROR',

@@ -7,11 +7,12 @@ import {
 import fs from 'fs';
 import { PublicKey, Signature, Cache } from 'o1js';
 import { VerificationInputs } from '../image/verification.service.js';
+import { logger } from '../../utils/logger.js';
 
 export class ProofGenerationService {
 
   constructor() {
-    console.log('ProofGenerationService initialized');
+    logger.debug('ProofGenerationService initialized');
   }
 
 
@@ -29,7 +30,7 @@ export class ProofGenerationService {
     proof: AuthenticityProof;
     publicInputs: AuthenticityInputs;
   }> {
-    console.log(`Generating proof for SHA256: ${sha256Hash}`);
+    logger.debug({ sha256Hash }, 'Generating proof for image');
     
     // Use cached compilation if available
     const cacheDir = process.env.CIRCUIT_CACHE_PATH || './cache';
@@ -58,7 +59,7 @@ export class ProofGenerationService {
       roundConstant: verificationInputs.roundConstant,
     });
 
-    console.log('Generating authenticity proof...'); 
+    logger.debug('Generating authenticity proof...'); 
     
     // Generate proof that:
     // 1. The penultimate SHA256 state correctly produces the signed hash after the final round

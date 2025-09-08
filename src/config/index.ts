@@ -102,16 +102,3 @@ function parseConfig(): Config {
  * Parsed and validated at module load time
  */
 export const config: Config = parseConfig();
-
-// Log configuration on startup (without sensitive data)
-console.log('🔧 Configuration loaded:', {
-  port: config.port,
-  nodeEnv: config.nodeEnv,
-  databaseUrl: config.databaseUrl.replace(/\/\/[^@]+@/, '//*****@'), // Mask credentials
-  minaNetwork: config.minaNetwork,
-  zkappAddress: config.zkappAddress,
-  feePayerPrivateKey: '******',
-  corsOrigin: config.corsOrigin,
-  uploadMaxSize: `${(config.uploadMaxSize / 1024 / 1024).toFixed(2)}MB`,
-  circuitCachePath: config.circuitCachePath,
-});
