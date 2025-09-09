@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import type { } from 'multer';
+import type {} from 'multer';
 import { Signature, PublicKey, PrivateKey } from 'o1js';
 import { ImageAuthenticityService } from '../services/image/verification.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
@@ -156,7 +156,7 @@ export class UploadHandler {
       // Check for existing record (duplicate detection)
       const existing = await this.repository.checkExistingImage(sha256Hash);
       if (existing.exists) {
-        logger.info({ sha256Hash }, 'Duplicate image detected');
+        logger.info('Duplicate image detected');
 
         // Clean up uploaded file
         fs.unlinkSync(file!.path);
@@ -177,7 +177,7 @@ export class UploadHandler {
       );
 
       if (!verificationResult.isValid) {
-        logger.warn({ sha256Hash, error: verificationResult.error }, 'Invalid signature');
+        logger.warn({ error: verificationResult.error }, 'Invalid signature');
         res.status(400).json({
           error: {
             code: 'INVALID_SIGNATURE',
@@ -214,14 +214,16 @@ export class UploadHandler {
           tokenOwnerAddress,
           tokenOwnerPrivateKey: tokenOwnerPrivate,
           uploadedAt: new Date(),
+          // logging correlation id
+          correlationId: (req as any).correlationId,
         });
 
         // Update record with job ID for tracking
         await this.repository.updateRecord(sha256Hash, { job_id: jobId });
 
-        logger.info({ jobId, sha256Hash }, 'Proof generation job enqueued');
+        logger.info({ jobId }, 'Proof generation job enqueued');
       } catch (error) {
-        logger.error({ err: error, sha256Hash }, 'Failed to enqueue job');
+        logger.error({ err: error }, 'Failed to enqueue job');
         // Clean up the record if job enqueue fails
         await this.repository.deleteRecord(sha256Hash);
         throw error;
@@ -265,5 +267,4 @@ export class UploadHandler {
       });
     }
   }
-
 }

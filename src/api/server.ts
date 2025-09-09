@@ -9,6 +9,7 @@ import { createTokenOwnerRoutes } from './routes/tokenOwner.routes.js';
 import { createAdminRoutes } from './routes/admin.routes.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 import { loggingMiddleware } from './middleware/logging.middleware.js';
+import { contextMiddleware } from './middleware/context.middleware.js';
 import { UploadHandler } from '../handlers/upload.handler.js';
 import { StatusHandler } from '../handlers/status.handler.js';
 import { TokenOwnerHandler } from '../handlers/tokenOwner.handler.js';
@@ -42,6 +43,9 @@ export function createServer(dependencies: ServerDependencies): Express {
   // Body parsing middleware
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Context middleware (must be before logging)
+  app.use(contextMiddleware);
 
   // Logging middleware
   app.use(loggingMiddleware);

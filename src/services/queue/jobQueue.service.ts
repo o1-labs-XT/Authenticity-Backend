@@ -10,6 +10,7 @@ export interface ProofGenerationJobData {
   tokenOwnerPrivateKey: string;
   uploadedAt: Date;
   priority?: number;
+  correlationId?: string;
 }
 
 export class JobQueueService {
