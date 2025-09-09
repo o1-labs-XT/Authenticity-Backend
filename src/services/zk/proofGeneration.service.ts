@@ -8,6 +8,7 @@ import fs from 'fs';
 import { PublicKey, Signature, Cache } from 'o1js';
 import { VerificationInputs } from '../image/verification.service.js';
 import { logger } from '../../utils/logger.js';
+import { PerformanceTracker } from '../../utils/performance.js';
 
 export class ProofGenerationService {
 
@@ -35,7 +36,9 @@ export class ProofGenerationService {
     // Use cached compilation if available
     const cacheDir = process.env.CIRCUIT_CACHE_PATH || './cache';
     const cache = Cache.FileSystem(cacheDir);
+    const compileTracker = new PerformanceTracker('proof.compile');
     await AuthenticityProgram.compile({ cache });
+    compileTracker.end('success');
 
     const pubKey = PublicKey.fromBase58(publicKey);
     const sig = Signature.fromBase58(signature);
@@ -64,10 +67,12 @@ export class ProofGenerationService {
     // Generate proof that:
     // 1. The penultimate SHA256 state correctly produces the signed hash after the final round
     // 2. The supplied signature was made with the supplied public key on the SHA256 commitment
+    const proofTracker = new PerformanceTracker('proof.generate', { sha256Hash });
     const { proof } = await AuthenticityProgram.verifyAuthenticity(
       publicInputs,
       privateInputs
     );
+    proofTracker.end('success');
 
     return { proof, publicInputs };
   }

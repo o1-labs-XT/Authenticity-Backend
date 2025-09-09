@@ -2,6 +2,7 @@ import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authen
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount } from 'o1js';
 import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
 import { logger } from '../../utils/logger.js';
+import { PerformanceTracker } from '../../utils/performance.js';
 
 export class ProofPublishingService {
   private zkApp: AuthenticityZkApp;
@@ -69,7 +70,9 @@ export class ProofPublishingService {
     logger.info({ sha256Hash }, 'Publishing proof to blockchain');
 
     // Ensure contract is compiled (o1js caches this internally)
+    const compileTracker = new PerformanceTracker('publish.compile');
     await AuthenticityZkApp.compile();
+    compileTracker.end('success');
 
     // Parse addresses and keys
     const tokenOwnerPrivate = PrivateKey.fromBase58(tokenOwnerPrivateKey);
@@ -96,7 +99,9 @@ export class ProofPublishingService {
       });
 
       logger.debug('Proving transaction...');
+      const proveTracker = new PerformanceTracker('publish.prove');
       await txn.prove();
+      proveTracker.end('success');
 
       logger.debug('Signing and sending transaction...');
       // Sign with all required parties:
@@ -104,7 +109,9 @@ export class ProofPublishingService {
       // 2. Token owner (for the new token account)
       const signers = [feePayer, tokenOwnerPrivate];
       logger.debug(`Signing transaction with ${signers.length} signers`);
+      const sendTracker = new PerformanceTracker('publish.send');
       const pendingTxn = await txn.sign(signers).send();
+      sendTracker.end('success', { hash: pendingTxn.hash });
 
       logger.info({ transactionHash: pendingTxn.hash }, 'Transaction sent');
 

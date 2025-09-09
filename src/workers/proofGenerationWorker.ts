@@ -6,6 +6,7 @@ import { ProofPublishingService } from '../services/zk/proofPublishing.service.j
 import { ProofGenerationJobData } from '../services/queue/jobQueue.service.js';
 import fs from 'fs/promises';
 import { logger, withContext } from '../utils/logger.js';
+import { PerformanceTracker } from '../utils/performance.js';
 
 export class ProofGenerationWorker {
   constructor(
@@ -31,7 +32,9 @@ export class ProofGenerationWorker {
               attempt: (job as any).retryCount || 0,
             },
             async () => {
-              const startTime = Date.now();
+              const jobTracker = new PerformanceTracker('job.proofGeneration', { 
+                sha256Hash: job.data.sha256Hash 
+              });
               
               const { 
                 sha256Hash, 
@@ -54,11 +57,13 @@ export class ProofGenerationWorker {
 
             // Step 1: Verify and prepare image
             logger.info('Verifying and preparing image');
+            const verifyTracker = new PerformanceTracker('job.verifyImage');
             const { isValid, verificationInputs, error } = this.imageAuthenticityService.verifyAndPrepareImage(
               imagePath,
               signature,
               publicKey
             );
+            verifyTracker.end(isValid ? 'success' : 'error');
 
             if (!isValid || !verificationInputs) {
               throw new Error(`Image verification failed: ${error || 'Unknown error'}`);
@@ -66,6 +71,7 @@ export class ProofGenerationWorker {
 
             // Step 2: Generate proof
             logger.info('Generating zero-knowledge proof');
+            const proofTracker = new PerformanceTracker('job.generateProof');
             const { proof, publicInputs } = await this.proofGenerationService.generateProof(
               sha256Hash,
               publicKey,
@@ -73,15 +79,18 @@ export class ProofGenerationWorker {
               verificationInputs,
               imagePath
             );
+            proofTracker.end('success');
 
             // Step 3: Publish to blockchain
             logger.info('Publishing proof to Mina blockchain');
+            const publishTracker = new PerformanceTracker('job.publishProof');
             const transactionId = await this.proofPublishingService.publishProof(
               sha256Hash,
               proof,
               publicInputs,
               tokenOwnerPrivateKey
             );
+            publishTracker.end('success', { transactionId });
 
             // Step 4: Update database with success
             await this.repository.updateRecord(sha256Hash, {
@@ -98,8 +107,8 @@ export class ProofGenerationWorker {
               logger.warn({ err: cleanupError }, 'Failed to clean up temporary file');
             }
 
-            const duration = Date.now() - startTime;
-            logger.info({ transactionId, duration }, 'Proof generation completed successfully');
+            jobTracker.end('success', { transactionId });
+            logger.info({ transactionId }, 'Proof generation completed successfully');
 
           } catch (error: any) {
             const retryCount = (job as any).retryCount || 0;
