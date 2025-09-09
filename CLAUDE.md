@@ -13,8 +13,7 @@ docker-compose up -d  # Starts PostgreSQL (port 5432) and pgweb (port 8081)
 # pgweb is available at http://localhost:8081 (no login required)
 
 # Run services (in separate terminals):
-npm run dev           # Start API server with hot reload (port 3000)
-npm run dev:api       # Alias for API server only
+npm run dev:api       # Start API server with hot reload (port 3000)
 npm run dev:worker    # Start worker service with hot reload
 
 # Production commands:
@@ -29,11 +28,12 @@ npm run start:worker  # Compile zkApp and start worker service
 npm run db:migrate      # Run database migrations (development)
 npm run db:rollback     # Rollback last migration
 npm run db:migrate:make # Create new migration file
+npm run db:reset        # Reset database (removes volumes, restarts containers, runs migrations)
 
 # Direct PostgreSQL access
 docker-compose exec postgres psql -U postgres authenticity_dev
 
-# Reset database
+# Manual database reset
 docker-compose down -v  # Remove volumes
 docker-compose up -d    # Restart containers
 npm run db:migrate      # Rerun migrations
@@ -43,6 +43,25 @@ npm run db:migrate      # Rerun migrations
 ```bash
 npm run lint    # Run ESLint on src/**/*.ts
 npm run format  # Format code with Prettier
+```
+
+### Observability
+```bash
+# Start observability stack
+docker-compose up -d loki grafana promtail
+
+# Access dashboards
+# Grafana: http://localhost:3001 (admin/admin)
+# Loki API: http://localhost:3100
+
+# View logs in Grafana
+# 1. Navigate to http://localhost:3001
+# 2. Login with admin/admin
+# 3. Go to Explore → Select Loki datasource
+# 4. Query examples:
+#    {service="api"} - All API logs
+#    {service="worker"} - All Worker logs
+#    {service=~"api|worker"} |= "error" - All errors
 ```
 
 **Note**: No automated tests are implemented. Testing is done via manual scripts (`test-upload.mts`, `test-admin.mts`).
@@ -171,7 +190,7 @@ FEE_PAYER_PRIVATE_KEY=<private_key>
 PORT=3000
 NODE_ENV=development|production|test
 CORS_ORIGIN=http://localhost:3001
-UPLOAD_MAX_SIZE=52428800  # 50MB
+UPLOAD_MAX_SIZE=10485760  # 10MB default, configurable
 ```
 
 ### Optional Variables
@@ -238,6 +257,26 @@ updated_at              -- Last modified
 - **Health Checks**: 180s timeout, 3 restart attempts
 - **Auto-migrations**: Run at API startup
 - **Circuit Compilation**: At worker startup
+
+### Railway CLI
+```bash
+# Install and setup
+npm install -g @railway/cli
+railway login
+railway link  # Select project/environment
+
+# Switch environments
+railway environment staging
+railway environment production
+
+# Connect to database
+railway connect postgres
+
+# View logs
+railway logs --service api
+railway logs --service worker
+railway logs -f  # Tail logs
+```
 
 ### Docker Setup
 ```yaml

@@ -38,6 +38,11 @@ The system uses a job queue architecture with two separate services:
 4. Worker publishes proof to Mina blockchain
 5. Client can verify authenticity via token owner address
 
+## Observability
+
+Grafana dashboards are set up in docker-compose and configured to show logs collected with promtail and stored in Loki.
+Access Grafana dashboards at http://localhost:3001 
+
 ## Database Management
 
 ### pgweb UI
