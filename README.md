@@ -31,6 +31,7 @@ The system uses a job queue architecture with two separate services:
 - **Worker Service**: Processes proof generation jobs asynchronously via pg-boss queue
 
 ### Flow
+
 1. Client uploads image with cryptographic signature
 2. API validates and enqueues proof generation job
 3. Worker generates zero-knowledge proof
@@ -40,21 +41,21 @@ The system uses a job queue architecture with two separate services:
 ## Database Management
 
 ### pgweb UI
+
 Access the database through pgweb interface at http://localhost:8081
+
 - Automatically connects to the development database
 - No additional configuration needed
 - Started automatically with `docker-compose up -d`
 
 ### PostgreSQL CLI
+
 ```shell
 # Connect to PostgreSQL CLI
 docker-compose exec postgres psql -U postgres authenticity_dev
 
 # Delete and recreate the db
-docker-compose down -v
-docker-compose up -d
-# Wait a few seconds for PostgreSQL to start
-npm run db:migrate
+npm run db:reset
 ```
 
 ### pg-boss Admin
@@ -69,8 +70,8 @@ docker-compose exec postgres psql -U postgres authenticity_dev
 \dt pgboss.*
 
 -- Check pending jobs
-SELECT id, name, state, created_on, retry_count 
-FROM pgboss.job 
+SELECT id, name, state, created_on, retry_count
+FROM pgboss.job
 WHERE state IN ('created', 'retry')
 ORDER BY created_on DESC;
 
@@ -82,17 +83,46 @@ ORDER BY completed_on DESC
 LIMIT 10;
 ```
 
+## Railway Deployment
+
+### Setup Railway CLI
+
+```bash
+# Install and login
+npm install -g @railway/cli
+railway login
+railway link  # Select project/environment
+
+# Switch environments
+railway environment staging
+railway environment production
+```
+
+### Connect to DB
+
+```bash
+railway connect postgres
+```
+
+### View Logs
+
+```bash
+railway logs --service api
+railway logs --service worker
+railway logs -f  # Tail logs
+```
 
 ## API Endpoints
 
 ### Public
+
 - `POST /api/upload` - Upload image for proof generation (multipart form: image, signature, publicKey)
 - `GET /api/status/:sha256Hash` - Check proof status
 - `GET /api/token-owner/:sha256Hash` - Get token owner for verification
 - `GET /health` - Health check
 
 ### Admin (requires ADMIN_API_KEY in production)
+
 - `GET /api/admin/jobs/stats` - Job queue statistics
 - `GET /api/admin/jobs/failed` - List failed jobs
 - `POST /api/admin/jobs/:jobId/retry` - Retry failed job
- 

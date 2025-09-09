@@ -11,10 +11,11 @@
     "start:api": "npm run db:migrate && node dist/index.js",
     "start:worker": "tsx scripts/compile-zkapp.ts && node dist/worker.js",
     "lint": "eslint src/**/*.ts",
-    "format": "prettier --write src/**/*.ts", 
-    "db:migrate": "tsx node_modules/.bin/knex migrate:latest", 
-    "db:rollback": "tsx node_modules/.bin/knex migrate:rollback", 
-    "db:migrate:make": "tsx node_modules/.bin/knex migrate:make"
+    "format": "prettier --write src/**/*.ts",
+    "db:migrate": "tsx node_modules/.bin/knex migrate:latest",
+    "db:rollback": "tsx node_modules/.bin/knex migrate:rollback",
+    "db:migrate:make": "tsx node_modules/.bin/knex migrate:make",
+    "db:reset": "docker-compose down -v && docker-compose up -d && sleep 3 && npm run db:migrate"
   },
   "keywords": [],
   "author": "",
