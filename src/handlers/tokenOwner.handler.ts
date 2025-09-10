@@ -56,10 +56,9 @@ export class TokenOwnerHandler {
         status: record.status as 'pending' | 'verified',
         found: true,
       });
-
     } catch (error: any) {
-      logger.error({ err: error, sha256Hash }, 'Token owner handler error');
-      
+      logger.error({ err: error, sha256Hash: req.params.sha256Hash }, 'Token owner handler error');
+
       res.status(500).json({
         error: {
           code: 'INTERNAL_ERROR',
