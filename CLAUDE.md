@@ -25,10 +25,12 @@ npm run start:worker  # Compile zkApp and start worker service
 
 ### Database Management
 ```bash
-npm run db:migrate      # Run database migrations (development)
-npm run db:rollback     # Rollback last migration
-npm run db:migrate:make # Create new migration file
+npm run db:migrate      # Run database migrations
 npm run db:reset        # Reset database (removes volumes, restarts containers, runs migrations)
+
+# Knex migration commands (use npx):
+npx knex migrate:rollback  # Rollback last migration
+npx knex migrate:make migration_name  # Create new migration file
 
 # Direct PostgreSQL access
 docker-compose exec postgres psql -U postgres authenticity_dev
@@ -62,6 +64,7 @@ docker-compose up -d loki grafana promtail
 #    {service="api"} - All API logs
 #    {service="worker"} - All Worker logs
 #    {service=~"api|worker"} |= "error" - All errors
+#    {service="api"} |= "correlationId=<id>" - Track request through system
 ```
 
 **Note**: No automated tests are implemented. Testing is done via manual scripts (`test-upload.mts`, `test-admin.mts`).
@@ -146,7 +149,7 @@ test-admin.mts           # Manual admin API testing
 ### Database
 - **PostgresAdapter**: Instance-based Knex wrapper (NOT static methods)
 - **AuthenticityRepository**: Repository pattern for data access
-- **Migrations**: Two migrations - initial schema + job tracking fields
+- **Migrations**: Schema managed via Knex migrations
 - **Status values**: `pending`, `processing`, `verified`, `failed`
 
 ### Worker
@@ -233,7 +236,8 @@ updated_at              -- Last modified
 - **Compression**: Response compression
 - **File Upload**: Multer with size limits
 - **Error Handling**: Consistent error responses
-- **Request Logging**: Custom middleware
+- **Request Logging**: Pino with correlation IDs
+- **AsyncLocalStorage**: Context propagation for tracing
 
 ### zkApp Integration
 - **Circuit Compilation**: Pre-compiled at worker startup
@@ -328,6 +332,6 @@ ADMIN_API_KEY=key API_URL=https://api.example.com tsx test-admin.mts stats
 - **No SQLite support**: PostgreSQL-only (required for pg-boss)
 - **No automated tests**: Use manual testing scripts
 - **Instance-based adapters**: PostgresAdapter uses instance methods, not static
-- **Cache directory**: Now in `.gitignore`, auto-created when needed
-- **Service naming**: `ImageAuthenticityService` (was refactored from verification)
-- **Database interface removed**: Direct PostgresAdapter usage (no DatabaseAdapter interface)
+- **Cache directory**: Auto-created when needed, in `.gitignore`
+- **Logging**: Structured JSON logs with correlation IDs for request tracing
+- **File outputs**: Logs written to `./logs/*.log` for Promtail collection

@@ -15,7 +15,8 @@
     "db:migrate": "tsx node_modules/.bin/knex migrate:latest",
     "db:rollback": "tsx node_modules/.bin/knex migrate:rollback",
     "db:migrate:make": "tsx node_modules/.bin/knex migrate:make",
-    "db:reset": "docker-compose down -v && docker-compose up -d && sleep 3 && npm run db:migrate"
+    "db:reset": "docker-compose down -v && docker-compose up -d && sleep 3 && npm run db:migrate",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -57,10 +58,18 @@
     "eslint": "^9.33.0",
     "form-data": "^4.0.4",
     "globals": "^16.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.6",
     "nodemon": "^3.1.10",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   }
 }
