@@ -6,6 +6,13 @@ import dotenv from 'dotenv';
 // app config not available when migrations are run by cli
 dotenv.config();
 
+// Validate required DATABASE_URL
+if (!process.env.DATABASE_URL) {
+  console.error('\n❌ DATABASE_URL environment variable is required for database operations.');
+  console.error('   Please configure your .env file with DATABASE_URL.\n');
+  process.exit(1);
+}
+
 const isProduction = process.env.NODE_ENV === 'production';
 
 const config: Knex.Config = {
