@@ -12,10 +12,10 @@ export class AdminHandler {
   async getJobStats(req: Request, res: Response): Promise<void> {
     try {
       const stats = await this.jobQueue.getQueueStats();
-      
+
       // Get database stats
       const dbStats = await this.repository.getStatusCounts();
-      
+
       res.json({
         queue: stats,
         database: dbStats,
@@ -38,7 +38,7 @@ export class AdminHandler {
     try {
       // Get the job details first
       const job = await this.jobQueue.getJobById(jobId);
-      
+
       if (!job) {
         res.status(404).json({
           error: {
@@ -51,7 +51,7 @@ export class AdminHandler {
 
       // Retry the job
       await this.jobQueue.retryJob(jobId);
-      
+
       // Update database status back to pending
       if (job.data?.sha256Hash) {
         await this.repository.updateRecord(job.data.sha256Hash, {
@@ -82,7 +82,7 @@ export class AdminHandler {
       const offset = parseInt(req.query.offset as string) || 0;
 
       const failedJobs = await this.repository.getFailedRecords(limit, offset);
-      
+
       res.json({
         jobs: failedJobs,
         limit,
@@ -104,7 +104,7 @@ export class AdminHandler {
 
     try {
       const job = await this.jobQueue.getJobById(jobId);
-      
+
       if (!job) {
         res.status(404).json({
           error: {

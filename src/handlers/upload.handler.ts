@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, Express } from 'express';
 import type {} from 'multer';
 import { Signature, PublicKey, PrivateKey } from 'o1js';
 import { ImageAuthenticityService } from '../services/image/verification.service.js';

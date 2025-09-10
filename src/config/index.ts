@@ -22,7 +22,7 @@ export interface Config {
   // API Configuration
   corsOrigin: string;
   uploadMaxSize: number; // in bytes
-  
+
   // Optional configurations
   circuitCachePath?: string;
 }

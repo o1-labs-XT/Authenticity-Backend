@@ -5,11 +5,14 @@ import { logger } from './logger.js';
  */
 export class PerformanceTracker {
   private startTime: number;
-  
-  constructor(private operation: string, private metadata?: Record<string, any>) {
+
+  constructor(
+    private operation: string,
+    private metadata?: Record<string, any>
+  ) {
     this.startTime = Date.now();
   }
-  
+
   end(status: 'success' | 'error' = 'success', additionalMetadata?: Record<string, any>) {
     const duration = Date.now() - this.startTime;
     const logData = {
@@ -17,9 +20,9 @@ export class PerformanceTracker {
       duration,
       status,
       ...this.metadata,
-      ...additionalMetadata
+      ...additionalMetadata,
     };
-    
+
     if (status === 'error') {
       logger.error(logData, `${this.operation} failed after ${duration}ms`);
     } else if (duration > 5000) {
@@ -27,7 +30,7 @@ export class PerformanceTracker {
     } else {
       logger.info(logData, `${this.operation} completed in ${duration}ms`);
     }
-    
+
     return duration;
   }
 }

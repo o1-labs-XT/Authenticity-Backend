@@ -26,16 +26,20 @@ export function createServer(dependencies: ServerDependencies): Express {
   const app = express();
 
   // Security middleware
-  app.use(helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow images from different origins
-  }));
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow images from different origins
+    })
+  );
 
   // CORS configuration
-  app.use(cors({
-    origin: config.corsOrigin,
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  }));
+  app.use(
+    cors({
+      origin: config.corsOrigin,
+      methods: ['GET', 'POST'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+    })
+  );
 
   // Compression middleware
   app.use(compression());
