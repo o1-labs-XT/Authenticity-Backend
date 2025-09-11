@@ -1,4 +1,4 @@
-import type { Knex } from "knex";
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // First, update the status check constraint to include new statuses
@@ -18,7 +18,7 @@ export async function up(knex: Knex): Promise<void> {
     table.timestamp('failed_at').nullable();
     table.text('failure_reason').nullable();
     table.integer('retry_count').defaultTo(0);
-    
+
     // Add indexes for performance
     table.index('job_id');
     table.index(['status', 'created_at']);
@@ -63,4 +63,3 @@ export async function down(knex: Knex): Promise<void> {
     `);
   }
 }
-

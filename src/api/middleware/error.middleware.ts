@@ -18,23 +18,26 @@ export interface ErrorResponse {
  * Catches all errors and formats them consistently
  */
 export function errorMiddleware(
-  error: any,
+  error: unknown,
   req: Request,
   res: Response<ErrorResponse>,
   _next: NextFunction
 ): void {
   // Log the error with structured logging
-  logger.error({
-    err: error,
-    method: req.method,
-    path: req.path,
-    query: req.query,
-    body: req.body,
-    headers: {
-      'user-agent': req.headers['user-agent'],
-      'content-type': req.headers['content-type'],
+  logger.error(
+    {
+      err: error,
+      method: req.method,
+      path: req.path,
+      query: req.query,
+      body: req.body,
+      headers: {
+        'user-agent': req.headers['user-agent'],
+        'content-type': req.headers['content-type'],
+      },
     },
-  }, 'Request error');
+    'Request error'
+  );
 
   // Default error response
   let statusCode = 500;

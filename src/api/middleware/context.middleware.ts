@@ -8,10 +8,10 @@ import { withContext } from '../../utils/logger.js';
  */
 export const contextMiddleware = (req: Request, res: Response, next: NextFunction) => {
   const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
-  
+
   // Store correlationId on request for passing to jobs
-  (req as any).correlationId = correlationId;
-  
+  (req as Request & { correlationId: string }).correlationId = correlationId;
+
   // Run the rest of the request with context
   withContext({ correlationId }, () => next());
 };

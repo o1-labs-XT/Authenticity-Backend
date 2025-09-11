@@ -10,8 +10,8 @@ export class ProofPublishingService {
   private feePayerKey: string;
 
   constructor(
-    zkAppAddress: string, 
-    feePayerKey: string, 
+    zkAppAddress: string,
+    feePayerKey: string,
     network: string,
     private repository?: AuthenticityRepository
   ) {
@@ -43,7 +43,7 @@ export class ProofPublishingService {
       const Mainnet = Mina.Network('https://api.minascan.io/node/mainnet/v1/graphql');
       Mina.setActiveInstance(Mainnet);
       logger.info('Connected to Mina mainnet');
-    } 
+    }
   }
 
   /**
@@ -79,11 +79,14 @@ export class ProofPublishingService {
     const tokenOwner = tokenOwnerPrivate.toPublicKey();
     const feePayer = PrivateKey.fromBase58(this.feePayerKey);
 
-    logger.debug({ 
-      feePayer: feePayer.toPublicKey().toBase58(),
-      tokenOwner: tokenOwner.toBase58(),
-      creator: proof.publicInput.publicKey.toBase58()
-    }, 'Transaction participants');
+    logger.debug(
+      {
+        feePayer: feePayer.toPublicKey().toBase58(),
+        tokenOwner: tokenOwner.toBase58(),
+        creator: proof.publicInput.publicKey.toBase58(),
+      },
+      'Transaction participants'
+    );
 
     logger.debug('Creating transaction...');
 
@@ -120,7 +123,10 @@ export class ProofPublishingService {
         await this.repository.updateRecord(sha256Hash, {
           transaction_id: pendingTxn.hash,
         });
-        logger.debug({ sha256Hash, transactionHash: pendingTxn.hash }, 'Transaction ID saved to database');
+        logger.debug(
+          { sha256Hash, transactionHash: pendingTxn.hash },
+          'Transaction ID saved to database'
+        );
       }
 
       // Wait for confirmation (optional - could be async)
@@ -131,9 +137,10 @@ export class ProofPublishingService {
       }
 
       return pendingTxn.hash;
-    } catch (error: any) {
+    } catch (error) {
       logger.error({ err: error }, 'Failed to publish proof');
-      throw new Error(`Failed to publish proof: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to publish proof: ${errorMessage}`);
     }
   }
 
@@ -147,16 +154,19 @@ export class ProofPublishingService {
 
       await fetchAccount({ publicKey: zkAppPublicKey });
       const account = Mina.getAccount(zkAppPublicKey);
-      logger.debug({
-        address: zkAppPublicKey.toBase58(),
-        balance: account.balance.toString(),
-        nonce: account.nonce.toString(),
-        hasZkapp: !!account.zkapp,
-        zkappState: account.zkapp?.appState?.map((s) => s.toString()),
-      }, 'Account fetched');
+      logger.debug(
+        {
+          address: zkAppPublicKey.toBase58(),
+          balance: account.balance.toString(),
+          nonce: account.nonce.toString(),
+          hasZkapp: !!account.zkapp,
+          zkappState: account.zkapp?.appState?.map((s) => s.toString()),
+        },
+        'Account fetched'
+      );
 
       return !!account.zkapp;
-    } catch (error: any) {
+    } catch (error) {
       logger.error({ err: error }, 'Error checking deployment');
       return false;
     }

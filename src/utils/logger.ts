@@ -4,7 +4,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 const SERVICE_NAME =
   process.env.SERVICE_NAME || (process.argv[1]?.includes('worker') ? 'worker' : 'api');
 
-const contextStorage = new AsyncLocalStorage<Record<string, any>>();
+const contextStorage = new AsyncLocalStorage<Record<string, unknown>>();
 
 const transports = pino.transport({
   targets: [
@@ -41,7 +41,7 @@ export const logger = pino(
   transports
 );
 
-export function withContext<T>(context: Record<string, any>, fn: () => T): T {
+export function withContext<T>(context: Record<string, unknown>, fn: () => T): T {
   return contextStorage.run(context, fn);
 }
 

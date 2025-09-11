@@ -215,7 +215,7 @@ export class UploadHandler {
           tokenOwnerPrivateKey: tokenOwnerPrivate,
           uploadedAt: new Date(),
           // logging correlation id
-          correlationId: (req as any).correlationId,
+          correlationId: (req as Request & { correlationId: string }).correlationId,
         });
 
         // Update record with job ID for tracking

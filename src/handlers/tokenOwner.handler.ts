@@ -56,7 +56,7 @@ export class TokenOwnerHandler {
         status: record.status as 'pending' | 'verified',
         found: true,
       });
-    } catch (error: any) {
+    } catch (error) {
       logger.error({ err: error, sha256Hash: req.params.sha256Hash }, 'Token owner handler error');
 
       res.status(500).json({

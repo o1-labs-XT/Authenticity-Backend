@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import crypto from 'crypto';
@@ -26,7 +26,7 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     // Accept only image files
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    
+
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -40,35 +40,31 @@ export function createUploadRoutes(uploadHandler: UploadHandler): Router {
 
   /**
    * POST /api/upload
-   * 
+   *
    * Upload an image with signature for authenticity proof generation
-   * 
+   *
    * Request:
    * - multipart/form-data
    * - Fields:
    *   - image: File (required) - The image file to verify
    *   - publicKey: string (required) - Base58 encoded public key
    *   - signature: string (required) - Base58 encoded signature of SHA256 hash
-   * 
+   *
    * Response:
    * - 200: { tokenOwnerAddress: string, sha256Hash?: string, status: 'pending' | 'duplicate' }
    * - 400: Validation error
    * - 500: Internal error
    */
-  router.post(
-    '/upload',
-    upload.single('image'),
-    async (req, res, next) => {
-      try {
-        await uploadHandler.handleUpload(req, res);
-      } catch (error) {
-        next(error);
-      }
+  router.post('/upload', upload.single('image'), async (req, res, next) => {
+    try {
+      await uploadHandler.handleUpload(req, res);
+    } catch (error) {
+      next(error);
     }
-  );
+  });
 
   // Handle multer errors
-  router.use((error: any, req: any, res: any, next: any) => {
+  router.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (error instanceof multer.MulterError) {
       if (error.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({

@@ -15,14 +15,14 @@ export interface ProofGenerationJobData {
 
 export class JobQueueService {
   private boss: PgBoss;
-  
+
   constructor(connectionString: string) {
     this.boss = new PgBoss(connectionString);
   }
 
   async start(): Promise<void> {
     await this.boss.start();
-    
+
     // Create queue if it doesn't exist
     await this.boss.createQueue('proof-generation');
     logger.info('Job queue started');
@@ -35,16 +35,12 @@ export class JobQueueService {
 
   async enqueueProofGeneration(data: ProofGenerationJobData): Promise<string> {
     try {
-      const jobId = await this.boss.send(
-        'proof-generation',
-        data,
-        {
-          retryLimit: 3,
-          retryDelay: 60,
-          retryBackoff: true,
-          singletonKey: data.sha256Hash,
-        }
-      );
+      const jobId = await this.boss.send('proof-generation', data, {
+        retryLimit: 3,
+        retryDelay: 60,
+        retryBackoff: true,
+        singletonKey: data.sha256Hash,
+      });
 
       logger.debug({ jobId, sha256Hash: data.sha256Hash }, 'Job enqueued');
       return jobId || '';
@@ -54,19 +50,25 @@ export class JobQueueService {
     }
   }
 
-  async getJobById(jobId: string): Promise<any> {
+  async getJobById(jobId: string): Promise<PgBoss.JobWithMetadata<ProofGenerationJobData> | null> {
     // pg-boss getJobById requires queue name as well
     return await this.boss.getJobById('proof-generation', jobId);
   }
 
-  async getQueueStats(): Promise<any> {
+  async getQueueStats(): Promise<{
+    pending: number;
+    active: number;
+    completed: number;
+    failed: number;
+    total: number;
+  }> {
     try {
       // In pg-boss v10, getQueueSize returns count of jobs in created state by default
       const pending = await this.boss.getQueueSize('proof-generation');
       const failed = await this.boss.getQueueSize('proof-generation', { before: 'failed' });
       const active = await this.boss.getQueueSize('proof-generation', { before: 'active' });
       const completed = await this.boss.getQueueSize('proof-generation', { before: 'completed' });
-      
+
       return {
         pending,
         active,

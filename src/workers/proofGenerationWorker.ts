@@ -26,8 +26,8 @@ export class ProofGenerationWorker {
           {
             jobId: job.id,
             sha256Hash: job.data.sha256Hash,
-            correlationId: (job.data as any).correlationId,
-            attempt: (job as any).retryCount || 0,
+            correlationId: job.data.correlationId,
+            attempt: (job as PgBoss.JobWithMetadata<ProofGenerationJobData>).retryCount || 0,
           },
           async () => {
             const jobTracker = new PerformanceTracker('job.proofGeneration', {
@@ -50,7 +50,8 @@ export class ProofGenerationWorker {
               await this.repository.updateRecord(sha256Hash, {
                 status: 'processing',
                 processing_started_at: new Date().toISOString(),
-                retry_count: (job as any).retryCount || 0,
+                retry_count:
+                  (job as PgBoss.JobWithMetadata<ProofGenerationJobData>).retryCount || 0,
               });
 
               // Step 1: Verify and prepare image
@@ -108,8 +109,9 @@ export class ProofGenerationWorker {
 
               jobTracker.end('success', { transactionId });
               logger.info({ transactionId }, 'Proof generation completed successfully');
-            } catch (error: any) {
-              const retryCount = (job as any).retryCount || 0;
+            } catch (error) {
+              const retryCount =
+                (job as PgBoss.JobWithMetadata<ProofGenerationJobData>).retryCount || 0;
               const retryLimit = 3; // Default retry limit
               const isLastRetry = retryCount >= retryLimit - 1;
 

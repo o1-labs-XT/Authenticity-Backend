@@ -3,7 +3,7 @@ import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { ImageAuthenticityService } from './services/image/verification.service.js';
-import { JobQueueService } from './services/queue/jobQueue.service.js'; 
+import { JobQueueService } from './services/queue/jobQueue.service.js';
 import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
@@ -16,8 +16,8 @@ async function main() {
   try {
     // Initialize database
     logger.info('Initializing database...');
-    const dbConnection = new DatabaseConnection({ 
-      connectionString: config.databaseUrl 
+    const dbConnection = new DatabaseConnection({
+      connectionString: config.databaseUrl,
     });
     await dbConnection.initialize();
     const repository = new AuthenticityRepository(dbConnection.getAdapter());
@@ -25,18 +25,14 @@ async function main() {
     // Initialize services
     logger.info('Initializing services...');
     const verificationService = new ImageAuthenticityService();
-    
+
     // Initialize job queue
     logger.info('Initializing job queue...');
     const jobQueue = new JobQueueService(config.databaseUrl);
     await jobQueue.start();
-    
+
     // Initialize handlers
-    const uploadHandler = new UploadHandler(
-      verificationService,
-      repository,
-      jobQueue
-    );
+    const uploadHandler = new UploadHandler(verificationService, repository, jobQueue);
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
     const adminHandler = new AdminHandler(jobQueue, repository);
@@ -59,18 +55,18 @@ async function main() {
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       logger.info(`Received ${signal}, starting graceful shutdown...`);
-      
+
       // Stop accepting new connections
       server.close(() => {
         logger.info('HTTP server closed');
       });
-      
+
       // Stop job queue
       await jobQueue.stop();
-      
+
       // Close database
       await dbConnection.close();
-      
+
       logger.info('Graceful shutdown complete');
       process.exit(0);
     };

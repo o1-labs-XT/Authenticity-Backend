@@ -1,8 +1,8 @@
 import knex, { Knex } from 'knex';
 import { logger } from '../../utils/logger.js';
 import { AuthenticityRecord } from '../types.js';
- 
-export class PostgresAdapter  {
+
+export class PostgresAdapter {
   private knex: Knex;
   private connectionString: string;
 

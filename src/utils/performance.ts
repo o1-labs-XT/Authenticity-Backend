@@ -8,12 +8,12 @@ export class PerformanceTracker {
 
   constructor(
     private operation: string,
-    private metadata?: Record<string, any>
+    private metadata?: Record<string, unknown>
   ) {
     this.startTime = Date.now();
   }
 
-  end(status: 'success' | 'error' = 'success', additionalMetadata?: Record<string, any>) {
+  end(status: 'success' | 'error' = 'success', additionalMetadata?: Record<string, unknown>) {
     const duration = Date.now() - this.startTime;
     const logData = {
       operation: this.operation,
@@ -42,7 +42,7 @@ export class PerformanceTracker {
 export async function trackAsync<T>(
   operation: string,
   fn: () => Promise<T>,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): Promise<T> {
   const tracker = new PerformanceTracker(operation, metadata);
   try {

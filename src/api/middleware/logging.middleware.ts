@@ -6,14 +6,14 @@ import { logger } from '../../utils/logger.js';
  */
 export const loggingMiddleware = pinoHttp({
   logger,
-  
+
   // Customize log level based on status code
   customLogLevel: (req, res, err) => {
     if (err || res.statusCode >= 500) return 'error';
     if (res.statusCode >= 400) return 'warn';
     return 'info';
   },
-  
+
   // Simplify serializers to reduce verbosity
   serializers: {
     req: (req) => ({
@@ -29,7 +29,7 @@ export const loggingMiddleware = pinoHttp({
       statusCode: res.statusCode,
     }),
   },
-  
+
   // Redact sensitive headers
   redact: ['req.headers.authorization', 'req.headers.cookie'],
 });

@@ -17,8 +17,8 @@ async function startWorker() {
   try {
     // Initialize database
     logger.info('Initializing database connection...');
-    dbConnection = new DatabaseConnection({ 
-      connectionString: config.databaseUrl 
+    dbConnection = new DatabaseConnection({
+      connectionString: config.databaseUrl,
     });
     await dbConnection.initialize();
     const repository = new AuthenticityRepository(dbConnection.getAdapter());
@@ -31,10 +31,10 @@ async function startWorker() {
     // Initialize services
     logger.info('Initializing services...');
     const verificationService = new ImageAuthenticityService();
-    
+
     logger.info('Initializing proof generation service...');
     const proofGenerationService = new ProofGenerationService();
-    
+
     logger.info('Initializing proof publishing service...');
     const proofPublishingService = new ProofPublishingService(
       config.zkappAddress,
@@ -58,31 +58,30 @@ async function startWorker() {
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       logger.info(`Received ${signal}, starting graceful shutdown...`);
-      
+
       if (worker) {
         await worker.stop();
       }
-      
+
       if (boss) {
         await boss.stop();
         logger.info('Job queue stopped');
       }
-      
+
       if (dbConnection) {
         await dbConnection.close();
         logger.info('Database connection closed');
       }
-      
+
       logger.info('Worker shutdown complete');
       process.exit(0);
     };
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
-
   } catch (error) {
     logger.fatal({ err: error }, 'Failed to start worker');
-    
+
     // Clean up on error
     if (boss) {
       await boss.stop();
@@ -90,7 +89,7 @@ async function startWorker() {
     if (dbConnection) {
       await dbConnection.close();
     }
-    
+
     process.exit(1);
   }
 }

@@ -2,20 +2,17 @@ import {
   AuthenticityProgram,
   AuthenticityInputs,
   AuthenticityProof,
-  FinalRoundInputs
-} from 'authenticity-zkapp'; 
-import fs from 'fs';
+  FinalRoundInputs,
+} from 'authenticity-zkapp';
 import { PublicKey, Signature, Cache } from 'o1js';
 import { VerificationInputs } from '../image/verification.service.js';
 import { logger } from '../../utils/logger.js';
 import { PerformanceTracker } from '../../utils/performance.js';
 
 export class ProofGenerationService {
-
   constructor() {
     logger.debug('ProofGenerationService initialized');
   }
-
 
   /**
    * Generate a proof of authenticity for an image
@@ -26,13 +23,13 @@ export class ProofGenerationService {
     publicKey: string,
     signature: string,
     verificationInputs: VerificationInputs,
-    imagePath?: string
+    _imagePath?: string
   ): Promise<{
     proof: AuthenticityProof;
     publicInputs: AuthenticityInputs;
   }> {
     logger.debug({ sha256Hash }, 'Generating proof for image');
-    
+
     // Use cached compilation if available
     const cacheDir = process.env.CIRCUIT_CACHE_PATH || './cache';
     const cache = Cache.FileSystem(cacheDir);
@@ -62,19 +59,15 @@ export class ProofGenerationService {
       roundConstant: verificationInputs.roundConstant,
     });
 
-    logger.debug('Generating authenticity proof...'); 
-    
+    logger.debug('Generating authenticity proof...');
+
     // Generate proof that:
     // 1. The penultimate SHA256 state correctly produces the signed hash after the final round
     // 2. The supplied signature was made with the supplied public key on the SHA256 commitment
     const proofTracker = new PerformanceTracker('proof.generate', { sha256Hash });
-    const { proof } = await AuthenticityProgram.verifyAuthenticity(
-      publicInputs,
-      privateInputs
-    );
+    const { proof } = await AuthenticityProgram.verifyAuthenticity(publicInputs, privateInputs);
     proofTracker.end('success');
 
     return { proof, publicInputs };
   }
-
 }

@@ -57,7 +57,7 @@ export class StatusHandler {
         tokenOwnerAddress: recordStatus.tokenOwnerAddress,
         transactionId: recordStatus.transactionId || undefined,
       });
-    } catch (error: any) {
+    } catch (error) {
       logger.error({ err: error, sha256Hash: req.params.sha256Hash }, 'Status handler error');
 
       res.status(500).json({
