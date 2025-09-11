@@ -2,6 +2,10 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config } from '../config/index.js';
 import { createUploadRoutes } from './routes/upload.routes.js';
 import { createStatusRoutes } from './routes/status.routes.js';
@@ -14,6 +18,8 @@ import { UploadHandler } from '../handlers/upload.handler.js';
 import { StatusHandler } from '../handlers/status.handler.js';
 import { TokenOwnerHandler } from '../handlers/tokenOwner.handler.js';
 import { AdminHandler } from '../handlers/admin.handler.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface ServerDependencies {
   uploadHandler: UploadHandler;
@@ -72,6 +78,20 @@ export function createServer(dependencies: ServerDependencies): Express {
       zkApp: config.zkappAddress || 'not configured',
     });
   });
+
+  const swaggerDocument = YAML.load(path.join(__dirname, '../../swagger/swagger.yaml'));
+  const baseUrl =
+    config.nodeEnv === 'development'
+      ? `http://localhost:${config.port}`
+      : `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  swaggerDocument.servers = [
+    {
+      url: `${baseUrl}/api`,
+      description: `${config.nodeEnv} server`,
+    },
+  ];
+
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
   // Mount API routes
   const uploadRoutes = createUploadRoutes(dependencies.uploadHandler);
