@@ -15,19 +15,16 @@ const transports = pino.transport({
         mkdir: true,
       },
     },
-    // pretty print to terminal
-    ...(process.stdout.isTTY
-      ? [
-          {
-            target: 'pino-pretty',
-            options: {
-              colorize: true,
-              translateTime: 'HH:MM:ss.l',
-              ignore: 'pid,hostname',
-            },
-          },
-        ]
-      : []),
+    // Always output to stdout with pretty formatting
+    {
+      target: 'pino-pretty',
+      options: {
+        destination: 1, // stdout
+        colorize: true,
+        translateTime: 'HH:MM:ss.l',
+        ignore: 'pid,hostname',
+      },
+    },
   ],
 });
 
