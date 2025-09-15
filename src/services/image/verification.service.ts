@@ -35,7 +35,7 @@ export class ImageAuthenticityService {
     try {
       const signature = Signature.fromBase58(signatureString);
       const publicKey = PublicKey.fromBase58(publicKeyString);
-      
+
       // Extract SHA256 state for ZK proof
       const inputs = prepareImageVerification(imagePath);
       const verificationInputs: VerificationInputs = {
@@ -47,7 +47,9 @@ export class ImageAuthenticityService {
       };
 
       // Verify signature matches hash
-      const isValid = signature.verify(publicKey, verificationInputs.expectedHash.toFields()).toBoolean();
+      const isValid = signature
+        .verify(publicKey, verificationInputs.expectedHash.toFields())
+        .toBoolean();
 
       if (!isValid) {
         return {
@@ -67,5 +69,4 @@ export class ImageAuthenticityService {
       };
     }
   }
-
 }

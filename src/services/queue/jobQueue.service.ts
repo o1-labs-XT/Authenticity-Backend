@@ -1,4 +1,5 @@
 import PgBoss from 'pg-boss';
+import { logger } from '../../utils/logger.js';
 
 export interface ProofGenerationJobData {
   sha256Hash: string;
@@ -9,64 +10,65 @@ export interface ProofGenerationJobData {
   tokenOwnerPrivateKey: string;
   uploadedAt: Date;
   priority?: number;
+  correlationId?: string;
 }
 
 export class JobQueueService {
   private boss: PgBoss;
-  
+
   constructor(connectionString: string) {
     this.boss = new PgBoss(connectionString);
   }
 
   async start(): Promise<void> {
     await this.boss.start();
-    
+
     // Create queue if it doesn't exist
     await this.boss.createQueue('proof-generation');
-    console.log('✅ Queue created/verified: proof-generation');
-    
-    console.log('🚀 Job queue started');
+    logger.info('Job queue started');
   }
 
   async stop(): Promise<void> {
     await this.boss.stop();
-    console.log('🛑 Job queue stopped');
+    logger.info('Job queue stopped');
   }
 
   async enqueueProofGeneration(data: ProofGenerationJobData): Promise<string> {
     try {
-      const jobId = await this.boss.send(
-        'proof-generation',
-        data,
-        {
-          retryLimit: 3,
-          retryDelay: 60,
-          retryBackoff: true,
-          singletonKey: data.sha256Hash,
-        }
-      );
+      const jobId = await this.boss.send('proof-generation', data, {
+        retryLimit: 3,
+        retryDelay: 60,
+        retryBackoff: true,
+        singletonKey: data.sha256Hash,
+      });
 
-      console.log(`📋 Enqueued proof generation job ${jobId} for hash ${data.sha256Hash}`);
+      logger.debug({ jobId, sha256Hash: data.sha256Hash }, 'Job enqueued');
       return jobId || '';
     } catch (error) {
-      console.error('❌ Failed to enqueue job:', error);
+      logger.error({ err: error }, 'Failed to enqueue job');
       throw error;
     }
   }
 
-  async getJobById(jobId: string): Promise<any> {
+  async getJobById(jobId: string): Promise<PgBoss.JobWithMetadata<ProofGenerationJobData> | null> {
     // pg-boss getJobById requires queue name as well
     return await this.boss.getJobById('proof-generation', jobId);
   }
 
-  async getQueueStats(): Promise<any> {
+  async getQueueStats(): Promise<{
+    pending: number;
+    active: number;
+    completed: number;
+    failed: number;
+    total: number;
+  }> {
     try {
       // In pg-boss v10, getQueueSize returns count of jobs in created state by default
       const pending = await this.boss.getQueueSize('proof-generation');
       const failed = await this.boss.getQueueSize('proof-generation', { before: 'failed' });
       const active = await this.boss.getQueueSize('proof-generation', { before: 'active' });
       const completed = await this.boss.getQueueSize('proof-generation', { before: 'completed' });
-      
+
       return {
         pending,
         active,
@@ -75,7 +77,7 @@ export class JobQueueService {
         total: pending + active + completed + failed,
       };
     } catch (error) {
-      console.error('Failed to get queue stats:', error);
+      logger.error({ err: error }, 'Failed to get queue stats');
       throw error;
     }
   }
@@ -83,9 +85,9 @@ export class JobQueueService {
   async retryJob(jobId: string): Promise<void> {
     try {
       await this.boss.retry('proof-generation', jobId);
-      console.log(`🔄 Retried job ${jobId}`);
+      logger.info({ jobId }, 'Job retried successfully');
     } catch (error) {
-      console.error('Failed to retry job:', error);
+      logger.error({ err: error, jobId }, 'Failed to retry job');
       throw error;
     }
   }

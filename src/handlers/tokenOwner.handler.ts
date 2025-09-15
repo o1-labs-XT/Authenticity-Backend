@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * API response for token owner endpoint
@@ -55,10 +56,9 @@ export class TokenOwnerHandler {
         status: record.status as 'pending' | 'verified',
         found: true,
       });
+    } catch (error) {
+      logger.error({ err: error, sha256Hash: req.params.sha256Hash }, 'Token owner handler error');
 
-    } catch (error: any) {
-      console.error('Token owner handler error:', error);
-      
       res.status(500).json({
         error: {
           code: 'INTERNAL_ERROR',

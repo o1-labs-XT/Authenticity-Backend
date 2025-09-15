@@ -6,7 +6,7 @@ import globals from 'globals';
 export default [
   js.configs.recommended,
   {
-    files: ['src/**/*.ts'],
+    files: ['src/**/*.ts', 'migrations/**/*.ts', 'scripts/**/*.ts'],
     languageOptions: {
       parser: typescriptParser,
       ecmaVersion: 2022,
@@ -30,6 +30,6 @@ export default [
     }
   },
   {
-    ignores: ['node_modules/**', 'dist/**', '*.js', 'tests/**']
+    ignores: ['node_modules/**', 'dist/**']
   }
 ];

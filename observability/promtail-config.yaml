@@ -1,0 +1,67 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Scrape all .log files in /var/log/app/
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: authenticity
+          __path__: /var/log/app/*.log
+    pipeline_stages:
+      # Extract service name from filename
+      - regex:
+          source: filename
+          expression: '/var/log/app/(?P<service>\w+)\.log'
+      - labels:
+          service:
+      # Parse JSON logs and extract all fields
+      - json:
+          expressions:
+            level: level
+            msg: msg
+            correlationId: correlationId
+            jobId: jobId
+            sha256Hash: sha256Hash
+            operation: operation
+            duration: duration
+            status: status
+            transactionId: transactionId
+            attempt: attempt
+            event: event
+            step: step
+            failure_reason: failure_reason
+      - labels:
+          level:
+      # Add commonly searched fields as labels for fast filtering
+      - labels:
+          operation:
+          status:
+          correlationId:
+      # Use Pino's time field
+      - timestamp:
+          source: time
+          format: Unix
+      # Store structured data in output
+      - pack:
+          json_objects:
+            - correlationId: correlationId
+            - jobId: jobId
+            - sha256Hash: sha256Hash
+            - duration: duration
+            - transactionId: transactionId
+            - attempt: attempt
+            - event: event
+            - step: step
+            - failure_reason: failure_reason
+      - output:
+          source: msg

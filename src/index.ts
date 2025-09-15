@@ -3,41 +3,36 @@ import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { ImageAuthenticityService } from './services/image/verification.service.js';
-import { JobQueueService } from './services/queue/jobQueue.service.js'; 
+import { JobQueueService } from './services/queue/jobQueue.service.js';
 import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
 import { AdminHandler } from './handlers/admin.handler.js';
+import { logger } from './utils/logger.js';
 
 async function main() {
-  console.log('🚀 Starting Authenticity Backend...');
-  console.log(`Environment: ${config.nodeEnv}`);
-  console.log(`Network: ${config.minaNetwork}`);
+  logger.info('Starting Authenticity Backend...');
 
   try {
     // Initialize database
-    console.log('Initializing database...');
-    const dbConnection = new DatabaseConnection({ 
-      connectionString: config.databaseUrl 
+    logger.info('Initializing database...');
+    const dbConnection = new DatabaseConnection({
+      connectionString: config.databaseUrl,
     });
     await dbConnection.initialize();
     const repository = new AuthenticityRepository(dbConnection.getAdapter());
 
     // Initialize services
-    console.log('Initializing services...');
+    logger.info('Initializing services...');
     const verificationService = new ImageAuthenticityService();
-    
+
     // Initialize job queue
-    console.log('Initializing job queue...');
+    logger.info('Initializing job queue...');
     const jobQueue = new JobQueueService(config.databaseUrl);
     await jobQueue.start();
-    
+
     // Initialize handlers
-    const uploadHandler = new UploadHandler(
-      verificationService,
-      repository,
-      jobQueue
-    );
+    const uploadHandler = new UploadHandler(verificationService, repository, jobQueue);
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
     const adminHandler = new AdminHandler(jobQueue, repository);
@@ -53,58 +48,50 @@ async function main() {
     const port = config.port;
 
     const server = app.listen(port, () => {
-      console.log(`✅ Server running on port ${port}`);
-      console.log(`📍 Health check: http://localhost:${port}/health`);
-      console.log(`📍 API endpoints:`);
-      console.log(`   POST /api/upload - Upload image for proof generation`);
-      console.log(`   GET  /api/status/:sha256Hash - Check proof status`);
-      console.log(`   GET  /api/token-owner/:sha256Hash - Get token owner address`);
-      if (config.nodeEnv === 'development') {
-        console.log(`📍 Admin endpoints:`);
-        console.log(`   GET  /api/admin/jobs/stats - Job queue statistics`);
-        console.log(`   GET  /api/admin/jobs/failed - List failed jobs`);
-        console.log(`   GET  /api/admin/jobs/:jobId - Get job details`);
-        console.log(`   POST /api/admin/jobs/:jobId/retry - Retry a failed job`);
-      }
+      logger.info(`Server running on port ${port}`);
+      logger.info(`Health check: http://localhost:${port}/health`);
     });
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
-      console.log(`\n${signal} received, starting graceful shutdown...`);
-      
+      logger.info(`Received ${signal}, starting graceful shutdown...`);
+
       // Stop accepting new connections
       server.close(() => {
-        console.log('HTTP server closed');
+        logger.info('HTTP server closed');
       });
-      
+
       // Stop job queue
       await jobQueue.stop();
-      
+
       // Close database
       await dbConnection.close();
-      
-      console.log('✅ Graceful shutdown complete');
+
+      logger.info('Graceful shutdown complete');
       process.exit(0);
     };
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    logger.fatal({ err: error }, 'Failed to start server');
     process.exit(1);
   }
 }
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  logger.fatal({ err: error }, 'Uncaught Exception');
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.fatal({ reason, promise }, 'Unhandled Rejection');
   process.exit(1);
 });
 
 // Start the application
-main().catch(console.error);
+main().catch((error) => {
+  logger.fatal({ err: error }, 'Failed to start application');
+  process.exit(1);
+});

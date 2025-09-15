@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { logger } from '../utils/logger.js';
 
 export class AdminHandler {
   constructor(
@@ -11,17 +12,17 @@ export class AdminHandler {
   async getJobStats(req: Request, res: Response): Promise<void> {
     try {
       const stats = await this.jobQueue.getQueueStats();
-      
+
       // Get database stats
       const dbStats = await this.repository.getStatusCounts();
-      
+
       res.json({
         queue: stats,
         database: dbStats,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error('Failed to get job stats:', error);
+      logger.error({ err: error }, 'Failed to get job stats');
       res.status(500).json({
         error: {
           code: 'STATS_ERROR',
@@ -37,7 +38,7 @@ export class AdminHandler {
     try {
       // Get the job details first
       const job = await this.jobQueue.getJobById(jobId);
-      
+
       if (!job) {
         res.status(404).json({
           error: {
@@ -50,7 +51,7 @@ export class AdminHandler {
 
       // Retry the job
       await this.jobQueue.retryJob(jobId);
-      
+
       // Update database status back to pending
       if (job.data?.sha256Hash) {
         await this.repository.updateRecord(job.data.sha256Hash, {
@@ -65,7 +66,7 @@ export class AdminHandler {
         jobId,
       });
     } catch (error) {
-      console.error('Failed to retry job:', error);
+      logger.error({ err: error, jobId }, 'Failed to retry job');
       res.status(500).json({
         error: {
           code: 'RETRY_ERROR',
@@ -81,14 +82,14 @@ export class AdminHandler {
       const offset = parseInt(req.query.offset as string) || 0;
 
       const failedJobs = await this.repository.getFailedRecords(limit, offset);
-      
+
       res.json({
         jobs: failedJobs,
         limit,
         offset,
       });
     } catch (error) {
-      console.error('Failed to get failed jobs:', error);
+      logger.error({ err: error }, 'Failed to get failed jobs');
       res.status(500).json({
         error: {
           code: 'FAILED_JOBS_ERROR',
@@ -103,7 +104,7 @@ export class AdminHandler {
 
     try {
       const job = await this.jobQueue.getJobById(jobId);
-      
+
       if (!job) {
         res.status(404).json({
           error: {
@@ -116,7 +117,7 @@ export class AdminHandler {
 
       res.json(job);
     } catch (error) {
-      console.error('Failed to get job details:', error);
+      logger.error({ err: error, jobId }, 'Failed to get job details');
       res.status(500).json({
         error: {
           code: 'JOB_DETAILS_ERROR',

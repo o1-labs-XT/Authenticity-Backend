@@ -13,8 +13,7 @@ docker-compose up -d  # Starts PostgreSQL (port 5432) and pgweb (port 8081)
 # pgweb is available at http://localhost:8081 (no login required)
 
 # Run services (in separate terminals):
-npm run dev           # Start API server with hot reload (port 3000)
-npm run dev:api       # Alias for API server only
+npm run dev:api       # Start API server with hot reload (port 3000)
 npm run dev:worker    # Start worker service with hot reload
 
 # Production commands:
@@ -26,14 +25,17 @@ npm run start:worker  # Compile zkApp and start worker service
 
 ### Database Management
 ```bash
-npm run db:migrate      # Run database migrations (development)
-npm run db:rollback     # Rollback last migration
-npm run db:migrate:make # Create new migration file
+npm run db:migrate      # Run database migrations
+npm run db:reset        # Reset database (removes volumes, restarts containers, runs migrations)
+
+# Knex migration commands (use npx):
+npx knex migrate:rollback  # Rollback last migration
+npx knex migrate:make migration_name  # Create new migration file
 
 # Direct PostgreSQL access
 docker-compose exec postgres psql -U postgres authenticity_dev
 
-# Reset database
+# Manual database reset
 docker-compose down -v  # Remove volumes
 docker-compose up -d    # Restart containers
 npm run db:migrate      # Rerun migrations
@@ -43,6 +45,26 @@ npm run db:migrate      # Rerun migrations
 ```bash
 npm run lint    # Run ESLint on src/**/*.ts
 npm run format  # Format code with Prettier
+```
+
+### Observability
+```bash
+# Start observability stack
+docker-compose up -d loki grafana promtail
+
+# Access dashboards
+# Grafana: http://localhost:3001 (admin/admin)
+# Loki API: http://localhost:3100
+
+# View logs in Grafana
+# 1. Navigate to http://localhost:3001
+# 2. Login with admin/admin
+# 3. Go to Explore → Select Loki datasource
+# 4. Query examples:
+#    {service="api"} - All API logs
+#    {service="worker"} - All Worker logs
+#    {service=~"api|worker"} |= "error" - All errors
+#    {service="api"} |= "correlationId=<id>" - Track request through system
 ```
 
 **Note**: No automated tests are implemented. Testing is done via manual scripts (`test-upload.mts`, `test-admin.mts`).
@@ -127,7 +149,7 @@ test-admin.mts           # Manual admin API testing
 ### Database
 - **PostgresAdapter**: Instance-based Knex wrapper (NOT static methods)
 - **AuthenticityRepository**: Repository pattern for data access
-- **Migrations**: Two migrations - initial schema + job tracking fields
+- **Migrations**: Schema managed via Knex migrations
 - **Status values**: `pending`, `processing`, `verified`, `failed`
 
 ### Worker
@@ -171,7 +193,7 @@ FEE_PAYER_PRIVATE_KEY=<private_key>
 PORT=3000
 NODE_ENV=development|production|test
 CORS_ORIGIN=http://localhost:3001
-UPLOAD_MAX_SIZE=52428800  # 50MB
+UPLOAD_MAX_SIZE=10485760  # 10MB default, configurable
 ```
 
 ### Optional Variables
@@ -214,7 +236,8 @@ updated_at              -- Last modified
 - **Compression**: Response compression
 - **File Upload**: Multer with size limits
 - **Error Handling**: Consistent error responses
-- **Request Logging**: Custom middleware
+- **Request Logging**: Pino with correlation IDs
+- **AsyncLocalStorage**: Context propagation for tracing
 
 ### zkApp Integration
 - **Circuit Compilation**: Pre-compiled at worker startup
@@ -238,6 +261,26 @@ updated_at              -- Last modified
 - **Health Checks**: 180s timeout, 3 restart attempts
 - **Auto-migrations**: Run at API startup
 - **Circuit Compilation**: At worker startup
+
+### Railway CLI
+```bash
+# Install and setup
+npm install -g @railway/cli
+railway login
+railway link  # Select project/environment
+
+# Switch environments
+railway environment staging
+railway environment production
+
+# Connect to database
+railway connect postgres
+
+# View logs
+railway logs --service api
+railway logs --service worker
+railway logs -f  # Tail logs
+```
 
 ### Docker Setup
 ```yaml
@@ -289,6 +332,6 @@ ADMIN_API_KEY=key API_URL=https://api.example.com tsx test-admin.mts stats
 - **No SQLite support**: PostgreSQL-only (required for pg-boss)
 - **No automated tests**: Use manual testing scripts
 - **Instance-based adapters**: PostgresAdapter uses instance methods, not static
-- **Cache directory**: Now in `.gitignore`, auto-created when needed
-- **Service naming**: `ImageAuthenticityService` (was refactored from verification)
-- **Database interface removed**: Direct PostgresAdapter usage (no DatabaseAdapter interface)
+- **Cache directory**: Auto-created when needed, in `.gitignore`
+- **Logging**: Structured JSON logs with correlation IDs for request tracing
+- **File outputs**: Logs written to `./logs/*.log` for Promtail collection

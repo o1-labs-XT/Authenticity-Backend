@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { AdminHandler } from '../../handlers/admin.handler.js';
 import { config } from '../../config/index.js';
 
@@ -6,7 +6,7 @@ export function createAdminRoutes(adminHandler: AdminHandler): Router {
   const router = Router();
 
   // Basic auth middleware for admin endpoints
-  const adminAuth = (req: any, res: any, next: any) => {
+  const adminAuth = (req: Request, res: Response, next: NextFunction) => {
     // In production, implement proper authentication
     // For now, check if NODE_ENV is development or if a specific header is present
     if (config.nodeEnv === 'development') {

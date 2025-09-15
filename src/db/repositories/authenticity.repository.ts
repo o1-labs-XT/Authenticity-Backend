@@ -27,10 +27,13 @@ export class AuthenticityRepository {
         status: 'pending',
         transaction_id: null,
       });
-    } catch (error: any) {
+    } catch (error) {
       // Handle unique constraint violations
-      if (error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' || error.code === '23505') {
-        throw new Error('Record with this SHA256 hash already exists');
+      if (error instanceof Error && 'code' in error) {
+        const dbError = error as Error & { code: string };
+        if (dbError.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' || dbError.code === '23505') {
+          throw new Error('Record with this SHA256 hash already exists');
+        }
       }
       throw error;
     }

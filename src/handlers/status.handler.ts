@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * API response for status endpoint
@@ -56,10 +57,9 @@ export class StatusHandler {
         tokenOwnerAddress: recordStatus.tokenOwnerAddress,
         transactionId: recordStatus.transactionId || undefined,
       });
+    } catch (error) {
+      logger.error({ err: error, sha256Hash: req.params.sha256Hash }, 'Status handler error');
 
-    } catch (error: any) {
-      console.error('Status handler error:', error);
-      
       res.status(500).json({
         error: {
           code: 'INTERNAL_ERROR',
