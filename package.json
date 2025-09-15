@@ -74,7 +74,7 @@
     "**/*.ts": [
       "eslint --fix",
       "prettier --write",
-      "npm run build"
+      "bash -c 'npm run build'"
     ]
   }
 }

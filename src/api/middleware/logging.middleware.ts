@@ -1,5 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pinoHttp = require('pino-http');
+import pinoHttp from 'pino-http';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { logger } from '../../utils/logger.js';
 
