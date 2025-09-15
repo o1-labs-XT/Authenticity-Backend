@@ -49,39 +49,54 @@ export function errorMiddleware(
   };
 
   // Handle different error types
-  if (error.name === 'ValidationError') {
-    statusCode = 400;
-    errorResponse = {
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: error.message,
-      },
-    };
-  } else if (error.name === 'UnauthorizedError') {
-    statusCode = 401;
-    errorResponse = {
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-      },
-    };
-  } else if (error.name === 'ForbiddenError') {
-    statusCode = 403;
-    errorResponse = {
-      error: {
-        code: 'FORBIDDEN',
-        message: 'Access denied',
-      },
-    };
-  } else if (error.name === 'NotFoundError') {
-    statusCode = 404;
-    errorResponse = {
-      error: {
-        code: 'NOT_FOUND',
-        message: error.message || 'Resource not found',
-      },
-    };
-  } else if (error.code === 'SQLITE_CONSTRAINT') {
+  if (error instanceof Error) {
+    // Handle Error instances
+    if (error.name === 'ValidationError') {
+      statusCode = 400;
+      errorResponse = {
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: error.message,
+        },
+      };
+    } else if (error.name === 'UnauthorizedError') {
+      statusCode = 401;
+      errorResponse = {
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required',
+        },
+      };
+    } else if (error.name === 'ForbiddenError') {
+      statusCode = 403;
+      errorResponse = {
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Access denied',
+        },
+      };
+    } else if (error.name === 'NotFoundError') {
+      statusCode = 404;
+      errorResponse = {
+        error: {
+          code: 'NOT_FOUND',
+          message: error.message || 'Resource not found',
+        },
+      };
+    } else if (error.message) {
+      // Use the error message if available
+      errorResponse.error.message = error.message;
+    }
+
+    // Add more details in development mode
+    if (config.nodeEnv === 'development' && error.stack) {
+      logger.debug({ stack: error.stack }, 'Error stack trace');
+    }
+  }
+
+  // Handle non-Error objects with error codes
+  const errorWithCode = error as any;
+  if (errorWithCode?.code === 'SQLITE_CONSTRAINT') {
     statusCode = 409;
     errorResponse = {
       error: {
@@ -89,24 +104,15 @@ export function errorMiddleware(
         message: 'Resource already exists',
       },
     };
-  } else if (error.code === 'LIMIT_FILE_SIZE') {
+  } else if (errorWithCode?.code === 'LIMIT_FILE_SIZE') {
     statusCode = 413;
     errorResponse = {
       error: {
         code: 'FILE_TOO_LARGE',
-        message: error.message || 'File size exceeds limit',
+        message: errorWithCode.message || 'File size exceeds limit',
         field: 'image',
       },
     };
-  } else if (error.message) {
-    // Use the error message if available
-    errorResponse.error.message = error.message;
-  }
-
-  // Add more details in development mode
-  if (config.nodeEnv === 'development' && error.stack) {
-    logger.debug({ stack: error.stack }, 'Error stack trace');
-    // You could add stack trace to response in dev mode if needed
   }
 
   // Send error response

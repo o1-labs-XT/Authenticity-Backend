@@ -1,4 +1,6 @@
-import pinoHttp from 'pino-http';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pinoHttp = require('pino-http');
+import type { IncomingMessage, ServerResponse } from 'http';
 import { logger } from '../../utils/logger.js';
 
 /**
@@ -8,7 +10,7 @@ export const loggingMiddleware = pinoHttp({
   logger,
 
   // Customize log level based on status code
-  customLogLevel: (req, res, err) => {
+  customLogLevel: (req: IncomingMessage, res: ServerResponse, err?: Error) => {
     if (err || res.statusCode >= 500) return 'error';
     if (res.statusCode >= 400) return 'warn';
     return 'info';
@@ -16,7 +18,7 @@ export const loggingMiddleware = pinoHttp({
 
   // Simplify serializers to reduce verbosity
   serializers: {
-    req: (req) => ({
+    req: (req: IncomingMessage) => ({
       method: req.method,
       url: req.url,
       // Only include essential headers
@@ -25,7 +27,7 @@ export const loggingMiddleware = pinoHttp({
         'content-type': req.headers['content-type'],
       },
     }),
-    res: (res) => ({
+    res: (res: ServerResponse) => ({
       statusCode: res.statusCode,
     }),
   },

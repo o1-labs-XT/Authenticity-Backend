@@ -127,7 +127,7 @@ export class ProofGenerationWorker {
               await this.repository.updateRecord(sha256Hash, {
                 status: isLastRetry ? 'failed' : 'pending',
                 failed_at: isLastRetry ? new Date().toISOString() : null,
-                failure_reason: error.message || 'Unknown error',
+                failure_reason: error instanceof Error ? error.message : 'Unknown error',
                 retry_count: retryCount + 1,
               });
 
