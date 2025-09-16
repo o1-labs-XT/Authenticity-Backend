@@ -94,8 +94,8 @@ function parseConfig(): Config {
     uploadMaxSize: getRequiredNumber('UPLOAD_MAX_SIZE'),
     circuitCachePath: process.env.CIRCUIT_CACHE_PATH || './cache',
     minioEndpoint: getRequired('MINIO_ENDPOINT'),
-    minioAccessKey: getRequired('MINIO_ACCESS_KEY'),
-    minioSecretKey: getRequired('MINIO_SECRET_KEY'),
+    minioAccessKey: getRequired('MINIO_ROOT_USER'),
+    minioSecretKey: getRequired('MINIO_ROOT_PASSWORD'),
     minioBucket: getRequired('MINIO_BUCKET'),
   };
 

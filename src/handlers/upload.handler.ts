@@ -4,6 +4,7 @@ import { Signature, PublicKey, PrivateKey } from 'o1js';
 import { ImageAuthenticityService } from '../services/image/verification.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
+import { MinioStorageService } from '../services/storage/minio.service.js';
 import { logger } from '../utils/logger.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
 import fs from 'fs';
@@ -31,7 +32,8 @@ export class UploadHandler {
   constructor(
     private verificationService: ImageAuthenticityService,
     private repository: AuthenticityRepository,
-    private jobQueue: JobQueueService
+    private jobQueue: JobQueueService,
+    private storageService: MinioStorageService
   ) {}
 
   /**
@@ -204,13 +206,30 @@ export class UploadHandler {
         signature,
       });
 
+      // Upload image to MinIO
+      let storageKey: string;
+      try {
+        storageKey = await this.storageService.uploadImage(sha256Hash, imageBuffer);
+        logger.debug({ storageKey, sha256Hash }, 'Image uploaded to MinIO');
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to upload image to MinIO');
+        // Clean up the database record
+        await this.repository.deleteRecord(sha256Hash);
+        // Clean up temp file
+        fs.unlinkSync(file!.path);
+        throw error;
+      }
+
+      // Clean up temp file after successful MinIO upload
+      fs.unlinkSync(file!.path);
+
       // Enqueue job for proof generation
       try {
         const jobId = await this.jobQueue.enqueueProofGeneration({
           sha256Hash,
           signature,
           publicKey,
-          imagePath: file!.path,
+          storageKey,
           tokenOwnerAddress,
           tokenOwnerPrivateKey: tokenOwnerPrivate,
           uploadedAt: new Date(),
@@ -226,6 +245,12 @@ export class UploadHandler {
         logger.error({ err: error }, 'Failed to enqueue job');
         // Clean up the record if job enqueue fails
         await this.repository.deleteRecord(sha256Hash);
+        // Try to clean up MinIO image
+        try {
+          await this.storageService.deleteImage(storageKey);
+        } catch (deleteError) {
+          logger.warn({ err: deleteError }, 'Failed to delete MinIO image after job failure');
+        }
         throw error;
       }
 

@@ -2,6 +2,7 @@ import { config } from './config/index.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { ImageAuthenticityService } from './services/image/verification.service.js';
+import { MinioStorageService } from './services/storage/minio.service.js';
 import { ProofGenerationService } from './services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
 import { ProofGenerationWorker } from './workers/proofGenerationWorker.js';
@@ -31,6 +32,7 @@ async function startWorker() {
     // Initialize services
     logger.info('Initializing services...');
     const verificationService = new ImageAuthenticityService();
+    const storageService = new MinioStorageService();
 
     logger.info('Initializing proof generation service...');
     const proofGenerationService = new ProofGenerationService();
@@ -49,7 +51,8 @@ async function startWorker() {
       repository,
       verificationService,
       proofGenerationService,
-      proofPublishingService
+      proofPublishingService,
+      storageService
     );
 
     await worker.start();
