@@ -1,31 +1,27 @@
-openapi: 3.0.0
+gopenapi: 3.0.0
 info:
-  title: PhotoChain API
-  description: REST API for PhotoChain - A photo challenge and chain creation platform
+  title: TouchGrass MVP API
+  description: REST API for TouchGrass MVP - A photo challenge and chain creation platform
   version: 1.0.0
   contact:
-    name: PhotoChain Support
-    email: support@photochain.app
+    name: TouchGrass Support
+    email: support@touchgrass.app
 
 servers:
-  - url: https://api.photochain.app/api
+  - url: https://api.touchgrass.app/api
     description: Production server
   - url: http://localhost:3000/api
     description: Development server
 
 tags:
   - name: Users
-    description: User profile and statistics
+    description: User management
   - name: Challenges
     description: Photo challenges
   - name: Submissions
     description: Photo submissions
   - name: Chains
     description: Photo chains
-  - name: Votes
-    description: Voting system
-  - name: Leaderboards
-    description: Rankings and leaderboards
 
 paths:
   /users/{walletAddress}:
@@ -41,7 +37,7 @@ paths:
             example: "0x1234...abcd"
       responses:
         '200':
-          description: User profile with statistics
+          description: User profile
           content:
             application/json:
               schema:
@@ -49,30 +45,24 @@ paths:
                 properties:
                   user:
                     $ref: '#/components/schemas/User'
-                  stats:
-                    $ref: '#/components/schemas/UserStats'
-
-  /users/{walletAddress}/votes:
-    get:
+    
+    post:
       tags: [Users]
-      summary: Get available votes for user
+      summary: Create user
       parameters:
         - name: walletAddress
           in: path
           required: true
           schema:
             type: string
+            example: "0x1234...abcd"
       responses:
-        '200':
-          description: Available votes count
+        '201':
+          description: User created
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  availableVotes:
-                    type: integer
-                    example: 10
+                $ref: '#/components/schemas/User'
 
   /challenges/current:
     get:
@@ -147,25 +137,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [image, challengeId, isPublic, signedTransaction]
+              required: [image, tagline, signedTransaction]
               properties:
                 image:
                   type: string
                   description: Base64 encoded image or file reference
                 tagline:
                   type: string
-                  maxLength: 100
-                socialLink:
-                  type: string
-                  format: uri
-                chainId:
-                  type: string
-                  nullable: true
-                challengeId:
-                  type: string
-                isPublic:
-                  type: boolean
-                  default: false
+                  maxLength: 200
+                  description: Combined tagline and social link
                 signedTransaction:
                   type: string
       responses:
@@ -200,111 +180,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Submission'
 
-    patch:
-      tags: [Submissions]
-      summary: Update submission (visibility)
-      parameters:
-        - name: submissionId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                isPublic:
-                  type: boolean
-                transaction:
-                  type: string
-      responses:
-        '200':
-          description: Update successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-
-  /chains:
-    get:
-      tags: [Chains]
-      summary: List chains
-      parameters:
-        - name: search
-          in: query
-          schema:
-            type: string
-          description: Search chains by name
-        - name: sort
-          in: query
-          schema:
-            type: string
-            enum: [longest, newest, active]
-          description: Sort order
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
-      responses:
-        '200':
-          description: Paginated list of chains
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  chains:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Chain'
-                  totalCount:
-                    type: integer
-                  currentPage:
-                    type: integer
-                  totalPages:
-                    type: integer
-
-    post:
-      tags: [Chains]
-      summary: Create new chain
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, foundingSubmissionId]
-              properties:
-                name:
-                  type: string
-                  maxLength: 50
-                foundingSubmissionId:
-                  type: string
-      responses:
-        '201':
-          description: Chain created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  name:
-                    type: string
-
   /chains/{chainId}:
     get:
       tags: [Chains]
@@ -323,140 +198,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Chain'
 
-  /votes:
-    get:
-      tags: [Votes]
-      summary: Get vote history
-      parameters:
-        - name: walletAddress
-          in: query
-          schema:
-            type: string
-          description: Filter by voter address
-        - name: submissionId
-          in: query
-          schema:
-            type: string
-          description: Filter by submission
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
-      responses:
-        '200':
-          description: Vote history
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  votes:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Vote'
-                  totalCount:
-                    type: integer
-                  currentPage:
-                    type: integer
-                  totalPages:
-                    type: integer
-
-    post:
-      tags: [Votes]
-      summary: Cast a vote
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [submissionId, signedTransaction]
-              properties:
-                submissionId:
-                  type: string
-                signedTransaction:
-                  type: string
-      responses:
-        '201':
-          description: Vote cast successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  newVoteCount:
-                    type: integer
-                  remainingVotes:
-                    type: integer
-
-  /leaderboards/submissions:
-    get:
-      tags: [Leaderboards]
-      summary: Get top submissions
-      parameters:
-        - name: type
-          in: query
-          schema:
-            type: string
-            enum: [best-image]
-          description: Leaderboard type
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 10
-          description: Number of results
-      responses:
-        '200':
-          description: Top submissions
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  submissions:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Submission'
-
-  /leaderboards/chains:
-    get:
-      tags: [Leaderboards]
-      summary: Get top chains
-      parameters:
-        - name: type
-          in: query
-          schema:
-            type: string
-            enum: [longest, most-active]
-          description: Leaderboard type
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 10
-          description: Number of results
-      responses:
-        '200':
-          description: Top chains
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  chains:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Chain'
-
 components:
   schemas:
     User:
@@ -469,20 +210,6 @@ components:
         createdAt:
           type: string
           format: date-time
-        availableVotes:
-          type: integer
-
-    UserStats:
-      type: object
-      properties:
-        challengesParticipated:
-          type: integer
-        totalVotesReceived:
-          type: integer
-        chainsStarted:
-          type: integer
-        chainsJoined:
-          type: integer
 
     Challenge:
       type: object
@@ -493,7 +220,7 @@ components:
           type: string
         description:
           type: string
-        date:
+        startTime:
           type: string
           format: date-time
         endTime:
@@ -501,8 +228,9 @@ components:
           format: date-time
         participantCount:
           type: integer
-        prizePool:
-          type: number
+        chainCount:
+          type: integer
+          description: Always 1 for MVP
 
     Submission:
       type: object
@@ -515,25 +243,13 @@ components:
           type: string
         chainId:
           type: string
-          nullable: true
-        chainName:
-          type: string
-          nullable: true
         imageUrl:
           type: string
         tagline:
           type: string
-          nullable: true
-        socialLink:
-          type: string
-          nullable: true
-        isPublic:
-          type: boolean
-        votes:
-          type: integer
+          description: Combined tagline and social link
         chainPosition:
           type: integer
-          nullable: true
         status:
           type: string
           enum: [uploading, proving, publishing, verifying, verified]
@@ -548,33 +264,15 @@ components:
           type: string
         name:
           type: string
-        founderAddress:
-          type: string
-        foundingImageTokenOwnerAddress:
+        challengeId:
           type: string
         length:
           type: integer
-        participantCount:
-          type: integer
+          description: Number of images in chain
         createdAt:
           type: string
           format: date-time
         lastActivityAt:
-          type: string
-          format: date-time
-
-    Vote:
-      type: object
-      properties:
-        id:
-          type: string
-        submissionId:
-          type: string
-        imageUrl:
-          type: string
-        voterAddress:
-          type: string
-        timestamp:
           type: string
           format: date-time
 
