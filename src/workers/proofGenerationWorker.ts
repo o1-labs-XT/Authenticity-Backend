@@ -1,6 +1,7 @@
 import PgBoss from 'pg-boss';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { ImageAuthenticityService } from '../services/image/verification.service.js';
+import { MinioStorageService } from '../services/storage/minio.service.js';
 import { ProofGenerationService } from '../services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
 import { ProofGenerationJobData } from '../services/queue/jobQueue.service.js';
@@ -14,7 +15,8 @@ export class ProofGenerationWorker {
     private repository: AuthenticityRepository,
     private imageAuthenticityService: ImageAuthenticityService,
     private proofGenerationService: ProofGenerationService,
-    private proofPublishingService: ProofPublishingService
+    private proofPublishingService: ProofPublishingService,
+    private storageService: MinioStorageService
   ) {}
 
   async start(): Promise<void> {
@@ -27,6 +29,7 @@ export class ProofGenerationWorker {
             jobId: job.id,
             sha256Hash: job.data.sha256Hash,
             correlationId: job.data.correlationId,
+            // todo: retrycount isn't behaving as expected, investigate
             attempt: (job as PgBoss.JobWithMetadata<ProofGenerationJobData>).retryCount || 0,
           },
           async () => {
@@ -38,12 +41,15 @@ export class ProofGenerationWorker {
               sha256Hash,
               signature,
               publicKey,
-              imagePath,
-              tokenOwnerAddress: _tokenOwnerAddress,
+              storageKey,
+              tokenOwnerAddress: _tokenOwnerAddress, // currently unused
               tokenOwnerPrivateKey,
             } = job.data;
 
             logger.info('Starting proof generation job');
+
+            // temporary location for image downloaded from minio
+            const tempPath = `/tmp/${sha256Hash}.png`;
 
             try {
               // Update status to processing
@@ -54,15 +60,15 @@ export class ProofGenerationWorker {
                   (job as PgBoss.JobWithMetadata<ProofGenerationJobData>).retryCount || 0,
               });
 
-              // Step 1: Verify and prepare image
+              // Step 1: Download image from MinIO to temp file
+              const imageBuffer = await this.storageService.downloadImage(storageKey);
+              await fs.writeFile(tempPath, imageBuffer);
+
+              // Step 2: Verify and prepare image
               logger.info('Verifying and preparing image');
               const verifyTracker = new PerformanceTracker('job.verifyImage');
               const { isValid, verificationInputs, error } =
-                this.imageAuthenticityService.verifyAndPrepareImage(
-                  imagePath,
-                  signature,
-                  publicKey
-                );
+                this.imageAuthenticityService.verifyAndPrepareImage(tempPath, signature, publicKey);
               verifyTracker.end(isValid ? 'success' : 'error');
 
               if (!isValid || !verificationInputs) {
@@ -77,7 +83,7 @@ export class ProofGenerationWorker {
                 publicKey,
                 signature,
                 verificationInputs,
-                imagePath
+                tempPath
               );
               proofTracker.end('success');
 
@@ -99,12 +105,13 @@ export class ProofGenerationWorker {
                 verified_at: new Date().toISOString(),
               });
 
-              // Clean up temp file
+              // Clean up temp file and MinIO
               try {
-                await fs.unlink(imagePath);
-                logger.debug('Cleaned up temporary file');
+                await fs.unlink(tempPath);
+                await this.storageService.deleteImage(storageKey); // Delete from MinIO
+                logger.debug('Cleaned up temp file and MinIO');
               } catch (cleanupError) {
-                logger.warn({ err: cleanupError }, 'Failed to clean up temporary file');
+                logger.warn({ err: cleanupError }, 'Failed to clean up');
               }
 
               jobTracker.end('success', { transactionId });
@@ -131,13 +138,15 @@ export class ProofGenerationWorker {
                 retry_count: retryCount + 1,
               });
 
-              // Clean up temp file on final failure
+              // Clean up on final failure
+              // todo: revisit failure logic, we'll probably want to retain failed records
               if (isLastRetry) {
                 try {
-                  await fs.unlink(imagePath);
-                  logger.debug('Cleaned up temp file after final failure');
+                  await fs.unlink(tempPath);
+                  await this.storageService.deleteImage(storageKey);
+                  logger.debug('Cleaned up after final failure');
                 } catch (cleanupError) {
-                  logger.warn({ err: cleanupError }, 'Failed to clean up temp file after failure');
+                  logger.warn({ err: cleanupError }, 'Failed to clean up after failure');
                 }
               }
 

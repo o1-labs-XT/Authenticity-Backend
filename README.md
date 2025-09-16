@@ -3,10 +3,13 @@
 ## Quick Start
 
 ```bash
-# 1. Start PostgreSQL
+# 1. Start PostgreSQL and MinIO
 docker-compose up -d
 
-# 2. Setup environment
+# 2. Create MinIO bucket (first time only)
+docker-compose exec minio mc mb /data/authenticity-local
+
+# 3. Setup environment
 cp .env.example .env
 # Configure required variables:
 # - ZKAPP_ADDRESS: Your deployed zkApp contract address

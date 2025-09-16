@@ -25,6 +25,12 @@ export interface Config {
 
   // Optional configurations
   circuitCachePath?: string;
+
+  // MinIO Storage
+  minioEndpoint: string;
+  minioAccessKey: string;
+  minioSecretKey: string;
+  minioBucket: string;
 }
 
 /**
@@ -87,6 +93,10 @@ function parseConfig(): Config {
     corsOrigin: getRequired('CORS_ORIGIN'),
     uploadMaxSize: getRequiredNumber('UPLOAD_MAX_SIZE'),
     circuitCachePath: process.env.CIRCUIT_CACHE_PATH || './cache',
+    minioEndpoint: getRequired('MINIO_ENDPOINT'),
+    minioAccessKey: getRequired('MINIO_ROOT_USER'),
+    minioSecretKey: getRequired('MINIO_ROOT_PASSWORD'),
+    minioBucket: getRequired('MINIO_BUCKET'),
   };
 
   // Throw if any errors

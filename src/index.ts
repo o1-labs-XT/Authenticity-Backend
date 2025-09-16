@@ -3,6 +3,7 @@ import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { ImageAuthenticityService } from './services/image/verification.service.js';
+import { MinioStorageService } from './services/storage/minio.service.js';
 import { JobQueueService } from './services/queue/jobQueue.service.js';
 import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
@@ -25,14 +26,17 @@ async function main() {
     // Initialize services
     logger.info('Initializing services...');
     const verificationService = new ImageAuthenticityService();
-
-    // Initialize job queue
-    logger.info('Initializing job queue...');
+    const storageService = new MinioStorageService();
     const jobQueue = new JobQueueService(config.databaseUrl);
     await jobQueue.start();
 
     // Initialize handlers
-    const uploadHandler = new UploadHandler(verificationService, repository, jobQueue);
+    const uploadHandler = new UploadHandler(
+      verificationService,
+      repository,
+      jobQueue,
+      storageService
+    );
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
     const adminHandler = new AdminHandler(jobQueue, repository);

@@ -5,7 +5,7 @@ export interface ProofGenerationJobData {
   sha256Hash: string;
   signature: string;
   publicKey: string;
-  imagePath: string;
+  storageKey: string; // minio storage key
   tokenOwnerAddress: string;
   tokenOwnerPrivateKey: string;
   uploadedAt: Date;

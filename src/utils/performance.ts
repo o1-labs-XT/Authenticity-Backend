@@ -2,6 +2,7 @@ import { logger } from './logger.js';
 
 /**
  * Performance tracking utility that logs operation timing
+ * todo: investigate timers that will integrate more easily with grafana or railway observability dashboards
  */
 export class PerformanceTracker {
   private startTime: number;
