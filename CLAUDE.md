@@ -47,10 +47,18 @@ docker-compose up -d    # Restart containers
 npm run db:migrate      # Rerun migrations
 ```
 
-### Code Quality
+### Testing & Code Quality
 ```bash
-npm run lint    # Run ESLint on src/**/*.ts
+npm run test    # Run unit tests with Vitest
+npm run lint    # Run ESLint
 npm run format  # Format code with Prettier
+
+# Manual testing scripts
+IMAGE_PATH=./image.png API_URL=http://localhost:3000 tsx test-upload.mts
+tsx test-admin.mts stats              # Queue statistics
+tsx test-admin.mts failed             # List failed jobs
+tsx test-admin.mts details <jobId>    # Job details
+tsx test-admin.mts retry <jobId>      # Retry job
 ```
 
 ### Observability
@@ -73,8 +81,6 @@ docker-compose up -d loki grafana promtail
 #    {service="api"} |= "correlationId=<id>" - Track request through system
 ```
 
-**Note**: No automated tests are implemented. Testing is done via manual scripts (`test-upload.mts`, `test-admin.mts`).
-
 ## High-Level Architecture
 
 Zero-knowledge proof backend for image authenticity verification on Mina Protocol. Users prove image authenticity without revealing sensitive information.
@@ -82,7 +88,7 @@ Zero-knowledge proof backend for image authenticity verification on Mina Protoco
 ### Core Flow
 1. **Upload**: Client uploads image with cryptographic signature
 2. **Queue**: Upload handler enqueues proof generation job in pg-boss
-3. **Process**: Worker service processes jobs asynchronously  
+3. **Process**: Worker service processes jobs asynchronously
 4. **Prove**: Worker generates zero-knowledge proofs using o1js
 5. **Publish**: Worker publishes proofs to Mina blockchain
 6. **Verify**: Anyone can verify authenticity via token owner address
@@ -95,80 +101,90 @@ Client → REST API → Handlers → Services → Database
                     Job Queue → Worker → Blockchain
 ```
 
+### Architectural Patterns
+
+**Dependency Injection Architecture**: All components use constructor-based dependency injection for testability and flexibility. Handlers receive services via constructors, not imports.
+
+**Instance-Based Adapters**: PostgresAdapter uses instance methods (not static) to enable proper dependency injection and connection pooling.
+
+**Context Propagation**: AsyncLocalStorage propagates correlation IDs through async operations, from HTTP requests through job queue to worker processing.
+
+**Comprehensive Error Handling**: Upload failures trigger cleanup of temp files, database records, and MinIO storage. Handlers validate inputs and provide field-specific error responses.
+
 ## Project Structure
 
 ```
 src/
 ├── api/
-│   ├── middleware/      # Security, logging, error handling
+│   ├── middleware/      # Security, logging, error handling, context propagation
 │   ├── routes/          # Express route definitions
 │   └── server.ts        # Express server setup
 ├── config/
-│   └── index.ts         # Environment validation & config
+│   └── index.ts         # Environment validation & singleton configuration
 ├── db/
 │   ├── adapters/
-│   │   └── PostgresAdapter.ts  # PostgreSQL wrapper (instance-based)
+│   │   └── PostgresAdapter.ts  # Instance-based Knex wrapper with connection pooling
 │   ├── repositories/
-│   │   └── authenticity.repository.ts  # Data access layer
+│   │   └── authenticity.repository.ts  # Repository pattern with camelCase/snake_case mapping
 │   ├── database.ts      # Database connection manager
 │   └── types.ts         # Database type definitions
-├── handlers/            # Request handlers (orchestrate services)
-│   ├── upload.handler.ts
-│   ├── status.handler.ts
+├── handlers/            # Request handlers with dependency injection
+│   ├── upload.handler.ts    # Complex validation, orchestration, error recovery
+│   ├── status.handler.ts    # Simple status queries
 │   ├── tokenOwner.handler.ts
-│   └── admin.handler.ts
+│   └── admin.handler.ts     # Job queue management
 ├── services/
 │   ├── image/
-│   │   └── verification.service.ts  # ImageAuthenticityService
+│   │   └── verification.service.ts  # SHA256 hashing, signature verification using o1js
 │   ├── queue/
-│   │   └── jobQueue.service.ts      # pg-boss integration
+│   │   └── jobQueue.service.ts      # pg-boss wrapper with singleton keys, retry logic
 │   ├── storage/
-│   │   └── storageService.ts        # MinIO S3-compatible storage
+│   │   └── storageService.ts        # MinIO S3-compatible storage abstraction
 │   └── zk/
-│       ├── proofGeneration.service.ts
-│       └── proofPublishing.service.ts
+│       ├── proofGeneration.service.ts  # ZK proof generation with o1js circuits
+│       └── proofPublishing.service.ts  # Mina blockchain publishing
 ├── utils/
 │   ├── logger.ts        # Pino logger with correlation IDs
 │   └── performance.ts   # Performance tracking utilities
 ├── workers/
-│   └── proofGenerationWorker.ts    # Background job processor
-├── index.ts             # API server entry point
+│   └── proofGenerationWorker.ts    # Job processor with context propagation
+├── index.ts             # API server entry point with dependency wiring
 └── worker.ts            # Worker service entry point
 
 migrations/              # Knex database migrations
-scripts/                 # Utility scripts
-├── compile-zkapp.ts     # Pre-compile zkApp circuits
-├── init-db.sql          # Database initialization
-test-upload.mts          # Manual upload testing
-test-admin.mts           # Manual admin API testing
+test/                    # Unit tests with Vitest
+├── handlers/           # Handler tests with mocked services
+├── repositories/       # Repository tests
+└── services/           # Service tests
 ```
 
 ## Key Components
 
 ### Handlers
-- **UploadHandler**: Validates uploads, creates records, enqueues jobs
+- **UploadHandler**: Validates uploads, creates records, enqueues jobs, handles comprehensive error recovery
 - **StatusHandler**: Returns proof generation/publishing status
 - **TokenOwnerHandler**: Returns token owner for verified images
 - **AdminHandler**: Job queue management (stats, failures, retries)
 
 ### Services
-- **ImageAuthenticityService**: SHA256 hashing, signature verification
+- **ImageAuthenticityService**: SHA256 hashing, signature verification using o1js and authenticity-zkapp
 - **StorageService**: MinIO S3-compatible storage for cross-container file sharing
 - **ProofGenerationService**: Generates ZK proofs using o1js circuits
 - **ProofPublishingService**: Publishes proofs to Mina blockchain
-- **JobQueueService**: pg-boss wrapper for async job processing
+- **JobQueueService**: pg-boss wrapper with singleton keys to prevent duplicates
 
 ### Database
-- **PostgresAdapter**: Instance-based Knex wrapper (NOT static methods)
-- **AuthenticityRepository**: Repository pattern for data access
+- **PostgresAdapter**: Instance-based Knex wrapper (NOT static methods) with connection pooling
+- **AuthenticityRepository**: Repository pattern for data access with camelCase/snake_case transformation
 - **Migrations**: Schema managed via Knex migrations
 - **Status values**: `pending`, `processing`, `verified`, `failed`
 
 ### Worker
-- **ProofGenerationWorker**: Processes jobs from pg-boss queue
+- **ProofGenerationWorker**: Processes jobs from pg-boss queue with context propagation
 - Updates status throughout lifecycle
 - Handles retries (3 attempts with exponential backoff)
-- Cleans up temporary files after processing
+- Downloads images from MinIO, generates proofs, publishes to blockchain
+- Cleans up temporary files and MinIO storage after processing
 
 ## API Endpoints
 
@@ -190,7 +206,7 @@ test-admin.mts           # Manual admin API testing
 
 ### Admin Endpoints (dev mode or with ADMIN_API_KEY)
 - `GET /api/admin/jobs/stats` - Queue statistics
-- `GET /api/admin/jobs/failed?limit=10&offset=0` - Failed jobs
+- `GET /api/admin/jobs/failed?limit=10&offset=0` - Failed jobs with pagination
 - `GET /api/admin/jobs/:jobId` - Job details
 - `POST /api/admin/jobs/:jobId/retry` - Retry failed job
 
@@ -228,6 +244,7 @@ SSL_REQUIRED=false          # Enable SSL for PostgreSQL in production
 - Singleton key prevents duplicate jobs for same hash
 - Retry policy: 3 attempts with exponential backoff
 - Job retention: 24 hours for auditing
+- Jobs carry correlation IDs for distributed tracing
 - Worker concurrency: Configurable via pg-boss
 
 ### Database Schema
@@ -271,6 +288,13 @@ updated_at              -- Last modified
 - Type: module (ESM)
 - Strict mode enabled
 - Import extensions: `.js` required for TypeScript files
+
+## Testing Strategy
+- **Framework**: Vitest with 30-second timeout for tests
+- **Unit Tests**: Located in `test/` directory, organized by layer
+- **Mocking**: Services mocked at boundaries using vitest-mock-extended
+- **Manual Testing**: Scripts for upload (`test-upload.mts`) and admin (`test-admin.mts`) operations
+- **Test Pattern**: Tests focus on validation, error conditions, and domain logic
 
 ## Deployment
 
@@ -333,24 +357,6 @@ services:
    - MinIO: http://localhost:9001
    - Grafana: http://localhost:3001
 
-## Testing Scripts
-
-### Upload Testing
-```bash
-IMAGE_PATH=./image.png API_URL=http://localhost:3000 tsx test-upload.mts
-```
-
-### Admin API Testing
-```bash
-tsx test-admin.mts stats              # Queue statistics
-tsx test-admin.mts failed             # List failed jobs
-tsx test-admin.mts details <jobId>    # Job details
-tsx test-admin.mts retry <jobId>      # Retry job
-
-# Production with auth
-ADMIN_API_KEY=key API_URL=https://api.example.com tsx test-admin.mts stats
-```
-
 ## Common Issues & Solutions
 
 1. **Database connection**: Ensure PostgreSQL is running via Docker
@@ -363,8 +369,9 @@ ADMIN_API_KEY=key API_URL=https://api.example.com tsx test-admin.mts stats
 ## Important Notes
 
 - **No SQLite support**: PostgreSQL-only (required for pg-boss)
-- **No automated tests**: Use manual testing scripts
 - **Instance-based adapters**: PostgresAdapter uses instance methods, not static
+- **Dependency injection**: All handlers and services use constructor injection
+- **Context propagation**: Correlation IDs flow through AsyncLocalStorage
 - **Cache directory**: Auto-created when needed, in `.gitignore`
 - **Logging**: Structured JSON logs with correlation IDs for request tracing
 - **File outputs**: Logs written to `./logs/*.log` for Promtail collection
