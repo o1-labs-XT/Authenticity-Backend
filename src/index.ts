@@ -2,6 +2,7 @@ import { config } from './config/index.js';
 import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
 import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
+import { ChallengesRepository } from './db/repositories/challenges.repository.js';
 import { ImageAuthenticityService } from './services/image/verification.service.js';
 import { MinioStorageService } from './services/storage/minio.service.js';
 import { JobQueueService } from './services/queue/jobQueue.service.js';
@@ -9,6 +10,7 @@ import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
 import { AdminHandler } from './handlers/admin.handler.js';
+import { ChallengesHandler } from './handlers/challenges.handler.js';
 import { logger } from './utils/logger.js';
 
 async function main() {
@@ -22,6 +24,7 @@ async function main() {
     });
     await dbConnection.initialize();
     const repository = new AuthenticityRepository(dbConnection.getAdapter());
+    const challengesRepository = new ChallengesRepository(dbConnection.getAdapter());
 
     // Initialize services
     logger.info('Initializing services...');
@@ -40,6 +43,7 @@ async function main() {
     const statusHandler = new StatusHandler(repository);
     const tokenOwnerHandler = new TokenOwnerHandler(repository);
     const adminHandler = new AdminHandler(jobQueue, repository);
+    const challengesHandler = new ChallengesHandler(challengesRepository);
 
     // Create and start server
     const app = createServer({
@@ -47,6 +51,7 @@ async function main() {
       statusHandler,
       tokenOwnerHandler,
       adminHandler,
+      challengesHandler,
     });
 
     const port = config.port;

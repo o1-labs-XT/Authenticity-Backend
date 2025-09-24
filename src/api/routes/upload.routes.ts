@@ -4,6 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { config } from '../../config/index.js';
 import { UploadHandler } from '../../handlers/upload.handler.js';
+import { ApiError } from '../../utils/errors.js';
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -35,6 +36,29 @@ const upload = multer({
   },
 });
 
+/**
+ * Convert Multer errors to ApiError
+ */
+function handleMulterError(error: unknown, req: Request, res: Response, next: NextFunction): void {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      next(new ApiError(413, `File size exceeds limit of ${config.uploadMaxSize} bytes`, 'image'));
+    } else if (error.code === 'LIMIT_FILE_COUNT') {
+      next(new ApiError(400, 'Too many files uploaded', 'image'));
+    } else if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      next(new ApiError(400, `Unexpected field: ${error.field}`, error.field));
+    } else {
+      next(new ApiError(400, error.message));
+    }
+  } else if (error) {
+    // Handle file type errors from fileFilter
+    const message = error instanceof Error ? error.message : 'Invalid file upload';
+    next(new ApiError(400, message, 'image'));
+  } else {
+    next();
+  }
+}
+
 export function createUploadRoutes(uploadHandler: UploadHandler): Router {
   const router = Router();
 
@@ -55,35 +79,14 @@ export function createUploadRoutes(uploadHandler: UploadHandler): Router {
    * - 400: Validation error
    * - 500: Internal error
    */
-  router.post('/upload', upload.single('image'), async (req, res, next) => {
-    try {
-      await uploadHandler.handleUpload(req, res);
-    } catch (error) {
-      next(error);
+  router.post(
+    '/upload',
+    upload.single('image'),
+    handleMulterError, // Convert Multer errors to ApiError
+    async (req: Request, res: Response, next: NextFunction) => {
+      await uploadHandler.handleUpload(req, res, next);
     }
-  });
-
-  // Handle multer errors
-  router.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
-    if (error instanceof multer.MulterError) {
-      if (error.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({
-          error: {
-            code: 'FILE_TOO_LARGE',
-            message: `File size exceeds limit of ${config.uploadMaxSize} bytes`,
-            field: 'image',
-          },
-        });
-      }
-      return res.status(400).json({
-        error: {
-          code: 'UPLOAD_ERROR',
-          message: error.message,
-        },
-      });
-    }
-    next(error);
-  });
+  );
 
   return router;
 }

@@ -70,10 +70,10 @@ export class ChallengesHandler {
     try {
       const { title, description, startTime, endTime } = req.body;
 
-      if (!title) throw Errors.missingField('title');
-      if (!description) throw Errors.missingField('description');
-      if (!startTime) throw Errors.missingField('startTime');
-      if (!endTime) throw Errors.missingField('endTime');
+      if (!title) throw Errors.badRequest('title is required', 'title');
+      if (!description) throw Errors.badRequest('description is required', 'description');
+      if (!startTime) throw Errors.badRequest('startTime is required', 'startTime');
+      if (!endTime) throw Errors.badRequest('endTime is required', 'endTime');
 
       const challenge = await this.challengesRepo.create({
         title,

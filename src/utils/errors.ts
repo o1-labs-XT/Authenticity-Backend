@@ -1,28 +1,29 @@
+/**
+ * REST API Error Class
+ * All errors in the application should be converted to this type
+ */
 export class ApiError extends Error {
   constructor(
-    public code: string,
-    public statusCode: number,
+    public readonly statusCode: number,
     message: string,
-    public field?: string,
-    public details?: any
+    public readonly field?: string
   ) {
     super(message);
     this.name = 'ApiError';
+    Error.captureStackTrace(this, this.constructor);
   }
 }
 
 export const Errors = {
-  validationError: (message: string, field?: string) =>
-    new ApiError('VALIDATION_ERROR', 400, message, field),
+  // 400 Bad Request
+  badRequest: (message: string, field?: string) => new ApiError(400, message, field),
 
-  missingField: (field: string) =>
-    new ApiError('MISSING_FIELD', 400, `${field} is required`, field),
+  // 404 Not Found
+  notFound: (resource: string) => new ApiError(404, `${resource} not found`),
 
-  notFound: (resource: string) => new ApiError('NOT_FOUND', 404, `${resource} not found`),
+  // 409 Conflict
+  conflict: (message: string) => new ApiError(409, message),
 
-  duplicateSubmission: () =>
-    new ApiError('DUPLICATE_SUBMISSION', 409, 'User has already submitted for this challenge'),
-
-  internal: (message = 'An unexpected error occurred') =>
-    new ApiError('INTERNAL_ERROR', 500, message),
+  // 500 Internal Server Error
+  internal: (message = 'Internal server error') => new ApiError(500, message),
 };

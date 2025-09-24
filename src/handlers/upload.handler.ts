@@ -1,4 +1,4 @@
-import { Request, Response, Express } from 'express';
+import { Request, Response, NextFunction, Express } from 'express';
 import type {} from 'multer';
 import { Signature, PublicKey, PrivateKey } from 'o1js';
 import { ImageAuthenticityService } from '../services/image/verification.service.js';
@@ -7,6 +7,7 @@ import { JobQueueService } from '../services/queue/jobQueue.service.js';
 import { MinioStorageService } from '../services/storage/minio.service.js';
 import { logger } from '../utils/logger.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
+import { Errors } from '../utils/errors.js';
 import fs from 'fs';
 
 /**
@@ -16,16 +17,6 @@ export interface UploadResponse {
   tokenOwnerAddress: string;
   sha256Hash?: string;
   status: 'pending' | 'duplicate';
-}
-
-interface ValidationResult {
-  isValid: boolean;
-  error?: {
-    code: string;
-    message: string;
-    field?: string;
-  };
-  imageBuffer?: Buffer;
 }
 
 export class UploadHandler {
@@ -43,39 +34,18 @@ export class UploadHandler {
     file: Express.Multer.File | undefined,
     publicKey: string | undefined,
     signature: string | undefined
-  ): ValidationResult {
+  ): Buffer {
     // Validate required fields
     if (!file) {
-      return {
-        isValid: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'No image file provided',
-          field: 'image',
-        },
-      };
+      throw Errors.badRequest('No image file provided', 'image');
     }
 
     if (!publicKey) {
-      return {
-        isValid: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Public key is required',
-          field: 'publicKey',
-        },
-      };
+      throw Errors.badRequest('Public key is required', 'publicKey');
     }
 
     if (!signature) {
-      return {
-        isValid: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Signature is required',
-          field: 'signature',
-        },
-      };
+      throw Errors.badRequest('Signature is required', 'signature');
     }
 
     // Read image buffer
@@ -83,55 +53,35 @@ export class UploadHandler {
 
     // Validate image buffer
     if (!imageBuffer || imageBuffer.length === 0) {
-      return {
-        isValid: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Image buffer is empty',
-          field: 'image',
-        },
-      };
+      throw Errors.badRequest('Image buffer is empty', 'image');
     }
 
     // Validate public key format
     try {
       PublicKey.fromBase58(publicKey);
     } catch {
-      return {
-        isValid: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid public key format',
-          field: 'publicKey',
-        },
-      };
+      throw Errors.badRequest('Invalid public key format', 'publicKey');
     }
 
     // Validate signature format
     try {
       Signature.fromBase58(signature);
     } catch {
-      return {
-        isValid: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid signature format',
-          field: 'signature',
-        },
-      };
+      throw Errors.badRequest('Invalid signature format', 'signature');
     }
 
-    return {
-      isValid: true,
-      imageBuffer,
-    };
+    return imageBuffer;
   }
 
   /**
    * Handle image upload request
    * This is the main endpoint for provers to upload images
    */
-  async handleUpload(req: Request, res: Response<UploadResponse | ErrorResponse>): Promise<void> {
+  async handleUpload(
+    req: Request,
+    res: Response<UploadResponse | ErrorResponse>,
+    next: NextFunction
+  ): Promise<void> {
     try {
       logger.debug('Processing upload request');
 
@@ -139,17 +89,8 @@ export class UploadHandler {
       const file = req.file;
       const { publicKey, signature } = req.body;
 
-      // Validate request
-      const validation = this.validateUploadRequest(file, publicKey, signature);
-      if (!validation.isValid) {
-        res.status(400).json({ error: validation.error! });
-        if (file) {
-          fs.unlinkSync(file.path);
-        }
-        return;
-      }
-
-      const imageBuffer = validation.imageBuffer!;
+      // Validate request and get image buffer
+      const imageBuffer = this.validateUploadRequest(file, publicKey, signature);
 
       // Compute SHA256 hash of image
       const sha256Hash = this.verificationService.hashImage(imageBuffer);
@@ -180,15 +121,12 @@ export class UploadHandler {
 
       if (!verificationResult.isValid) {
         logger.warn({ error: verificationResult.error }, 'Invalid signature');
-        res.status(400).json({
-          error: {
-            code: 'INVALID_SIGNATURE',
-            message: verificationResult.error || 'Signature verification failed',
-          },
-        });
         // Clean up uploaded file
         fs.unlinkSync(file!.path);
-        return;
+        throw Errors.badRequest(
+          verificationResult.error || 'Signature verification failed',
+          'signature'
+        );
       }
 
       // Generate random token owner address
@@ -284,12 +222,8 @@ export class UploadHandler {
         }
       }
 
-      res.status(500).json({
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to process upload',
-        },
-      });
+      // Pass error to middleware
+      next(error);
     }
   }
 }

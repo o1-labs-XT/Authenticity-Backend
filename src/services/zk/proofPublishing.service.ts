@@ -2,6 +2,7 @@ import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authen
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount } from 'o1js';
 import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
 import { logger } from '../../utils/logger.js';
+import { Errors } from '../../utils/errors.js';
 import { PerformanceTracker } from '../../utils/performance.js';
 
 export class ProofPublishingService {
@@ -60,11 +61,11 @@ export class ProofPublishingService {
     // Check if zkApp is deployed
     const isDeployed = await this.isDeployed();
     if (!isDeployed) {
-      throw new Error('AuthenticityZkApp is not deployed. Please deploy the contract first.');
+      throw Errors.internal('AuthenticityZkApp is not deployed. Please deploy the contract first.');
     }
 
     if (!this.feePayerKey) {
-      throw new Error('Fee payer private key not configured');
+      throw Errors.internal('Fee payer private key not configured');
     }
 
     logger.info({ sha256Hash }, 'Publishing proof to blockchain');
@@ -140,7 +141,7 @@ export class ProofPublishingService {
     } catch (error) {
       logger.error({ err: error }, 'Failed to publish proof');
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to publish proof: ${errorMessage}`);
+      throw Errors.internal(`Failed to publish proof: ${errorMessage}`);
     }
   }
 

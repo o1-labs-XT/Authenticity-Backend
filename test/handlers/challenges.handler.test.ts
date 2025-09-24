@@ -49,7 +49,7 @@ describe('ChallengesHandler', () => {
 
       expect(mockNext).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: 'MISSING_FIELD',
+          message: 'title is required',
           field: 'title',
           statusCode: 400,
         })
@@ -64,7 +64,7 @@ describe('ChallengesHandler', () => {
 
       expect(mockNext).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: 'MISSING_FIELD',
+          message: 'description is required',
           field: 'description',
           statusCode: 400,
         })
@@ -79,7 +79,7 @@ describe('ChallengesHandler', () => {
 
       expect(mockNext).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: 'MISSING_FIELD',
+          message: 'startTime is required',
           field: 'startTime',
           statusCode: 400,
         })
@@ -94,7 +94,7 @@ describe('ChallengesHandler', () => {
 
       expect(mockNext).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: 'MISSING_FIELD',
+          message: 'endTime is required',
           field: 'endTime',
           statusCode: 400,
         })
@@ -185,9 +185,8 @@ describe('ChallengesHandler', () => {
 
       expect(mockNext).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: 'NOT_FOUND',
-          statusCode: 404,
           message: 'Challenge not found',
+          statusCode: 404,
         })
       );
     });
@@ -200,7 +199,7 @@ describe('ChallengesHandler', () => {
 
       expect(mockNext).toHaveBeenCalledWith(
         expect.objectContaining({
-          code: 'NOT_FOUND',
+          message: 'Challenge not found',
           statusCode: 404,
         })
       );

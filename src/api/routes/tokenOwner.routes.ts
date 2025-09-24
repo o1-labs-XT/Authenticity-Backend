@@ -26,11 +26,7 @@ export function createTokenOwnerRoutes(tokenOwnerHandler: TokenOwnerHandler): Ro
    * This allows verifiers to distinguish between "not uploaded" and errors
    */
   router.get('/token-owner/:sha256Hash', async (req, res, next) => {
-    try {
-      await tokenOwnerHandler.getTokenOwner(req, res);
-    } catch (error) {
-      next(error);
-    }
+    await tokenOwnerHandler.getTokenOwner(req, res, next);
   });
 
   return router;

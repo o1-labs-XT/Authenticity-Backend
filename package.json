@@ -12,7 +12,8 @@
     "start:worker": "tsx scripts/compile-zkapp.ts && node dist/worker.js", 
     "db:migrate": "tsx node_modules/.bin/knex migrate:latest",
     "db:reset": "docker-compose down -v && docker-compose up -d && sleep 3 && npm run db:migrate",
-    "test": "vitest run", 
+    "test:unit": "vitest run --exclude='**/*.integration.test.ts'",
+    "test:integration": "./scripts/test-integration.sh",
     "lint": "eslint '**/*.ts'",
     "format": "prettier --write '**/*.ts'",
     "prepare": "husky"
