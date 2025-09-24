@@ -65,6 +65,7 @@ export class ProofGenerationWorker {
               await fs.writeFile(tempPath, imageBuffer);
 
               // Step 2: Verify and prepare image
+              // todo: upload handler is already doing this
               logger.info('Verifying and preparing image');
               const verifyTracker = new PerformanceTracker('job.verifyImage');
               const { isValid, verificationInputs, error } =

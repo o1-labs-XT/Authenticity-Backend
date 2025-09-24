@@ -6,11 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Development
 ```bash
-# Prerequisites: Start PostgreSQL and pgweb
-docker-compose up -d  # Starts PostgreSQL (port 5432) and pgweb (port 8081)
+# Prerequisites: Start infrastructure services
+docker-compose up -d  # Starts PostgreSQL, pgweb, MinIO, Grafana, Loki, Promtail
 
-# Access database UI
-# pgweb is available at http://localhost:8081 (no login required)
+# Access tools
+# pgweb: http://localhost:8081 (database UI, no login required)
+# MinIO: http://localhost:9001 (admin/minioadmin)
+# Grafana: http://localhost:3001 (admin/admin)
 
 # Run services (in separate terminals):
 npm run dev:api       # Start API server with hot reload (port 3000)
@@ -21,6 +23,10 @@ npm run build         # Build TypeScript to dist/
 npm run start         # Run migrations, compile zkApp, start API
 npm run start:api     # Run migrations and start API server
 npm run start:worker  # Compile zkApp and start worker service
+
+# MinIO bucket setup (first time only):
+docker-compose exec minio mc alias set local http://minio:9000 minioadmin minioadmin
+docker-compose exec minio mc mb local/authenticity --ignore-existing
 ```
 
 ### Database Management
@@ -116,9 +122,14 @@ src/
 │   │   └── verification.service.ts  # ImageAuthenticityService
 │   ├── queue/
 │   │   └── jobQueue.service.ts      # pg-boss integration
+│   ├── storage/
+│   │   └── storageService.ts        # MinIO S3-compatible storage
 │   └── zk/
 │       ├── proofGeneration.service.ts
 │       └── proofPublishing.service.ts
+├── utils/
+│   ├── logger.ts        # Pino logger with correlation IDs
+│   └── performance.ts   # Performance tracking utilities
 ├── workers/
 │   └── proofGenerationWorker.ts    # Background job processor
 ├── index.ts             # API server entry point
@@ -142,6 +153,7 @@ test-admin.mts           # Manual admin API testing
 
 ### Services
 - **ImageAuthenticityService**: SHA256 hashing, signature verification
+- **StorageService**: MinIO S3-compatible storage for cross-container file sharing
 - **ProofGenerationService**: Generates ZK proofs using o1js circuits
 - **ProofPublishingService**: Publishes proofs to Mina blockchain
 - **JobQueueService**: pg-boss wrapper for async job processing
@@ -194,12 +206,19 @@ PORT=3000
 NODE_ENV=development|production|test
 CORS_ORIGIN=http://localhost:3001
 UPLOAD_MAX_SIZE=10485760  # 10MB default, configurable
+
+# MinIO Storage Configuration
+MINIO_ENDPOINT=http://localhost:9000
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+MINIO_BUCKET=authenticity
 ```
 
 ### Optional Variables
 ```bash
 CIRCUIT_CACHE_PATH=./cache  # zkApp compilation cache
 ADMIN_API_KEY=<api_key>     # Required for admin endpoints in production
+SSL_REQUIRED=false          # Enable SSL for PostgreSQL in production
 ```
 
 ## Implementation Details
@@ -215,8 +234,8 @@ ADMIN_API_KEY=<api_key>     # Required for admin endpoints in production
 ```sql
 -- authenticity_records table
 sha256_hash (PK)        -- Image hash
-token_owner             -- Random address per image
-signature               -- Cryptographic signature  
+token_owner_address     -- Random address per image
+signature               -- Cryptographic signature
 public_key              -- Signer's public key
 status                  -- pending|processing|verified|failed
 transaction_id          -- Mina blockchain transaction
@@ -234,10 +253,10 @@ updated_at              -- Last modified
 - **Helmet.js**: Security headers
 - **CORS**: Configurable origins
 - **Compression**: Response compression
-- **File Upload**: Multer with size limits
-- **Error Handling**: Consistent error responses
+- **File Upload**: Multer with size limits and file type validation (image/*)
+- **Error Handling**: Consistent error responses with AsyncErrorHandler
 - **Request Logging**: Pino with correlation IDs
-- **AsyncLocalStorage**: Context propagation for tracing
+- **AsyncLocalStorage**: Context propagation for request tracing
 
 ### zkApp Integration
 - **Circuit Compilation**: Pre-compiled at worker startup
@@ -258,9 +277,11 @@ updated_at              -- Last modified
 ### Railway Configuration
 - **API Service**: Lightweight (512MB RAM)
 - **Worker Service**: Heavy (2GB RAM for proof generation)
+- **MinIO Service**: S3-compatible storage for image files
 - **Health Checks**: 180s timeout, 3 restart attempts
 - **Auto-migrations**: Run at API startup
 - **Circuit Compilation**: At worker startup
+- **Graceful Shutdown**: Signal handling for clean termination
 
 ### Railway CLI
 ```bash
@@ -287,19 +308,30 @@ railway logs -f  # Tail logs
 services:
   postgres:    # Port 5432, health checks enabled
   pgweb:       # Port 8081, auto-connects to postgres
+  minio:       # Port 9000 (API), 9001 (Console)
+  grafana:     # Port 3001, admin/admin
+  loki:        # Port 3100, log aggregation
+  promtail:    # Log collection from ./logs/*.log
 ```
 
 ## Local Development Setup
 
 1. **Start infrastructure**: `docker-compose up -d`
 2. **Configure environment**: `cp .env.example .env`
-3. **Run migrations**: `npm run db:migrate`
-4. **Start services**:
+3. **Setup MinIO bucket** (first time only):
+   ```bash
+   docker-compose exec minio mc alias set local http://minio:9000 minioadmin minioadmin
+   docker-compose exec minio mc mb local/authenticity --ignore-existing
+   ```
+4. **Run migrations**: `npm run db:migrate`
+5. **Start services**:
    - Terminal 1: `npm run dev:api`
    - Terminal 2: `npm run dev:worker`
-5. **Access tools**:
+6. **Access tools**:
    - API: http://localhost:3000
    - pgweb: http://localhost:8081
+   - MinIO: http://localhost:9001
+   - Grafana: http://localhost:3001
 
 ## Testing Scripts
 
@@ -324,8 +356,9 @@ ADMIN_API_KEY=key API_URL=https://api.example.com tsx test-admin.mts stats
 1. **Database connection**: Ensure PostgreSQL is running via Docker
 2. **Circuit compilation**: Allow 30-60 seconds for initial compilation
 3. **Job failures**: Check worker logs and admin endpoints
-4. **File cleanup**: Temporary files deleted after processing
+4. **MinIO connectivity**: Ensure MinIO is running and bucket exists
 5. **Memory issues**: Worker requires 2GB+ RAM for proof generation
+6. **File uploads**: Check file size limits (default 10MB) and type validation
 
 ## Important Notes
 
@@ -335,3 +368,5 @@ ADMIN_API_KEY=key API_URL=https://api.example.com tsx test-admin.mts stats
 - **Cache directory**: Auto-created when needed, in `.gitignore`
 - **Logging**: Structured JSON logs with correlation IDs for request tracing
 - **File outputs**: Logs written to `./logs/*.log` for Promtail collection
+- **File storage**: MinIO required for cross-container file sharing between API and Worker
+- **TypeScript imports**: Always use `.js` extension when importing TypeScript files
