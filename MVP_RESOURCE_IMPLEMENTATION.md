@@ -19,6 +19,54 @@ This guide walks through implementing each REST resource for the TouchGrass MVP.
 
 ---
 
+## Testing Strategy
+
+### Philosophy: Test What Provides Value
+
+**DO Test:**
+- ✅ **Validation logic** - Required fields, format validation, business rules
+- ✅ **Response transformation** - API contract (snake_case → camelCase)
+- ✅ **Error handling** - Correct status codes and error types
+- ✅ **Business logic** - Any non-trivial decision making
+
+**DON'T Test:**
+- ❌ Simple database call forwarding (e.g., `findById` just calls Knex)
+- ❌ Framework behavior (Express routing, Knex query building)
+- ❌ Implementation details (which Knex methods were called)
+
+### Test Pattern
+
+For each resource, create **focused handler tests** only:
+
+```typescript
+describe('ResourceHandler', () => {
+  // Mock only what's needed
+  const mockRepo = {
+    methodName: vi.fn(),
+  };
+
+  describe('validation', () => {
+    // Test required fields
+    // Test format validation
+    // Test business rules
+  });
+
+  describe('response transformation', () => {
+    // Test snake_case to camelCase
+    // Test date formatting
+  });
+
+  describe('error handling', () => {
+    // Test 404 for not found
+    // Test correct status codes
+  });
+});
+```
+
+**Skip repository tests unless they contain business logic!**
+
+---
+
 ## 1. Error Handling Setup
 
 ### Create Error Utilities
@@ -234,18 +282,46 @@ export class ChallengesHandler {
 ```typescript
 import { Router } from 'express';
 import { ChallengesHandler } from '../../handlers/challenges.handler.js';
-import { asyncErrorHandler } from '../middleware/errorHandler.js';
 
 export function createChallengesRoutes(handler: ChallengesHandler): Router {
   const router = Router();
 
-  router.get('/current', asyncErrorHandler(handler.getCurrentChallenge.bind(handler)));
-  router.get('/:id', asyncErrorHandler(handler.getChallenge.bind(handler)));
-  router.get('/', asyncErrorHandler(handler.getAllChallenges.bind(handler)));
+  router.get('/current', handler.getCurrentChallenge.bind(handler));
+  router.get('/:id', handler.getChallenge.bind(handler));
+  router.get('/', handler.getAllChallenges.bind(handler));
+  router.post('/', handler.createChallenge.bind(handler));
+  router.delete('/:id', handler.deleteChallenge.bind(handler));
 
   return router;
 }
 ```
+
+### Tests (High-Value Only)
+
+`test/handlers/challenges.handler.test.ts`:
+```typescript
+describe('ChallengesHandler', () => {
+  describe('createChallenge validation', () => {
+    it('should require title field');
+    it('should require description field');
+    it('should require startTime field');
+    it('should require endTime field');
+  });
+
+  describe('response transformation', () => {
+    it('should convert snake_case to camelCase');
+    it('should format dates as Date objects');
+  });
+
+  describe('error handling', () => {
+    it('should return 404 for missing challenge');
+    it('should return 201 for creation');
+    it('should return 204 for deletion');
+  });
+});
+```
+
+**Why these tests?** They validate business rules, document the API contract, and catch real bugs.
 
 ---
 
@@ -379,17 +455,36 @@ export class ChainsHandler {
 ```typescript
 import { Router } from 'express';
 import { ChainsHandler } from '../../handlers/chains.handler.js';
-import { asyncErrorHandler } from '../middleware/errorHandler.js';
 
 export function createChainsRoutes(handler: ChainsHandler): Router {
   const router = Router();
 
-  router.get('/:id', asyncErrorHandler(handler.getChain.bind(handler)));
-  router.get('/', asyncErrorHandler(handler.getChainsForChallenge.bind(handler)));
+  router.get('/:id', handler.getChain.bind(handler));
+  router.get('/', handler.getChainsForChallenge.bind(handler));
 
   return router;
 }
 ```
+
+### Tests (High-Value Only)
+
+`test/handlers/chains.handler.test.ts`:
+```typescript
+describe('ChainsHandler', () => {
+  describe('getChainsForChallenge validation', () => {
+    it('should require challengeId query parameter');
+  });
+
+  describe('response transformation', () => {
+    it('should convert snake_case to camelCase');
+    it('should format dates correctly');
+  });
+
+  // Note: Most chain logic is simple forwarding - skip those tests
+});
+```
+
+**Why minimal tests?** Chains are mostly pass-through with little business logic in MVP.
 
 ---
 
@@ -520,17 +615,42 @@ export class UsersHandler {
 ```typescript
 import { Router } from 'express';
 import { UsersHandler } from '../../handlers/users.handler.js';
-import { asyncErrorHandler } from '../middleware/errorHandler.js';
 
 export function createUsersRoutes(handler: UsersHandler): Router {
   const router = Router();
 
-  router.get('/:walletAddress', asyncErrorHandler(handler.getUser.bind(handler)));
-  router.post('/', asyncErrorHandler(handler.createUser.bind(handler)));
+  router.get('/:walletAddress', handler.getUser.bind(handler));
+  router.post('/', handler.createUser.bind(handler));
 
   return router;
 }
 ```
+
+### Tests (High-Value Only)
+
+`test/handlers/users.handler.test.ts`:
+```typescript
+describe('UsersHandler', () => {
+  describe('createUser validation', () => {
+    it('should require walletAddress field');
+    it('should validate Mina wallet address format');
+    // Note: Will need validation utility for Mina addresses
+  });
+
+  describe('response transformation', () => {
+    it('should convert snake_case to camelCase');
+    it('should return 200 for existing user (findOrCreate)');
+    it('should return 201 for new user');
+  });
+
+  describe('error handling', () => {
+    it('should return 404 when user not found');
+    it('should return validation error for invalid wallet format');
+  });
+});
+```
+
+**Why these tests?** Wallet validation is critical business logic. Status codes document idempotent behavior.
 
 ---
 
@@ -633,8 +753,23 @@ curl http://localhost:3000/api/users/B62qj...
 curl "http://localhost:3000/api/chains?challengeId=<uuid>"
 ```
 
+### Testing Summary
+
+**Total Tests Per Resource:**
+- **Challenges**: ~10-12 tests (validation, transformation, errors)
+- **Chains**: ~3-5 tests (minimal logic in MVP)
+- **Users**: ~7-8 tests (wallet validation is critical)
+- **Submissions**: ~15-20 tests (most complex, includes image validation)
+
+**Remember:**
+- Only test what can break or has business logic
+- Skip simple database forwarding methods
+- Focus on validation, transformation, and error handling
+- Integration tests will cover the full stack later
+
 ### Next Steps
-1. Implement submission resource with full upload flow
-2. Add unit tests for each resource
-3. Add integration tests
-4. Add admin endpoints if needed
+1. Implement each resource following the pattern
+2. Add focused unit tests immediately after implementation
+3. Wire everything together in index.ts
+4. Add integration tests for full request flow
+5. Test with manual curl commands
