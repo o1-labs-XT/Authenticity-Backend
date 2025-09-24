@@ -1,14 +1,19 @@
 #!/bin/bash
 set -e
 
+# Use test database
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/authenticity_test"
+
 # Cleanup function
 cleanup() {
   echo "Cleaning up..."
   [ -n "$SERVER_PID" ] && kill $SERVER_PID 2>/dev/null
+  # Drop test database
+  docker-compose exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS authenticity_test;" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-# Start services
+# Start PostgreSQL
 docker-compose up -d postgres
 
 # Wait for PostgreSQL
@@ -16,11 +21,15 @@ until docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; do
   sleep 1
 done
 
+# Create test database
+docker-compose exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS authenticity_test;"
+docker-compose exec -T postgres psql -U postgres -c "CREATE DATABASE authenticity_test;"
+
 # Setup database
 npm run db:migrate
 npm run build
 
-# Start API server
+# Start API server with test database
 npm run dev:api > /tmp/test-server.log 2>&1 &
 SERVER_PID=$!
 
