@@ -60,9 +60,9 @@ describe('Challenges API Integration', () => {
     const currentRes = await request(API_URL).get('/api/challenges/current');
 
     expect(currentRes.status).toBe(200);
-    // The most recent active challenge should be returned
-    expect(currentRes.body).toBeDefined();
-    expect(currentRes.body.id).toBeDefined();
+    // Verify the correct challenge is returned
+    expect(currentRes.body.id).toBe(challengeId);
+    expect(currentRes.body.title).toBe('Currently Active Integration Test');
   });
 
   // Test 3: List all challenges
@@ -117,6 +117,7 @@ describe('Challenges API Integration', () => {
 
     createdIds.push(createRes.body.id);
 
+    // Test POST response shape
     expect(createRes.body).toMatchObject({
       id: expect.any(String),
       title: 'Shape Test',
@@ -126,5 +127,43 @@ describe('Challenges API Integration', () => {
       participantCount: 0,
       chainCount: 1,
     });
+
+    // Test GET by ID response shape
+    const getByIdRes = await request(API_URL).get(`/api/challenges/${createRes.body.id}`);
+    expect(getByIdRes.body).toMatchObject({
+      id: expect.any(String),
+      title: 'Shape Test',
+      description: 'Testing response shape',
+      startTime: expect.any(String),
+      endTime: expect.any(String),
+      participantCount: 0,
+      chainCount: 1,
+    });
+
+    // Test GET all response shape
+    const getAllRes = await request(API_URL).get('/api/challenges');
+    const foundChallenge = getAllRes.body.find((c: any) => c.id === createRes.body.id);
+    expect(foundChallenge).toMatchObject({
+      id: expect.any(String),
+      title: 'Shape Test',
+      description: 'Testing response shape',
+      startTime: expect.any(String),
+      endTime: expect.any(String),
+      participantCount: 0,
+      chainCount: 1,
+    });
+  });
+
+  // Test 8: Date validation
+  it('should reject challenge when endTime is before startTime', async () => {
+    const res = await request(API_URL).post('/api/challenges').send({
+      title: 'Invalid Date Range',
+      description: 'Test',
+      startTime: '2024-12-31T00:00:00Z',
+      endTime: '2024-01-01T00:00:00Z', // End is before start
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe('endTime must be after startTime');
   });
 });

@@ -102,6 +102,25 @@ describe('ChallengesHandler', () => {
       expect(mockRepo.create).not.toHaveBeenCalled();
     });
 
+    it('should reject challenge when endTime is before startTime', async () => {
+      mockReq.body = {
+        title: 'Test Challenge',
+        description: 'Test Description',
+        startTime: '2024-12-31T00:00:00Z',
+        endTime: '2024-01-01T00:00:00Z', // End is before start
+      };
+
+      await handler.createChallenge(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'endTime must be after startTime',
+          statusCode: 400,
+        })
+      );
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
     it('should create challenge with valid data', async () => {
       const mockChallenge = {
         id: 'test-id',

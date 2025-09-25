@@ -75,6 +75,13 @@ export class ChallengesHandler {
       if (!startTime) throw Errors.badRequest('startTime is required', 'startTime');
       if (!endTime) throw Errors.badRequest('endTime is required', 'endTime');
 
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+
+      if (end <= start) {
+        throw Errors.badRequest('endTime must be after startTime');
+      }
+
       const challenge = await this.challengesRepo.create({
         title,
         description,

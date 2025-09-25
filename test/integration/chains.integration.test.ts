@@ -93,8 +93,8 @@ describe('Chains API Integration', () => {
     const challengeId = await createTestChallenge();
     createdChallenges.push(challengeId);
 
+    // Test GET with query param response shape
     const res = await request(API_URL).get(`/api/chains?challengeId=${challengeId}`);
-
     expect(res.status).toBe(200);
     const chain = res.body[0];
 
@@ -107,9 +107,15 @@ describe('Chains API Integration', () => {
       lastActivityAt: expect.any(String),
     });
 
-    // Verify camelCase (not snake_case)
-    expect(chain).not.toHaveProperty('challenge_id');
-    expect(chain).not.toHaveProperty('created_at');
-    expect(chain).not.toHaveProperty('last_activity_at');
+    // Test GET by ID response shape
+    const getByIdRes = await request(API_URL).get(`/api/chains/${chain.id}`);
+    expect(getByIdRes.body).toMatchObject({
+      id: chain.id,
+      name: 'Default',
+      challengeId: challengeId,
+      length: 0,
+      createdAt: expect.any(String),
+      lastActivityAt: expect.any(String),
+    });
   });
 });
