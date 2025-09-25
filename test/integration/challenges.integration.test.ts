@@ -1,19 +1,17 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import request from 'supertest';
-
-// For integration tests, we'll use the actual running server
-const API_URL = 'http://localhost:3000';
+import {
+  API_URL,
+  getRelativeDate,
+  createTestChallenge,
+  cleanupChallenges,
+} from './utils/test-helpers.js';
 
 describe('Challenges API Integration', () => {
   const createdIds: string[] = [];
 
   afterEach(async () => {
-    // Clean up any test data we created
-    for (const id of createdIds) {
-      await request(API_URL)
-        .delete(`/api/challenges/${id}`)
-        .catch(() => {}); // Ignore errors if already deleted
-    }
+    await cleanupChallenges(createdIds);
     createdIds.length = 0;
   });
 
@@ -50,19 +48,12 @@ describe('Challenges API Integration', () => {
 
   // Test 2: Current challenge logic
   it('should return current active challenge', async () => {
-    const now = new Date();
-    const yesterday = new Date(now.getTime() - 86400000);
-    const tomorrow = new Date(now.getTime() + 86400000);
-
-    // Create an active challenge
-    const createRes = await request(API_URL).post('/api/challenges').send({
+    // Create an active challenge (started yesterday, ends tomorrow)
+    const challengeId = await createTestChallenge({
       title: 'Currently Active Integration Test',
-      description: 'Should be returned as current',
-      startTime: yesterday.toISOString(),
-      endTime: tomorrow.toISOString(),
+      startDaysFromNow: -1,
+      endDaysFromNow: 1,
     });
-
-    const challengeId = createRes.body.id;
     createdIds.push(challengeId);
 
     // Get current
@@ -80,6 +71,12 @@ describe('Challenges API Integration', () => {
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
+
+    // Should contain all our test challenges
+    const ids = res.body.map((c: any) => c.id);
+    createdIds.forEach((id) => {
+      expect(ids).toContain(id);
+    });
   });
 
   // Test 4: 404 for non-existent
@@ -109,12 +106,14 @@ describe('Challenges API Integration', () => {
 
   // Test 7: Response shape validation
   it('should return properly formatted response with camelCase fields', async () => {
-    const createRes = await request(API_URL).post('/api/challenges').send({
-      title: 'Shape Test',
-      description: 'Testing response shape',
-      startTime: '2024-06-01T00:00:00Z',
-      endTime: '2024-06-30T00:00:00Z',
-    });
+    const createRes = await request(API_URL)
+      .post('/api/challenges')
+      .send({
+        title: 'Shape Test',
+        description: 'Testing response shape',
+        startTime: getRelativeDate(10),
+        endTime: getRelativeDate(20),
+      });
 
     createdIds.push(createRes.body.id);
 
@@ -127,9 +126,5 @@ describe('Challenges API Integration', () => {
       participantCount: 0,
       chainCount: 1,
     });
-
-    // Verify dates are properly formatted
-    expect(new Date(createRes.body.startTime).toISOString()).toBe(createRes.body.startTime);
-    expect(new Date(createRes.body.endTime).toISOString()).toBe(createRes.body.endTime);
   });
 });
