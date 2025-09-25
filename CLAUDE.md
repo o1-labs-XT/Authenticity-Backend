@@ -49,9 +49,10 @@ npm run db:migrate      # Rerun migrations
 
 ### Testing & Code Quality
 ```bash
-npm run test    # Run unit tests with Vitest
-npm run lint    # Run ESLint
-npm run format  # Format code with Prettier
+npm run test:unit        # Run unit tests only (excludes integration)
+npm run test:integration # Run integration tests with test database
+npm run lint            # Run ESLint
+npm run format          # Format code with Prettier
 
 # Manual testing scripts
 IMAGE_PATH=./image.png API_URL=http://localhost:3000 tsx test-upload.mts
@@ -59,6 +60,9 @@ tsx test-admin.mts stats              # Queue statistics
 tsx test-admin.mts failed             # List failed jobs
 tsx test-admin.mts details <jobId>    # Job details
 tsx test-admin.mts retry <jobId>      # Retry job
+
+# MinIO testing script
+tsx test-minio.mts      # Test MinIO connectivity and operations
 ```
 
 ### Observability
@@ -83,7 +87,7 @@ docker-compose up -d loki grafana promtail
 
 ## High-Level Architecture
 
-Zero-knowledge proof backend for image authenticity verification on Mina Protocol. Users prove image authenticity without revealing sensitive information.
+TouchGrass MVP: A social photo challenge platform with zero-knowledge proof verification on Mina Protocol. Users participate in daily challenges by submitting photos that are cryptographically verified for authenticity.
 
 ### Core Flow
 1. **Upload**: Client uploads image with cryptographic signature
@@ -132,7 +136,8 @@ src/
 │   ├── upload.handler.ts    # Complex validation, orchestration, error recovery
 │   ├── status.handler.ts    # Simple status queries
 │   ├── tokenOwner.handler.ts
-│   └── admin.handler.ts     # Job queue management
+│   ├── admin.handler.ts     # Job queue management
+│   └── challenges.handler.ts # TouchGrass challenge endpoints
 ├── services/
 │   ├── image/
 │   │   └── verification.service.ts  # SHA256 hashing, signature verification using o1js
@@ -165,6 +170,7 @@ test/                    # Unit tests with Vitest
 - **StatusHandler**: Returns proof generation/publishing status
 - **TokenOwnerHandler**: Returns token owner for verified images
 - **AdminHandler**: Job queue management (stats, failures, retries)
+- **ChallengesHandler**: TouchGrass challenge endpoints (current challenge, challenge metadata)
 
 ### Services
 - **ImageAuthenticityService**: SHA256 hashing, signature verification using o1js and authenticity-zkapp
@@ -176,6 +182,7 @@ test/                    # Unit tests with Vitest
 ### Database
 - **PostgresAdapter**: Instance-based Knex wrapper (NOT static methods) with connection pooling
 - **AuthenticityRepository**: Repository pattern for data access with camelCase/snake_case transformation
+- **ChallengesRepository**: TouchGrass challenges data access
 - **Migrations**: Schema managed via Knex migrations
 - **Status values**: `pending`, `processing`, `verified`, `failed`
 
@@ -200,6 +207,9 @@ test/                    # Unit tests with Vitest
 
 - `GET /api/token-owner/:sha256Hash` - Get token owner
   - Returns: `{ tokenOwner }` if verified
+
+- `GET /api/challenges/current` - Get current active challenge
+  - Returns: TouchGrass challenge metadata
 
 - `GET /health` - Health check
 - `GET /api/version` - API version
@@ -248,6 +258,8 @@ SSL_REQUIRED=false          # Enable SSL for PostgreSQL in production
 - Worker concurrency: Configurable via pg-boss
 
 ### Database Schema
+
+#### Core Tables
 ```sql
 -- authenticity_records table
 sha256_hash (PK)        -- Image hash
@@ -264,6 +276,12 @@ failure_reason          -- Error details
 retry_count             -- Retry attempts
 created_at              -- Upload timestamp
 updated_at              -- Last modified
+
+-- TouchGrass MVP tables (see migrations for full schema)
+-- users: wallet_address, created_at
+-- challenges: id, title, description, start_time, end_time, active, etc.
+-- chains: id, name, challenge_id, created_at, etc.
+-- submissions: id, sha256_hash, user_wallet_address, challenge_id, chain_id, tagline, chain_position, etc.
 ```
 
 ### Security & Middleware
@@ -377,3 +395,5 @@ services:
 - **File outputs**: Logs written to `./logs/*.log` for Promtail collection
 - **File storage**: MinIO required for cross-container file sharing between API and Worker
 - **TypeScript imports**: Always use `.js` extension when importing TypeScript files
+- **TouchGrass MVP**: Currently implementing social challenge features (see mvp.md)
+- **Error type pattern**: Uses ApiError class with specific error codes and field validation

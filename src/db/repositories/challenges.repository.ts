@@ -10,18 +10,27 @@ export class ChallengesRepository {
     start_time: Date;
     end_time: Date;
   }): Promise<Challenge> {
-    const [challenge] = await this.db
-      .getKnex()('challenges')
-      .insert({
-        ...data,
-        participant_count: 0,
-        chain_count: 1, // MVP: Always 1 chain per challenge
-      })
-      .returning('*');
+    const knex = this.db.getKnex();
 
-    // TODO: Automatically create a default chain for this challenge
-    // This should be done in a transaction with the challenge creation
-    // For MVP: Each challenge has exactly one chain, created automatically
+    // Use transaction to ensure both challenge and chain are created atomically
+    const challenge = await knex.transaction(async (trx) => {
+      const [newChallenge] = await trx('challenges')
+        .insert({
+          ...data,
+          participant_count: 0,
+          chain_count: 1,
+        })
+        .returning('*');
+
+      // Automatically create a default chain for this challenge
+      await trx('chains').insert({
+        challenge_id: newChallenge.id,
+        name: 'Default',
+        length: 0,
+      });
+
+      return newChallenge;
+    });
 
     return challenge;
   }

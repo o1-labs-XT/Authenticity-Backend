@@ -12,6 +12,7 @@ import { createStatusRoutes } from './routes/status.routes.js';
 import { createTokenOwnerRoutes } from './routes/tokenOwner.routes.js';
 import { createAdminRoutes } from './routes/admin.routes.js';
 import { createChallengesRoutes } from './routes/challenges.routes.js';
+import { createChainsRoutes } from './routes/chains.routes.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 import { loggingMiddleware } from './middleware/logging.middleware.js';
 import { contextMiddleware } from './middleware/context.middleware.js';
@@ -20,6 +21,7 @@ import { StatusHandler } from '../handlers/status.handler.js';
 import { TokenOwnerHandler } from '../handlers/tokenOwner.handler.js';
 import { AdminHandler } from '../handlers/admin.handler.js';
 import { ChallengesHandler } from '../handlers/challenges.handler.js';
+import { ChainsHandler } from '../handlers/chains.handler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +31,7 @@ export interface ServerDependencies {
   tokenOwnerHandler: TokenOwnerHandler;
   adminHandler: AdminHandler;
   challengesHandler: ChallengesHandler;
+  chainsHandler: ChainsHandler;
 }
 
 export function createServer(dependencies: ServerDependencies): Express {
@@ -110,6 +113,9 @@ export function createServer(dependencies: ServerDependencies): Express {
 
   const challengesRoutes = createChallengesRoutes(dependencies.challengesHandler);
   app.use('/api/challenges', challengesRoutes);
+
+  const chainsRoutes = createChainsRoutes(dependencies.chainsHandler);
+  app.use('/api/chains', chainsRoutes);
 
   // 404 handler
   app.use((req, res) => {
