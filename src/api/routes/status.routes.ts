@@ -25,11 +25,7 @@ export function createStatusRoutes(statusHandler: StatusHandler): Router {
    * - 500: Internal error
    */
   router.get('/status/:sha256Hash', async (req, res, next) => {
-    try {
-      await statusHandler.getStatus(req, res);
-    } catch (error) {
-      next(error);
-    }
+    await statusHandler.getStatus(req, res, next);
   });
 
   return router;

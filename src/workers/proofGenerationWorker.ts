@@ -8,6 +8,7 @@ import { ProofGenerationJobData } from '../services/queue/jobQueue.service.js';
 import fs from 'fs/promises';
 import { logger, withContext } from '../utils/logger.js';
 import { PerformanceTracker } from '../utils/performance.js';
+import { Errors } from '../utils/errors.js';
 
 export class ProofGenerationWorker {
   constructor(
@@ -73,7 +74,7 @@ export class ProofGenerationWorker {
               verifyTracker.end(isValid ? 'success' : 'error');
 
               if (!isValid || !verificationInputs) {
-                throw new Error(`Image verification failed: ${error || 'Unknown error'}`);
+                throw Errors.internal(`Image verification failed: ${error || 'Unknown error'}`);
               }
 
               // Step 2: Generate proof

@@ -5,6 +5,7 @@ import {
   CreateAuthenticityRecordInput,
   ExistingImageResult,
 } from '../types.js';
+import { Errors } from '../../utils/errors.js';
 
 export class AuthenticityRepository {
   private adapter: PostgresAdapter;
@@ -31,8 +32,9 @@ export class AuthenticityRepository {
       // Handle unique constraint violations
       if (error instanceof Error && 'code' in error) {
         const dbError = error as Error & { code: string };
-        if (dbError.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' || dbError.code === '23505') {
-          throw new Error('Record with this SHA256 hash already exists');
+        if (dbError.code === '23505') {
+          // PostgreSQL unique violation
+          throw Errors.conflict('Record with this SHA256 hash already exists');
         }
       }
       throw error;

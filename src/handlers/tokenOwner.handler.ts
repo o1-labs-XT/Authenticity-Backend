@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
-import { logger } from '../utils/logger.js';
+import { Errors } from '../utils/errors.js';
 
 /**
  * API response for token owner endpoint
@@ -22,21 +22,15 @@ export class TokenOwnerHandler {
    */
   async getTokenOwner(
     req: Request<{ sha256Hash: string }>,
-    res: Response<TokenOwnerResponse | ErrorResponse>
+    res: Response<TokenOwnerResponse | ErrorResponse>,
+    next: NextFunction
   ): Promise<void> {
     try {
       const { sha256Hash } = req.params;
 
       // Validate SHA256 hash format
       if (!sha256Hash || !/^[a-fA-F0-9]{64}$/.test(sha256Hash)) {
-        res.status(400).json({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid SHA256 hash format',
-            field: 'sha256Hash',
-          },
-        });
-        return;
+        throw Errors.badRequest('Invalid SHA256 hash format', 'sha256Hash');
       }
 
       // Get record from database
@@ -57,14 +51,7 @@ export class TokenOwnerHandler {
         found: true,
       });
     } catch (error) {
-      logger.error({ err: error, sha256Hash: req.params.sha256Hash }, 'Token owner handler error');
-
-      res.status(500).json({
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to retrieve token owner',
-        },
-      });
+      next(error);
     }
   }
 }

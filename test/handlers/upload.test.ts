@@ -24,48 +24,42 @@ describe('UploadHandler', () => {
     const mockFile: any = { path: '/tmp/test.jpg' };
 
     it('should reject when image is missing', () => {
-      const result = handler.validateUploadRequest(undefined, validPublicKey, validSignature);
-
-      expect(result.isValid).toBe(false);
-      expect(result.error?.field).toBe('image');
+      expect(() => {
+        handler.validateUploadRequest(undefined, validPublicKey, validSignature);
+      }).toThrow('No image file provided');
     });
 
     it('should reject when signature is missing', () => {
-      const result = handler.validateUploadRequest(mockFile, validPublicKey, undefined);
-
-      expect(result.isValid).toBe(false);
-      expect(result.error?.field).toBe('signature');
+      expect(() => {
+        handler.validateUploadRequest(mockFile, validPublicKey, undefined);
+      }).toThrow('Signature is required');
     });
 
     it('should reject when publicKey is missing', () => {
-      const result = handler.validateUploadRequest(mockFile, undefined, validSignature);
-
-      expect(result.isValid).toBe(false);
-      expect(result.error?.field).toBe('publicKey');
+      expect(() => {
+        handler.validateUploadRequest(mockFile, undefined, validSignature);
+      }).toThrow('Public key is required');
     });
 
     it('should reject empty image data', () => {
       fs.readFileSync = vi.fn().mockReturnValue(Buffer.from(''));
-      const result = handler.validateUploadRequest(mockFile, validPublicKey, validSignature);
-
-      expect(result.isValid).toBe(false);
-      expect(result.error?.field).toBe('image');
+      expect(() => {
+        handler.validateUploadRequest(mockFile, validPublicKey, validSignature);
+      }).toThrow('Image buffer is empty');
     });
 
     it('should reject invalid signature format', () => {
       fs.readFileSync = vi.fn().mockReturnValue(Buffer.from('test data'));
-      const result = handler.validateUploadRequest(mockFile, validPublicKey, 'invalid-sig');
-
-      expect(result.isValid).toBe(false);
-      expect(result.error?.field).toBe('signature');
+      expect(() => {
+        handler.validateUploadRequest(mockFile, validPublicKey, 'invalid-sig');
+      }).toThrow('Invalid signature format');
     });
 
     it('should reject invalid publicKey format', () => {
       fs.readFileSync = vi.fn().mockReturnValue(Buffer.from('test data'));
-      const result = handler.validateUploadRequest(mockFile, 'invalid-key', validSignature);
-
-      expect(result.isValid).toBe(false);
-      expect(result.error?.field).toBe('publicKey');
+      expect(() => {
+        handler.validateUploadRequest(mockFile, 'invalid-key', validSignature);
+      }).toThrow('Invalid public key format');
     });
 
     it('should accept valid submission data', () => {
@@ -74,8 +68,7 @@ describe('UploadHandler', () => {
 
       const result = handler.validateUploadRequest(mockFile, validPublicKey, validSignature);
 
-      expect(result.isValid).toBe(true);
-      expect(result.imageBuffer).toEqual(testBuffer);
+      expect(result).toEqual(testBuffer);
     });
   });
 });

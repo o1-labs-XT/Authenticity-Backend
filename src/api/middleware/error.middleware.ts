@@ -1,21 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
 import { config } from '../../config/index.js';
 import { logger } from '../../utils/logger.js';
+import { ApiError } from '../../utils/errors.js';
 
 /**
- * API error response - used across all handlers and middleware
+ * REST API Error Response Format
  */
 export interface ErrorResponse {
   error: {
-    code: string;
     message: string;
     field?: string;
   };
 }
 
 /**
- * Global error handling middleware
- * Catches all errors and formats them consistently
+ * Generic Error Handling Middleware
+ *
+ * This middleware ONLY knows about ApiError.
+ * All library-specific errors should be converted to ApiError at their source.
  */
 export function errorMiddleware(
   error: unknown,
@@ -23,7 +25,7 @@ export function errorMiddleware(
   res: Response<ErrorResponse>,
   _next: NextFunction
 ): void {
-  // Log the error with structured logging
+  // Log all errors
   logger.error(
     {
       err: error,
@@ -31,90 +33,33 @@ export function errorMiddleware(
       path: req.path,
       query: req.query,
       body: req.body,
-      headers: {
-        'user-agent': req.headers['user-agent'],
-        'content-type': req.headers['content-type'],
-      },
     },
     'Request error'
   );
 
-  // Default error response
-  let statusCode = 500;
-  let errorResponse: ErrorResponse = {
+  // user facing errors
+  if (error instanceof ApiError) {
+    res.status(error.statusCode).json({
+      error: {
+        message: error.message,
+        field: error.field,
+      },
+    });
+    return;
+  }
+
+  // For any other error, return 500
+  // In production, hide error details
+  const message =
+    config.nodeEnv === 'production'
+      ? 'Internal server error'
+      : error instanceof Error
+        ? error.message
+        : 'Unknown error';
+
+  res.status(500).json({
     error: {
-      code: 'INTERNAL_ERROR',
-      message: 'An unexpected error occurred',
+      message,
     },
-  };
-
-  // Handle different error types
-  if (error instanceof Error) {
-    // Handle Error instances
-    if (error.name === 'ValidationError') {
-      statusCode = 400;
-      errorResponse = {
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: error.message,
-        },
-      };
-    } else if (error.name === 'UnauthorizedError') {
-      statusCode = 401;
-      errorResponse = {
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-        },
-      };
-    } else if (error.name === 'ForbiddenError') {
-      statusCode = 403;
-      errorResponse = {
-        error: {
-          code: 'FORBIDDEN',
-          message: 'Access denied',
-        },
-      };
-    } else if (error.name === 'NotFoundError') {
-      statusCode = 404;
-      errorResponse = {
-        error: {
-          code: 'NOT_FOUND',
-          message: error.message || 'Resource not found',
-        },
-      };
-    } else if (error.message) {
-      // Use the error message if available
-      errorResponse.error.message = error.message;
-    }
-
-    // Add more details in development mode
-    if (config.nodeEnv === 'development' && error.stack) {
-      logger.debug({ stack: error.stack }, 'Error stack trace');
-    }
-  }
-
-  // Handle non-Error objects with error codes
-  const errorWithCode = error as any;
-  if (errorWithCode?.code === 'SQLITE_CONSTRAINT') {
-    statusCode = 409;
-    errorResponse = {
-      error: {
-        code: 'CONFLICT',
-        message: 'Resource already exists',
-      },
-    };
-  } else if (errorWithCode?.code === 'LIMIT_FILE_SIZE') {
-    statusCode = 413;
-    errorResponse = {
-      error: {
-        code: 'FILE_TOO_LARGE',
-        message: errorWithCode.message || 'File size exceeds limit',
-        field: 'image',
-      },
-    };
-  }
-
-  // Send error response
-  res.status(statusCode).json(errorResponse);
+  });
 }
