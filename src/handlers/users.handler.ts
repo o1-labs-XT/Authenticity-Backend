@@ -7,6 +7,7 @@ import { Errors } from '../utils/errors.js';
 export interface UserResponse {
   walletAddress: string;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export class UsersHandler {
@@ -16,6 +17,7 @@ export class UsersHandler {
     return {
       walletAddress: user.wallet_address,
       createdAt: new Date(user.created_at),
+      updatedAt: new Date(user.updated_at),
     };
   }
 

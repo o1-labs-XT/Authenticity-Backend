@@ -26,6 +26,7 @@ describe('Users API Integration', () => {
       expect(res.status).toBe(201);
       expect(res.body.walletAddress).toBe(validWallet);
       expect(res.body.createdAt).toBeDefined();
+      expect(res.body.updatedAt).toBeDefined();
 
       createdWallets.push(validWallet);
     });
@@ -79,6 +80,7 @@ describe('Users API Integration', () => {
       expect(res.status).toBe(200);
       expect(res.body.walletAddress).toBe(validWallet);
       expect(res.body.createdAt).toBeDefined();
+      expect(res.body.updatedAt).toBeDefined();
     });
 
     it('should return 404 for non-existent user', async () => {

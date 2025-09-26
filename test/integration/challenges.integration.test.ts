@@ -126,6 +126,8 @@ describe('Challenges API Integration', () => {
       endTime: expect.any(String),
       participantCount: 0,
       chainCount: 1,
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
     });
 
     // Test GET by ID response shape
@@ -138,6 +140,8 @@ describe('Challenges API Integration', () => {
       endTime: expect.any(String),
       participantCount: 0,
       chainCount: 1,
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
     });
 
     // Test GET all response shape
@@ -151,6 +155,8 @@ describe('Challenges API Integration', () => {
       endTime: expect.any(String),
       participantCount: 0,
       chainCount: 1,
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
     });
   });
 

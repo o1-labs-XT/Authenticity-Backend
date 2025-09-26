@@ -10,6 +10,7 @@ export interface ChainResponse {
   length: number;
   createdAt: Date;
   lastActivityAt: Date;
+  updatedAt: Date;
 }
 
 export class ChainsHandler {
@@ -23,6 +24,7 @@ export class ChainsHandler {
       length: chain.length,
       createdAt: new Date(chain.created_at),
       lastActivityAt: new Date(chain.last_activity_at),
+      updatedAt: new Date(chain.updated_at),
     };
   }
 

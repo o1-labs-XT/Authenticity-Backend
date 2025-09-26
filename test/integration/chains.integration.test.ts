@@ -105,6 +105,7 @@ describe('Chains API Integration', () => {
       length: 0,
       createdAt: expect.any(String),
       lastActivityAt: expect.any(String),
+      updatedAt: expect.any(String),
     });
 
     // Test GET by ID response shape
@@ -116,6 +117,7 @@ describe('Chains API Integration', () => {
       length: 0,
       createdAt: expect.any(String),
       lastActivityAt: expect.any(String),
+      updatedAt: expect.any(String),
     });
   });
 });

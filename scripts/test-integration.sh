@@ -21,6 +21,9 @@ until docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; do
   sleep 1
 done
 
+# Kill any existing connections to test database
+docker-compose exec -T postgres psql -U postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'authenticity_test' AND pid <> pg_backend_pid();" 2>/dev/null || true
+
 # Create test database
 docker-compose exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS authenticity_test;"
 docker-compose exec -T postgres psql -U postgres -c "CREATE DATABASE authenticity_test;"

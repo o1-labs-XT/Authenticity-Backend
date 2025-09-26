@@ -11,6 +11,8 @@ export interface ChallengeResponse {
   endTime: Date;
   participantCount: number;
   chainCount: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export class ChallengesHandler {
@@ -25,6 +27,8 @@ export class ChallengesHandler {
       endTime: new Date(challenge.end_time),
       participantCount: challenge.participant_count,
       chainCount: challenge.chain_count,
+      createdAt: new Date(challenge.created_at),
+      updatedAt: new Date(challenge.updated_at),
     };
   }
 
