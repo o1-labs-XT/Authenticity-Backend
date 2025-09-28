@@ -95,6 +95,8 @@ paths:
     delete:
       tags: [Users]
       summary: Delete user (admin only)
+      security:
+        - BasicAuth: []
       parameters:
         - name: walletAddress
           in: path
@@ -104,6 +106,8 @@ paths:
       responses:
         '204':
           description: User deleted
+        '401':
+          description: Unauthorized - authentication required
         '404':
           description: User not found
 
@@ -125,6 +129,8 @@ paths:
     post:
       tags: [Challenges]
       summary: Create challenge (admin only)
+      security:
+        - BasicAuth: []
       requestBody:
         required: true
         content:
@@ -160,6 +166,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - authentication required
 
   /challenges/active:
     get:
@@ -199,6 +207,8 @@ paths:
     delete:
       tags: [Challenges]
       summary: Delete challenge (admin only)
+      security:
+        - BasicAuth: []
       parameters:
         - name: id
           in: path
@@ -209,6 +219,8 @@ paths:
       responses:
         '204':
           description: Challenge deleted
+        '401':
+          description: Unauthorized - authentication required
         '404':
           description: Challenge not found
 
@@ -600,8 +612,7 @@ components:
               example: 400
 
   securitySchemes:
-    ApiKey:
-      type: apiKey
-      in: header
-      name: X-Admin-API-Key
-      description: Admin API key for protected endpoints
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: Basic authentication for admin endpoints (username is 'admin')

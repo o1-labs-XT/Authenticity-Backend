@@ -1,6 +1,9 @@
 import request from 'supertest';
 
 export const API_URL = 'http://localhost:3000';
+// credentials for calling protected api routes
+export const ADMIN_USERNAME = 'admin';
+export const ADMIN_PASSWORD = 'testpassword123';
 
 /**
  * Creates a date relative to the current date
@@ -24,6 +27,7 @@ export const createTestChallenge = async (options?: {
 }): Promise<string> => {
   const res = await request(API_URL)
     .post('/api/challenges')
+    .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
     .send({
       title: options?.title || `Test Challenge ${Date.now()}`,
       description: 'Challenge for integration testing',
@@ -46,6 +50,7 @@ export const cleanupChallenges = async (ids: string[]): Promise<void> => {
     ids.map((id) =>
       request(API_URL)
         .delete(`/api/challenges/${id}`)
+        .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
         .catch(() => {})
     )
   );

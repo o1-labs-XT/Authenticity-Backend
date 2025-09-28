@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import request from 'supertest';
 import { PrivateKey } from 'o1js';
-import { API_URL } from './utils/test-helpers.js';
+import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD } from './utils/test-helpers.js';
 
 describe('Users API Integration', () => {
   const createdWallets: string[] = [];
@@ -12,9 +12,9 @@ describe('Users API Integration', () => {
   const invalidWallet = 'invalid-wallet-address';
 
   afterEach(async () => {
-    // Clean up created users
+    // Clean up created users with authentication
     for (const wallet of createdWallets) {
-      await request(API_URL).delete(`/api/users/${wallet}`);
+      await request(API_URL).delete(`/api/users/${wallet}`).auth(ADMIN_USERNAME, ADMIN_PASSWORD);
     }
     createdWallets.length = 0;
   });
@@ -100,13 +100,30 @@ describe('Users API Integration', () => {
   });
 
   describe('DELETE /api/users/:walletAddress', () => {
-    it('should delete existing user', async () => {
+    it('should require authentication for deleting users', async () => {
+      // Create a user first
+      const testWallet = PrivateKey.random().toPublicKey().toBase58();
+      await request(API_URL).post('/api/users').send({ walletAddress: testWallet });
+      createdWallets.push(testWallet);
+
+      // Try to delete without auth - should fail
+      const deleteNoAuthRes = await request(API_URL).delete(`/api/users/${testWallet}`);
+      expect(deleteNoAuthRes.status).toBe(401);
+
+      // Verify user still exists
+      const getRes = await request(API_URL).get(`/api/users/${testWallet}`);
+      expect(getRes.status).toBe(200);
+    });
+
+    it('should delete existing user with authentication', async () => {
       // Create a user first
       const testWallet = PrivateKey.random().toPublicKey().toBase58();
       await request(API_URL).post('/api/users').send({ walletAddress: testWallet });
 
-      // Delete the user
-      const deleteRes = await request(API_URL).delete(`/api/users/${testWallet}`);
+      // Delete the user with auth
+      const deleteRes = await request(API_URL)
+        .delete(`/api/users/${testWallet}`)
+        .auth(ADMIN_USERNAME, ADMIN_PASSWORD);
 
       expect(deleteRes.status).toBe(204);
 
@@ -116,9 +133,11 @@ describe('Users API Integration', () => {
       expect(getRes.status).toBe(404);
     });
 
-    it('should return 404 when deleting non-existent user', async () => {
+    it('should return 404 when deleting non-existent user with auth', async () => {
       const nonExistentWallet = PrivateKey.random().toPublicKey().toBase58();
-      const res = await request(API_URL).delete(`/api/users/${nonExistentWallet}`);
+      const res = await request(API_URL)
+        .delete(`/api/users/${nonExistentWallet}`)
+        .auth(ADMIN_USERNAME, ADMIN_PASSWORD);
 
       expect(res.status).toBe(404);
       expect(res.body.error.message).toBe('User not found');
