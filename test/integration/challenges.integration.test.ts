@@ -46,8 +46,8 @@ describe('Challenges API Integration', () => {
     expect(verifyRes.status).toBe(404);
   });
 
-  // Test 2: Current challenge logic
-  it('should return current active challenge', async () => {
+  // Test 2: Active challenges logic
+  it('should return active challenges as an array', async () => {
     // Create an active challenge (started yesterday, ends tomorrow)
     const challengeId = await createTestChallenge({
       title: 'Currently Active Integration Test',
@@ -56,13 +56,42 @@ describe('Challenges API Integration', () => {
     });
     createdIds.push(challengeId);
 
-    // Get current
-    const currentRes = await request(API_URL).get('/api/challenges/current');
+    // Get active challenges
+    const activeRes = await request(API_URL).get('/api/challenges/active');
 
-    expect(currentRes.status).toBe(200);
-    // Verify the correct challenge is returned
-    expect(currentRes.body.id).toBe(challengeId);
-    expect(currentRes.body.title).toBe('Currently Active Integration Test');
+    expect(activeRes.status).toBe(200);
+    // Verify response is an array
+    expect(Array.isArray(activeRes.body)).toBe(true);
+    // Verify the correct challenge is in the array
+    const activeChallenge = activeRes.body.find((c: any) => c.id === challengeId);
+    expect(activeChallenge).toBeDefined();
+    expect(activeChallenge.title).toBe('Currently Active Integration Test');
+  });
+
+  // Test 2b: Empty active challenges
+  it('should return empty array when no challenges are active', async () => {
+    // Create a future challenge (not yet active)
+    const futureId = await createTestChallenge({
+      title: 'Future Challenge',
+      startDaysFromNow: 5,
+      endDaysFromNow: 10,
+    });
+    createdIds.push(futureId);
+
+    // Create a past challenge (no longer active)
+    const pastId = await createTestChallenge({
+      title: 'Past Challenge',
+      startDaysFromNow: -10,
+      endDaysFromNow: -5,
+    });
+    createdIds.push(pastId);
+
+    // Get active challenges
+    const activeRes = await request(API_URL).get('/api/challenges/active');
+
+    expect(activeRes.status).toBe(200);
+    expect(Array.isArray(activeRes.body)).toBe(true);
+    expect(activeRes.body.length).toBe(0); // Should be empty
   });
 
   // Test 3: List all challenges

@@ -32,15 +32,12 @@ export class ChallengesHandler {
     };
   }
 
-  async getCurrentChallenge(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getActiveChallenges(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const challenge = await this.challengesRepo.findCurrent();
+      const challenges = await this.challengesRepo.findActive();
 
-      if (!challenge) {
-        throw Errors.notFound('Challenge');
-      }
-
-      res.json(this.toResponse(challenge));
+      // Return array of active challenges (could be empty)
+      res.json(challenges.map((c) => this.toResponse(c)));
     } catch (error) {
       next(error);
     }

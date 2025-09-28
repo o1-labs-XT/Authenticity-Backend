@@ -161,19 +161,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /challenges/current:
+  /challenges/active:
     get:
       tags: [Challenges]
-      summary: Get current active challenge
+      summary: Get all active challenges
       responses:
         '200':
-          description: Current active challenge
+          description: List of active challenges (may be empty)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Challenge'
-        '404':
-          description: No active challenge
+                type: array
+                items:
+                  $ref: '#/components/schemas/Challenge'
 
   /challenges/{id}:
     get:

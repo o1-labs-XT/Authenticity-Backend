@@ -35,16 +35,15 @@ export class ChallengesRepository {
     return challenge;
   }
 
-  async findCurrent(): Promise<Challenge | null> {
+  async findActive(): Promise<Challenge[]> {
     const now = new Date();
-    const result = await this.db
+    const results = await this.db
       .getKnex()('challenges')
       .where('start_time', '<=', now)
       .where('end_time', '>', now)
-      .orderBy('start_time', 'desc')
-      .first();
+      .orderBy('start_time', 'desc');
 
-    return result || null;
+    return results;
   }
 
   async findById(id: string): Promise<Challenge | null> {
