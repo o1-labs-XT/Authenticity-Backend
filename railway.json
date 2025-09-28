@@ -1,0 +1,28 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "numReplicas": 1
+  },
+  "services": [
+    {
+      "name": "api",
+      "source": {
+        "repo": "."
+      },
+      "startCommand": "npm run start:api",
+      "healthcheckPath": "/health",
+      "restartPolicyType": "ON_FAILURE"
+    },
+    {
+      "name": "admin-dashboard",
+      "source": {
+        "repo": "./admin-dashboard"
+      },
+      "startCommand": "npm run start",
+      "restartPolicyType": "ON_FAILURE"
+    }
+  ]
+}
