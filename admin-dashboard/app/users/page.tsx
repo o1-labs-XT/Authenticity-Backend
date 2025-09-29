@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { api } from '@/lib/api-client';
 import type { User } from '@/lib/types';
 import Card from '@/components/Card';
-import DataTable from '@/components/DataTable';
+import DataTable, { Column } from '@/components/DataTable';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -51,7 +51,7 @@ export default function UsersPage() {
     }
   };
 
-  const columns = [
+  const columns: Column<User>[] = [
     {
       key: 'walletAddress' as keyof User,
       label: 'Wallet Address',

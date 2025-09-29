@@ -4,7 +4,7 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev:api": "tsx src/index.ts",
+    "dev:api": "tsx src/index.ts & cd admin-dashboard && npm run dev",
     "dev:worker": "tsx src/worker.ts",
     "build": "tsc",
     "start": "npm run db:migrate && tsx scripts/compile-zkapp.ts && node dist/index.js",
@@ -86,7 +86,7 @@
       "bash -c 'npm run build'"
     ],
     "admin-dashboard/**/*.{ts,tsx}": [
-      "bash -c 'cd admin-dashboard && npm run lint'"
+      "bash -c 'cd admin-dashboard && npm run precommit'"
     ]
   }
 }

@@ -1,4 +1,4 @@
-interface Column<T> {
+export interface Column<T> {
   key: keyof T | 'actions';
   label: string;
   render?: (item: T) => React.ReactNode;
@@ -10,11 +10,19 @@ interface DataTableProps<T> {
   emptyMessage?: string;
 }
 
-export default function DataTable<T extends { id?: any }>({
+export default function DataTable<T>({
   data,
   columns,
   emptyMessage = 'No data found',
 }: DataTableProps<T>) {
+  const getRowKey = (item: T, idx: number): string | number => {
+    if (typeof item === 'object' && item !== null) {
+      const obj = item as any;
+      return obj.id || obj.walletAddress || idx;
+    }
+    return idx;
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
@@ -39,7 +47,7 @@ export default function DataTable<T extends { id?: any }>({
             </tr>
           ) : (
             data.map((item, idx) => (
-              <tr key={item.id || idx}>
+              <tr key={getRowKey(item, idx)}>
                 {columns.map((col) => (
                   <td key={String(col.key)} className="px-6 py-4 whitespace-nowrap text-sm">
                     {col.render

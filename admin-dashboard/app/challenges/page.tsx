@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/api-client';
 import type { Challenge } from '@/lib/types';
 import Card from '@/components/Card';
-import DataTable from '@/components/DataTable';
+import DataTable, { Column } from '@/components/DataTable';
 
 export default function ChallengesPage() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
@@ -24,7 +24,7 @@ export default function ChallengesPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Delete this challenge?')) return;
     try {
       await api.challenges.delete(id);
@@ -34,7 +34,7 @@ export default function ChallengesPage() {
     }
   };
 
-  const columns = [
+  const columns: Column<Challenge>[] = [
     { key: 'title' as keyof Challenge, label: 'Title' },
     {
       key: 'description' as keyof Challenge,
@@ -44,15 +44,14 @@ export default function ChallengesPage() {
       )
     },
     {
-      key: 'active' as keyof Challenge,
-      label: 'Status',
-      render: (c: Challenge) => (
-        <span className={`px-2 py-1 text-xs font-medium rounded ${
-          c.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-        }`}>
-          {c.active ? 'Active' : 'Inactive'}
-        </span>
-      )
+      key: 'startTime' as keyof Challenge,
+      label: 'Start Time',
+      render: (c: Challenge) => new Date(c.startTime).toLocaleDateString()
+    },
+    {
+      key: 'endTime' as keyof Challenge,
+      label: 'End Time',
+      render: (c: Challenge) => new Date(c.endTime).toLocaleDateString()
     },
     {
       key: 'actions',

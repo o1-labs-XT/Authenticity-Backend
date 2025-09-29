@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/api-client';
 import type { Chain } from '@/lib/types';
 import Card from '@/components/Card';
-import DataTable from '@/components/DataTable';
+import DataTable, { Column } from '@/components/DataTable';
 
 export default function ChainsPage() {
   const [chains, setChains] = useState<Chain[]>([]);
@@ -23,7 +23,7 @@ export default function ChainsPage() {
     }
   };
 
-  const viewChainDetails = async (id: number) => {
+  const viewChainDetails = async (id: string) => {
     try {
       const data = await api.chains.get(id);
       setSelectedChain(data);
@@ -32,7 +32,7 @@ export default function ChainsPage() {
     }
   };
 
-  const columns = [
+  const columns: Column<Chain>[] = [
     { key: 'id' as keyof Chain, label: 'ID' },
     { key: 'name' as keyof Chain, label: 'Name' },
     { key: 'challengeId' as keyof Chain, label: 'Challenge ID' },
@@ -83,33 +83,21 @@ export default function ChainsPage() {
                   <p className="text-lg">{selectedChain.challengeId}</p>
                 </div>
                 <div>
+                  <label className="text-sm font-medium text-gray-500">Length</label>
+                  <p className="text-lg">{selectedChain.length}</p>
+                </div>
+                <div>
                   <label className="text-sm font-medium text-gray-500">Created At</label>
                   <p className="text-lg">
                     {new Date(selectedChain.createdAt).toLocaleString()}
                   </p>
                 </div>
-                {selectedChain.submissions && selectedChain.submissions.length > 0 && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">
-                      Submissions ({selectedChain.submissions.length})
-                    </label>
-                    <div className="mt-2 space-y-2">
-                      {selectedChain.submissions.map((sub) => (
-                        <div key={sub.id} className="border rounded p-3">
-                          <p className="text-sm">
-                            <span className="font-medium">User:</span> {sub.userWalletAddress}
-                          </p>
-                          <p className="text-sm">
-                            <span className="font-medium">Position:</span> {sub.chainPosition}
-                          </p>
-                          <p className="text-sm">
-                            <span className="font-medium">Tagline:</span> {sub.tagline}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Last Activity</label>
+                  <p className="text-lg">
+                    {new Date(selectedChain.lastActivityAt).toLocaleString()}
+                  </p>
+                </div>
               </div>
             </div>
           </div>

@@ -29,14 +29,14 @@ class ApiClient {
   // Challenges
   challenges = {
     list: () => this.request<Challenge[]>('challenges'),
-    get: (id: number) => this.request<Challenge>(`challenges/${id}`),
+    get: (id: string) => this.request<Challenge>(`challenges/${id}`),
     getActive: () => this.request<Challenge[]>('challenges/active'),
     create: (data: Partial<Challenge>) =>
       this.request<Challenge>('challenges', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    delete: (id: number) => this.request<void>(`challenges/${id}`, { method: 'DELETE' }),
+    delete: (id: string) => this.request<void>(`challenges/${id}`, { method: 'DELETE' }),
   };
 
   // Users
@@ -54,7 +54,7 @@ class ApiClient {
   // Chains
   chains = {
     list: () => this.request<Chain[]>('chains'),
-    get: (id: number) => this.request<Chain>(`chains/${id}`),
+    get: (id: string) => this.request<Chain>(`chains/${id}`),
   };
 
   // Authenticity

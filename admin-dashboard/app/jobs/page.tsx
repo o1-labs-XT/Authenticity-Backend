@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api-client';
 import type { Job, JobStats } from '@/lib/types';
 import Card from '@/components/Card';
-import DataTable from '@/components/DataTable';
+import DataTable, { Column } from '@/components/DataTable';
 
 export default function JobsPage() {
   const [stats, setStats] = useState<JobStats | null>(null);
@@ -66,11 +66,7 @@ export default function JobsPage() {
 
   const queueStats = stats?.queue ?? { created: 0, active: 0, completed: 0, failed: 0 };
 
-  const columns: Array<{
-    key: keyof Job | 'actions';
-    label: string;
-    render: (job: Job) => React.ReactNode;
-  }> = [
+  const columns: Column<Job>[] = [
     {
       key: 'id' as keyof Job,
       label: 'Job ID',
