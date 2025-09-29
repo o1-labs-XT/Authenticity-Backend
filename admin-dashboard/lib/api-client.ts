@@ -1,6 +1,13 @@
 import type { Challenge, User, Chain, AuthenticityRecord, Job, JobStats } from './types';
 
-// Simple API client that uses our proxy route
+/**
+ * API client wraps backend API calls with proxy routing.
+ *
+ * Uses Next.js API routes as a proxy layer between the frontend and backend API
+ * Frontend calls next server /api/proxy/challenges, next server calls back end /api/challenges
+ * - Avoids CORS issues, next server is same origin as client
+ * - Keeps API keys (ADMIN_API_KEY) server side
+ */
 class ApiClient {
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`/api/proxy/${path}`, {

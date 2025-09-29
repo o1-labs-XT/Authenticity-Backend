@@ -1,27 +1,31 @@
-// API Response Types
+// API Response Types - these need to be kept in sync with the
+// types defined in the handlers in the backend api
 export interface Challenge {
-  id: number;
+  id: string;
   title: string;
   description: string;
-  startTime: string;
-  endTime: string;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
+  startTime: Date;
+  endTime: Date;
+  participantCount: number;
+  chainCount: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface User {
   walletAddress: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Chain {
-  id: number;
+  id: string;
   name: string;
-  challengeId: number;
-  createdAt: string;
-  submissions?: Submission[];
+  challengeId: string;
+  length: number;
+  createdAt: Date;
+  lastActivityAt: Date;
+  updatedAt: Date;
 }
 
 export interface Submission {
@@ -53,14 +57,19 @@ export interface Job {
 }
 
 export interface JobStats {
-  queues: {
-    'proof-generation': {
-      created: number;
-      active: number;
-      completed: number;
-      failed: number;
-    };
+  queue: {
+    created: number;
+    active: number;
+    completed: number;
+    failed: number;
   };
+  database: {
+    pending: number;
+    processing: number;
+    verified: number;
+    failed: number;
+  };
+  timestamp: string;
 }
 
 export interface ApiError {

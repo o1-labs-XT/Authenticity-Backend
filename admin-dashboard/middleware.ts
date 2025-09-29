@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// protects nextjs routes
 export function middleware(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
 
