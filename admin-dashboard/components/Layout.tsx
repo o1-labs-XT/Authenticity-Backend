@@ -11,7 +11,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: '/challenges', label: 'Challenges' },
     { href: '/users', label: 'Users' },
     { href: '/chains', label: 'Chains' },
-    { href: '/authenticity-records', label: 'Authenticity Records' },
     { href: '/jobs', label: 'Jobs Queue' },
   ];
 
