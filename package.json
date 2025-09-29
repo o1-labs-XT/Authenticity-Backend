@@ -84,6 +84,9 @@
       "eslint --fix",
       "prettier --write",
       "bash -c 'npm run build'"
+    ],
+    "admin-dashboard/**/*.{ts,tsx}": [
+      "bash -c 'cd admin-dashboard && npm run lint'"
     ]
   }
 }

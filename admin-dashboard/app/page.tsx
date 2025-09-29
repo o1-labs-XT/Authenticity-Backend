@@ -27,7 +27,7 @@ export default function Dashboard() {
     }
   };
 
-  const stats = jobStats?.queues?.['proof-generation'] || {};
+  const queueStats = jobStats?.queue ?? { created: 0, active: 0, completed: 0, failed: 0 };
 
   return (
     <div>
@@ -36,8 +36,8 @@ export default function Dashboard() {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <StatCard title="Active Challenges" value={activeChallenges.length} />
-        <StatCard title="Jobs in Queue" value={stats.active || 0} color="blue" />
-        <StatCard title="Failed Jobs" value={stats.failed || 0} color="red" />
+        <StatCard title="Jobs in Queue" value={queueStats.active} color="blue" />
+        <StatCard title="Failed Jobs" value={queueStats.failed} color="red" />
       </div>
 
       {/* Active Challenges */}
@@ -100,8 +100,8 @@ function StatCard({
   color?: string;
 }) {
   const textColor = color === 'red' ? 'text-red-600' :
-                    color === 'blue' ? 'text-blue-600' :
-                    'text-gray-900';
+    color === 'blue' ? 'text-blue-600' :
+      'text-gray-900';
 
   return (
     <div className="bg-white rounded-lg shadow p-6">

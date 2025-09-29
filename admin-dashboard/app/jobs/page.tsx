@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api-client';
 import type { Job, JobStats } from '@/lib/types';
 import Card from '@/components/Card';
@@ -11,15 +11,14 @@ export default function JobsPage() {
   const [failedJobs, setFailedJobs] = useState<Job[]>([]);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const limit = 10;
 
-  useEffect(() => {
-    loadJobsData();
-  }, [page]);
-
-  const loadJobsData = async () => {
+  const loadJobsData = useCallback(async () => {
     try {
+      setError(null);
       const [statsData, failedData] = await Promise.all([
         api.jobs.stats(),
         api.jobs.failed(limit, page * limit)
@@ -28,8 +27,15 @@ export default function JobsPage() {
       setFailedJobs(failedData.jobs || []);
     } catch (error) {
       console.error('Failed to load jobs data:', error);
+      setError('Failed to load jobs data. Please try again.');
+    } finally {
+      setInitialLoading(false);
     }
-  };
+  }, [page]);
+
+  useEffect(() => {
+    loadJobsData();
+  }, [loadJobsData]);
 
   const viewJobDetails = async (jobId: string) => {
     setLoading(true);
@@ -38,8 +44,9 @@ export default function JobsPage() {
       setSelectedJob(data);
     } catch (error) {
       alert('Failed to load job details');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const retryJob = async (jobId: string) => {
@@ -52,13 +59,18 @@ export default function JobsPage() {
       setSelectedJob(null);
     } catch (error) {
       alert('Failed to retry job');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const queueStats = stats?.queues?.['proof-generation'] || {};
+  const queueStats = stats?.queue ?? { created: 0, active: 0, completed: 0, failed: 0 };
 
-  const columns = [
+  const columns: Array<{
+    key: keyof Job | 'actions';
+    label: string;
+    render: (job: Job) => React.ReactNode;
+  }> = [
     {
       key: 'id' as keyof Job,
       label: 'Job ID',
@@ -106,17 +118,42 @@ export default function JobsPage() {
     }
   ];
 
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-600">Loading jobs data...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="text-red-600 mb-4">{error}</div>
+        <button
+          onClick={() => {
+            setInitialLoading(true);
+            loadJobsData();
+          }}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Jobs Queue</h1>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <StatCard title="Created" value={queueStats.created || 0} />
-        <StatCard title="Active" value={queueStats.active || 0} color="blue" />
-        <StatCard title="Completed" value={queueStats.completed || 0} color="green" />
-        <StatCard title="Failed" value={queueStats.failed || 0} color="red" />
-      </div>
+        <StatCard title="Created" value={queueStats.created} />
+        <StatCard title="Active" value={queueStats.active} color="blue" />
+        <StatCard title="Completed" value={queueStats.completed} color="green" />
+        <StatCard title="Failed" value={queueStats.failed} color="red" />
+g      </div>
 
       {/* Job Details Modal */}
       {selectedJob && (

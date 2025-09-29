@@ -62,7 +62,7 @@ export default function UsersPage() {
     {
       key: 'createdAt' as keyof User,
       label: 'Created At',
-      render: (user: User) => new Date(user.createdAt).toLocaleString()
+      render: (user: User) => user.createdAt.toLocaleString()
     },
     {
       key: 'actions',
