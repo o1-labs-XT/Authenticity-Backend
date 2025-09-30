@@ -51,8 +51,9 @@ export function createServer(dependencies: ServerDependencies): Express {
   app.use(
     cors({
       origin: config.corsOrigin,
-      methods: ['GET', 'POST'],
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
+      credentials: true,
     })
   );
 

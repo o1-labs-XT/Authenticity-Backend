@@ -4,6 +4,9 @@ set -e
 # Use test database
 export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/authenticity_test"
 
+# Set admin password for tests to call protected routes
+export ADMIN_PASSWORD="testpassword123"
+
 # Cleanup function
 cleanup() {
   echo "Cleaning up..."

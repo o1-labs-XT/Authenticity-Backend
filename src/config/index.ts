@@ -31,6 +31,9 @@ export interface Config {
   minioAccessKey: string;
   minioSecretKey: string;
   minioBucket: string;
+
+  // Admin Authentication
+  ADMIN_PASSWORD: string;
 }
 
 /**
@@ -97,6 +100,7 @@ function parseConfig(): Config {
     minioAccessKey: getRequired('MINIO_ROOT_USER'),
     minioSecretKey: getRequired('MINIO_ROOT_PASSWORD'),
     minioBucket: getRequired('MINIO_BUCKET'),
+    ADMIN_PASSWORD: getRequired('ADMIN_PASSWORD'),
   };
 
   // Throw if any errors
