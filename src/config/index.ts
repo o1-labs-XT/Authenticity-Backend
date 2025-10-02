@@ -107,9 +107,9 @@ function parseConfig(): Config {
     minioBucket: getRequired('MINIO_BUCKET'),
     ADMIN_PASSWORD: getRequired('ADMIN_PASSWORD'),
     archiveNodeEndpoint:
-      process.env.ARCHIVE_NODE_ENDPOINT || 'https://api.minascan.io/node/berkeley/v1/graphql',
+      process.env.ARCHIVE_NODE_ENDPOINT || 'https://api.minascan.io/archive/devnet/v1/graphql',
     minaNodeEndpoint:
-      process.env.MINA_NODE_ENDPOINT || 'https://api.minascan.io/node/berkeley/v1/graphql',
+      process.env.MINA_NODE_ENDPOINT || 'https://api.minascan.io/node/devnet/v1/graphql',
     monitoringEnabled: process.env.MONITORING_ENABLED !== 'false', // Default to true
   };
 
