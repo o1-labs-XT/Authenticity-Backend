@@ -62,7 +62,7 @@ describe('ImageAuthenticityService', () => {
       const result = service.verifyAndPrepareImage(imagePath, invalidSignature, validPublicKey);
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toBe('Signature does not match image hash');
+      expect(result.error).toBe('Invalid signature for public key and image hash');
     });
 
     it('should handle invalid base58 formats', () => {

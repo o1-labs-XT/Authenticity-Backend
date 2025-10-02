@@ -174,6 +174,7 @@ export class SubmissionsHandler {
       }
 
       // Generate random token owner address
+      // todo: use public key, remove token owner key and tokenOwnerPrivate fields in db
       const tokenOwnerKey = PrivateKey.random();
       const tokenOwnerAddress = tokenOwnerKey.toPublicKey().toBase58();
       const tokenOwnerPrivate = tokenOwnerKey.toBase58();

@@ -2,6 +2,7 @@ import request from 'supertest';
 
 export const API_URL = 'http://localhost:3000';
 // credentials for calling protected api routes
+// todo: set this up so that tests can be run against local api easily
 export const ADMIN_USERNAME = 'admin';
 export const ADMIN_PASSWORD = 'testpassword123';
 
