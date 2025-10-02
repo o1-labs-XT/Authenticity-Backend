@@ -14,6 +14,7 @@
     "db:reset": "docker-compose down -v && docker-compose up -d && sleep 3 && npm run db:migrate",
     "test:unit": "vitest run --exclude='**/*.integration.test.ts'",
     "test:integration": "./scripts/test-integration.sh",
+    "test:integration:local": "vitest run test/integration",
     "lint": "eslint '**/*.ts'",
     "format": "prettier --write '**/*.ts'",
     "prepare": "husky"

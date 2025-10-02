@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
 import request from 'supertest';
-import { PrivateKey, Signature, Field } from 'o1js';
-import * as crypto from 'crypto';
+import { PrivateKey, Signature } from 'o1js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { prepareImageVerification } from 'authenticity-zkapp';
 import {
   API_URL,
   createTestChallenge,
@@ -12,6 +12,38 @@ import {
   getChainLength,
 } from './utils/test-helpers.js';
 
+// 1. should create a submission with valid data
+// 2. should reject submission without image
+// 3. should reject submission without chainId
+// 4. should reject submission without publicKey
+// 5. should reject submission without signature
+// 6. should reject submission with invalid publicKey
+// format
+// 7. should reject submission with invalid signature
+// format
+// 8. should reject submission with non-existent chainId
+// 9. should reject submission to inactive challenge (not
+//  started)
+// 10. should reject submission to inactive challenge
+// (ended)
+// 11. should reject duplicate image submission with 409
+// 12. should reject different image submission for same
+// user and challenge
+// 13. should increment chain position for sequential
+// submissions
+// 14. should retrieve a submission by ID
+// 15. should retrieve submissions for a wallet address
+// 16. should retrieve submissions for a chain
+// 17. should retrieve submissions for a challenge
+// 18. should retrieve submissions filtered by status
+// 19. should return properly formatted response with
+// camelCase fields
+// 20. todo: should enqueue proof generation job after
+// submission
+// 21. should update chain length when submission is
+// created
+// 22. should increment challenge participant count on
+// first submission
 // ===== Submission-specific test helpers =====
 
 interface SubmissionTestData {
@@ -25,20 +57,28 @@ interface SubmissionTestData {
 }
 
 function createSubmissionTestData(): SubmissionTestData {
-  const imageData = crypto.randomBytes(32);
-  const imageBuffer = Buffer.from(imageData);
-  const sha256Hash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
-  const imageHashField = Field.fromJSON(BigInt('0x' + sha256Hash).toString());
-
   const privateKey = PrivateKey.random();
   const publicKey = privateKey.toPublicKey().toBase58();
-  const signature = Signature.create(privateKey, [imageHashField]).toBase58();
 
+  // Create a temporary test image file
   const imagePath = path.join(
     '/tmp',
     `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.png`
   );
+
+  // Write some test image data
+  const imageBuffer = Buffer.from(imagePath);
   fs.writeFileSync(imagePath, imageBuffer);
+
+  // Use prepareImageVerification to get the correct hash format
+  const verificationInputs = prepareImageVerification(imagePath);
+  const sha256Hash = verificationInputs.imageHash;
+
+  // Sign using the expectedHash.toFields() - this is the correct way
+  const signature = Signature.create(
+    privateKey,
+    verificationInputs.expectedHash.toFields()
+  ).toBase58();
 
   return {
     imageBuffer,
@@ -128,7 +168,7 @@ describe('Submissions API Integration', () => {
       challengeId: challengeId,
       chainId: chainId,
       tagline: 'My first submission!',
-      status: 'uploaded',
+      status: 'uploading',
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     });
@@ -244,8 +284,62 @@ describe('Submissions API Integration', () => {
     cleanupSubmissionTestData(testData);
   });
 
-  // Test 5: Duplicate submission constraint (same user, same challenge)
-  it('should reject duplicate submission for same user and challenge', async () => {
+  it('should reject submission to inactive challenge (not started)', async () => {
+    const testData = createSubmissionTestData();
+
+    // Create a challenge that hasn't started yet
+    const futureChallenge = await createTestChallenge({
+      title: 'Future Challenge',
+      startDaysFromNow: 1, // Starts tomorrow
+      endDaysFromNow: 7,
+    });
+    createdChallengeIds.push(futureChallenge);
+
+    // Get its chain
+    const chainsRes = await request(API_URL).get(`/api/chains?challengeId=${futureChallenge}`);
+    const futureChainId = chainsRes.body[0].id;
+
+    const res = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', futureChainId)
+      .field('publicKey', testData.publicKey)
+      .field('signature', testData.signature)
+      .attach('image', testData.imagePath);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('not currently active');
+    cleanupSubmissionTestData(testData);
+  });
+
+  it('should reject submission to inactive challenge (ended)', async () => {
+    const testData = createSubmissionTestData();
+
+    // Create a challenge that has already ended
+    const pastChallenge = await createTestChallenge({
+      title: 'Past Challenge',
+      startDaysFromNow: -7, // Started 7 days ago
+      endDaysFromNow: -1, // Ended yesterday
+    });
+    createdChallengeIds.push(pastChallenge);
+
+    // Get its chain
+    const chainsRes = await request(API_URL).get(`/api/chains?challengeId=${pastChallenge}`);
+    const pastChainId = chainsRes.body[0].id;
+
+    const res = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', pastChainId)
+      .field('publicKey', testData.publicKey)
+      .field('signature', testData.signature)
+      .attach('image', testData.imagePath);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('not currently active');
+    cleanupSubmissionTestData(testData);
+  });
+
+  // Test 5a: Duplicate submission with same image (should return 409 conflict)
+  it('should reject duplicate image submission with 409', async () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
 
@@ -261,10 +355,9 @@ describe('Submissions API Integration', () => {
       .attach('image', testData.imagePath);
 
     expect(res1.status).toBe(201);
-    const originalHash = res1.body.sha256Hash;
     createdSubmissionIds.push(res1.body.id);
 
-    // Second submission with same image (should fail due to duplicate constraint)
+    // Second submission with same image (should return 409 conflict)
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
@@ -272,16 +365,45 @@ describe('Submissions API Integration', () => {
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
-    // Either returns 409 (already submitted) or 200 (duplicate detected)
-    expect([200, 409]).toContain(res2.status);
-    if (res2.status === 200) {
-      expect(res2.body.sha256Hash).toBe(originalHash);
-      expect(res2.body.status).toBe('duplicate');
-    } else {
-      expect(res2.body.error.message).toContain('already submitted');
-    }
+    expect(res2.status).toBe(409);
+    expect(res2.body.error.message).toContain('already submitted');
 
     cleanupSubmissionTestData(testData);
+  });
+
+  // Test 5b: Different image for same challenge (should return 409)
+  it('should reject different image submission for same user and challenge', async () => {
+    const testData1 = createSubmissionTestData();
+    const testData2 = createSubmissionTestData();
+    createdUserAddresses.push(testData1.walletAddress);
+
+    // Create user
+    await request(API_URL).post('/api/users').send({ walletAddress: testData1.walletAddress });
+
+    // First submission
+    const res1 = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('publicKey', testData1.publicKey)
+      .field('signature', testData1.signature)
+      .attach('image', testData1.imagePath);
+
+    expect(res1.status).toBe(201);
+    createdSubmissionIds.push(res1.body.id);
+
+    // Second submission with different image (should return 409)
+    const res2 = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('publicKey', testData1.publicKey)
+      .field('signature', testData2.signature)
+      .attach('image', testData2.imagePath);
+
+    expect(res2.status).toBe(409);
+    expect(res2.body.error.message).toContain('already submitted');
+
+    cleanupSubmissionTestData(testData1);
+    cleanupSubmissionTestData(testData2);
   });
 
   // Test 6: Chain position increment
@@ -350,7 +472,7 @@ describe('Submissions API Integration', () => {
     expect(getRes.body).toMatchObject({
       id: submissionId,
       tagline: 'Test GET',
-      status: 'uploaded',
+      status: 'uploading',
     });
 
     cleanupSubmissionTestData(testData);
@@ -495,7 +617,7 @@ describe('Submissions API Integration', () => {
       chainId: expect.any(String),
       tagline: 'Shape test',
       chainPosition: expect.any(Number),
-      status: 'uploaded',
+      status: 'uploading',
       retryCount: 0,
       challengeVerified: false,
       createdAt: expect.any(String),
