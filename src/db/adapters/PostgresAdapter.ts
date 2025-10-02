@@ -111,4 +111,13 @@ export class PostgresAdapter {
       .limit(limit)
       .offset(offset);
   }
+
+  async getRecentTransactionsWithTxId(lookbackBlocks: number): Promise<AuthenticityRecord[]> {
+    // Get records that have transaction_id (i.e., have been submitted to blockchain)
+    // Order by created_at to get most recent first
+    return await this.knex<AuthenticityRecord>('authenticity_records')
+      .whereNotNull('transaction_id')
+      .orderBy('created_at', 'desc')
+      .limit(lookbackBlocks * 2); // Get enough records to cover lookback period
+  }
 }

@@ -125,4 +125,30 @@ export class AuthenticityRepository {
   async getFailedRecords(limit: number, offset: number): Promise<AuthenticityRecord[]> {
     return await this.adapter.getFailedRecords(limit, offset);
   }
+
+  /**
+   * Get recent transactions for blockchain monitoring
+   * Returns transactions with transaction_id from recent blocks
+   */
+  async getRecentTransactionsForMonitoring(lookbackBlocks: number = 100): Promise<
+    Array<{
+      hash: string;
+      submittedHeight: number;
+      sha256Hash: string;
+    }>
+  > {
+    // TODO: Add submitted_block_height column to database schema
+    // For now, using a stub constant for submitted_block_height
+    const STUB_SUBMITTED_HEIGHT = 12000; // TODO: Replace with actual submitted_block_height from database
+
+    const records = await this.adapter.getRecentTransactionsWithTxId(lookbackBlocks);
+
+    return records
+      .filter((record) => record.transaction_id) // Only include records with transaction IDs
+      .map((record) => ({
+        hash: record.transaction_id!,
+        submittedHeight: STUB_SUBMITTED_HEIGHT, // TODO: Use record.submitted_block_height when column is added
+        sha256Hash: record.sha256_hash,
+      }));
+  }
 }

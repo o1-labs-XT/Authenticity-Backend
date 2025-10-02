@@ -21,6 +21,7 @@ export class ProofGenerationWorker {
   ) {}
 
   async start(): Promise<void> {
+    // Handle proof generation jobs
     await this.boss.work<ProofGenerationJobData>('proof-generation', async (jobs) => {
       // Process jobs one at a time (batch size is 1)
       for (const job of jobs) {

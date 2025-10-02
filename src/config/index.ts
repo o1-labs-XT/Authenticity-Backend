@@ -34,6 +34,11 @@ export interface Config {
 
   // Admin Authentication
   ADMIN_PASSWORD: string;
+
+  // Archive Node Configuration
+  archiveNodeEndpoint: string;
+  minaNodeEndpoint: string;
+  monitoringEnabled: boolean;
 }
 
 /**
@@ -101,6 +106,11 @@ function parseConfig(): Config {
     minioSecretKey: getRequired('MINIO_ROOT_PASSWORD'),
     minioBucket: getRequired('MINIO_BUCKET'),
     ADMIN_PASSWORD: getRequired('ADMIN_PASSWORD'),
+    archiveNodeEndpoint:
+      process.env.ARCHIVE_NODE_ENDPOINT || 'https://api.minascan.io/node/berkeley/v1/graphql',
+    minaNodeEndpoint:
+      process.env.MINA_NODE_ENDPOINT || 'https://api.minascan.io/node/berkeley/v1/graphql',
+    monitoringEnabled: process.env.MONITORING_ENABLED !== 'false', // Default to true
   };
 
   // Throw if any errors
