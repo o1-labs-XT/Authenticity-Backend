@@ -1,5 +1,5 @@
 import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authenticity-zkapp';
-import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount } from 'o1js';
+import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8 } from 'o1js';
 import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
 import { logger } from '../../utils/logger.js';
 import { Errors } from '../../utils/errors.js';
@@ -84,7 +84,7 @@ export class ProofPublishingService {
       {
         feePayer: feePayer.toPublicKey().toBase58(),
         tokenOwner: tokenOwner.toBase58(),
-        creator: proof.publicInput.publicKey.toBase58(),
+        creator: `(${proof.publicInput.publicKey.x.toString()}, ${proof.publicInput.publicKey.y.toString()})`,
       },
       'Transaction participants'
     );
@@ -98,8 +98,8 @@ export class ProofPublishingService {
         AccountUpdate.fundNewAccount(feePayer.toPublicKey());
 
         // Call verifyAndStore on the zkApp
-        // Pass the actual token owner address (not fee payer)
-        await this.zkApp.verifyAndStore(tokenOwner, proof, publicInputs);
+        // Pass the actual token owner address and a default chain ID
+        await this.zkApp.verifyAndStore(tokenOwner, UInt8.from(0), proof);
       });
 
       logger.debug('Proving transaction...');

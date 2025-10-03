@@ -1,7 +1,6 @@
 #!/usr/bin/env tsx
 
-import { PrivateKey, Signature } from 'o1js';
-import { prepareImageVerification, hashImageOffCircuit } from 'authenticity-zkapp';
+import { generateECKeyPair, computeOnChainCommitment, Secp256r1, Ecdsa } from 'authenticity-zkapp';
 import FormData from 'form-data';
 import axios from 'axios';
 import { promises as fs } from 'fs';
@@ -30,15 +29,19 @@ async function uploadSignedImage(): Promise<void> {
     console.log('🎲 Generating random image...');
     tempFile = await generateRandomImage();
     
-    console.log('🔑 Creating random keypair...');
-    const privateKey = PrivateKey.random();
-    const publicKey = privateKey.toPublicKey();
+    console.log('🔑 Creating random ECDSA keypair...');
+    const keyPair = generateECKeyPair();
     
-    console.log('📝 Signing image...');
+    console.log('📝 Signing image with ECDSA...');
     const imageData = await fs.readFile(tempFile);
-    const imageHash = hashImageOffCircuit(imageData);
-    const verificationInputs = prepareImageVerification(tempFile);
-    const signature = Signature.create(privateKey, verificationInputs.expectedHash.toFields());
+    const commitment = await computeOnChainCommitment(imageData);
+    
+    // Import Bytes32 for proper signature creation
+    const { Bytes32 } = await import('authenticity-zkapp');
+    const commitmentBytes = Bytes32.fromHex(commitment.sha256);
+    
+    // Create ECDSA signature using signHash (matches server's verifySignedHash)
+    const signature = Ecdsa.signHash(commitmentBytes, keyPair.privateKeyBigInt);
     
     console.log('📤 Uploading to API...');
     const form = new FormData();
@@ -46,8 +49,12 @@ async function uploadSignedImage(): Promise<void> {
       filename: 'test-image.bin',
       contentType: 'application/octet-stream'
     });
-    form.append('publicKey', publicKey.toBase58());
-    form.append('signature', signature.toBase58());
+    // Extract bigint values from the signature components  
+    const signatureData = signature.toBigInt();
+    form.append('signatureR', signatureData.r.toString(16).padStart(64, '0'));
+    form.append('signatureS', signatureData.s.toString(16).padStart(64, '0'));
+    form.append('publicKeyX', keyPair.publicKeyXHex);
+    form.append('publicKeyY', keyPair.publicKeyYHex);
     
     const response = await axios.post(`${API_URL}/api/upload`, form, {
       headers: {

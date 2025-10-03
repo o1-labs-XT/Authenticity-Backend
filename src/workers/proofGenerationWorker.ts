@@ -1,6 +1,9 @@
 import PgBoss from 'pg-boss';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
-import { ImageAuthenticityService } from '../services/image/verification.service.js';
+import {
+  ImageAuthenticityService,
+  ECDSASignatureData,
+} from '../services/image/verification.service.js';
 import { MinioStorageService } from '../services/storage/minio.service.js';
 import { ProofGenerationService } from '../services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
@@ -48,6 +51,21 @@ export class ProofGenerationWorker {
               tokenOwnerPrivateKey,
             } = job.data;
 
+            // Parse ECDSA signature and public key data from JSON
+            let signatureData: ECDSASignatureData;
+            try {
+              const sigData = JSON.parse(signature);
+              const pubKeyData = JSON.parse(publicKey);
+              signatureData = {
+                signatureR: sigData.r,
+                signatureS: sigData.s,
+                publicKeyX: pubKeyData.x,
+                publicKeyY: pubKeyData.y,
+              };
+            } catch {
+              throw Errors.internal('Failed to parse ECDSA signature data');
+            }
+
             logger.info('Starting proof generation job');
 
             // temporary location for image downloaded from minio
@@ -68,14 +86,16 @@ export class ProofGenerationWorker {
 
               // Step 2: Verify and prepare image
               // todo: upload handler is already doing this
-              logger.info('Verifying and preparing image');
+              logger.info('Verifying and preparing ECDSA signature');
               const verifyTracker = new PerformanceTracker('job.verifyImage');
-              const { isValid, verificationInputs, error } =
-                this.imageAuthenticityService.verifyAndPrepareImage(tempPath, signature, publicKey);
+              const { isValid, verificationInputs, commitment, error } =
+                this.imageAuthenticityService.verifyAndPrepareImage(tempPath, signatureData);
               verifyTracker.end(isValid ? 'success' : 'error');
 
-              if (!isValid || !verificationInputs) {
-                throw Errors.internal(`Image verification failed: ${error || 'Unknown error'}`);
+              if (!isValid || !verificationInputs || !commitment) {
+                throw Errors.internal(
+                  `ECDSA signature verification failed: ${error || 'Unknown error'}`
+                );
               }
 
               // Step 2: Generate proof
@@ -83,8 +103,8 @@ export class ProofGenerationWorker {
               const proofTracker = new PerformanceTracker('job.generateProof');
               const { proof, publicInputs } = await this.proofGenerationService.generateProof(
                 sha256Hash,
-                publicKey,
-                signature,
+                signatureData,
+                commitment,
                 verificationInputs,
                 tempPath
               );
