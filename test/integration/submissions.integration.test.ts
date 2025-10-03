@@ -26,48 +26,41 @@ interface SubmissionTestData {
 
 function createSubmissionTestData(): SubmissionTestData {
   const privateKey = PrivateKey.random();
-  const publicKey = privateKey.toPublicKey().toBase58();
+  const walletAddress = privateKey.toPublicKey().toBase58();
 
-  // Create a temporary test image file
+  // Create a temporary test image file in project tmp directory
+  const tmpDir = path.join(process.cwd(), 'tmp', 'test-uploads');
+  if (!fs.existsSync(tmpDir)) {
+    fs.mkdirSync(tmpDir, { recursive: true });
+  }
+
   const imagePath = path.join(
-    '/tmp',
+    tmpDir,
     `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.png`
   );
-
-  // Write some test image data
   const imageBuffer = Buffer.from(imagePath);
   fs.writeFileSync(imagePath, imageBuffer);
 
   // Use prepareImageVerification to get the correct hash format
   const verificationInputs = prepareImageVerification(imagePath);
-  const sha256Hash = verificationInputs.imageHash;
+  const sha256Hash = verificationInputs.expectedHash;
 
   // Sign using the expectedHash.toFields() - this is the correct way
-  const signature = Signature.create(
-    privateKey,
-    verificationInputs.expectedHash.toFields()
-  ).toBase58();
+  const signature = Signature.create(privateKey, sha256Hash.toFields()).toBase58();
 
   return {
     imageBuffer,
     imagePath,
     signature,
-    publicKey,
+    publicKey: walletAddress,
     privateKey,
     sha256Hash,
-    walletAddress: publicKey,
+    walletAddress,
   };
 }
 
-function cleanupSubmissionTestData(testData: SubmissionTestData): void {
-  if (fs.existsSync(testData.imagePath)) {
-    fs.unlinkSync(testData.imagePath);
-  }
-}
-
-// ===== Tests start here =====
-
 describe('Submissions API Integration', () => {
+  // tests will share a challenge and chain
   let challengeId: string;
   let chainId: string;
   const createdSubmissionIds: string[] = [];
@@ -86,7 +79,7 @@ describe('Submissions API Integration', () => {
     // Get the default chain for this challenge
     const chainsRes = await request(API_URL).get(`/api/chains?challengeId=${challengeId}`);
     expect(chainsRes.status).toBe(200);
-    expect(chainsRes.body.length).toBeGreaterThan(0);
+    expect(chainsRes.body.length).toBe(1);
     chainId = chainsRes.body[0].id;
   });
 
@@ -109,10 +102,15 @@ describe('Submissions API Integration', () => {
   afterAll(async () => {
     // Cleanup challenges (cascades to chains)
     await cleanupChallenges(createdChallengeIds);
+
+    // Cleanup temp test files
+    const tmpDir = path.join(process.cwd(), 'tmp', 'test-uploads');
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
-  // Test 1: Successful submission creation (auto-creates user)
-  it('should create a submission with valid data', async () => {
+  it('should create a submission with valid data and auto-create user', async () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
 
@@ -130,40 +128,28 @@ describe('Submissions API Integration', () => {
       sha256Hash: expect.any(String),
       walletAddress: testData.walletAddress,
       tokenOwnerAddress: expect.any(String),
+      publicKey: testData.publicKey,
+      signature: testData.signature,
       challengeId: challengeId,
       chainId: chainId,
       tagline: 'My first submission!',
+      chainPosition: expect.any(Number),
       status: 'uploading',
+      retryCount: 0,
+      challengeVerified: false,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     });
 
-    createdSubmissionIds.push(res.body.id);
-    cleanupSubmissionTestData(testData);
-  });
+    // Should NOT include private key in response
+    expect(res.body.tokenOwnerPrivateKey).toBeUndefined();
 
-  it('should create user for submission public key if user does not exist', async () => {
-    const testData = createSubmissionTestData();
-    createdUserAddresses.push(testData.walletAddress);
-
-    const res = await request(API_URL)
-      .post('/api/submissions')
-      .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
-      .field('signature', testData.signature)
-      .field('tagline', 'Auto-create user test')
-      .attach('image', testData.imagePath);
-
-    expect(res.status).toBe(201);
-    expect(res.body.walletAddress).toBe(testData.walletAddress);
-
-    // Verify user was created
+    // Verify user was auto-created
     const userRes = await request(API_URL).get(`/api/users/${testData.walletAddress}`);
     expect(userRes.status).toBe(200);
     expect(userRes.body.walletAddress).toBe(testData.walletAddress);
 
     createdSubmissionIds.push(res.body.id);
-    cleanupSubmissionTestData(testData);
   });
 
   it('should allow existing user to create submission', async () => {
@@ -185,43 +171,34 @@ describe('Submissions API Integration', () => {
     expect(res.body.walletAddress).toBe(testData.walletAddress);
 
     createdSubmissionIds.push(res.body.id);
-    cleanupSubmissionTestData(testData);
   });
 
-  // Test 2: Missing required fields
-  it('should reject submission without image', async () => {
+  it('should reject submission without image or with empty image', async () => {
     const testData = createSubmissionTestData();
 
-    const res = await request(API_URL)
+    // Test missing image
+    const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
       .field('publicKey', testData.publicKey)
       .field('signature', testData.signature);
 
-    expect(res.status).toBe(400);
-    expect(res.body.error.field).toBe('image');
-    cleanupSubmissionTestData(testData);
-  });
+    expect(res1.status).toBe(400);
+    expect(res1.body.error.field).toBe('image');
 
-  it('should reject submission with empty image file', async () => {
-    const testData = createSubmissionTestData();
-
-    // Create empty file
-    const emptyImagePath = path.join('/tmp', `empty-test-${Date.now()}.png`);
+    // Test empty image file
+    const tmpDir = path.join(process.cwd(), 'tmp', 'test-uploads');
+    const emptyImagePath = path.join(tmpDir, `empty-test-${Date.now()}.png`);
     fs.writeFileSync(emptyImagePath, Buffer.alloc(0));
 
-    const res = await request(API_URL)
+    const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
       .field('publicKey', testData.publicKey)
       .field('signature', testData.signature)
       .attach('image', emptyImagePath);
 
-    expect(res.status).toBe(400);
-
-    // Cleanup
-    fs.unlinkSync(emptyImagePath);
-    cleanupSubmissionTestData(testData);
+    expect(res2.status).toBe(400);
   });
 
   it('should reject submission without chainId', async () => {
@@ -235,7 +212,6 @@ describe('Submissions API Integration', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.field).toBe('chainId');
-    cleanupSubmissionTestData(testData);
   });
 
   it('should reject submission without publicKey', async () => {
@@ -249,7 +225,6 @@ describe('Submissions API Integration', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.field).toBe('publicKey');
-    cleanupSubmissionTestData(testData);
   });
 
   it('should reject submission without signature', async () => {
@@ -263,7 +238,6 @@ describe('Submissions API Integration', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.field).toBe('signature');
-    cleanupSubmissionTestData(testData);
   });
 
   // Test 3: Input validation
@@ -280,7 +254,6 @@ describe('Submissions API Integration', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBeDefined();
     expect(res.body.error.field).toBe('publicKey');
-    cleanupSubmissionTestData(testData);
   });
 
   it('should reject submission with invalid signature format', async () => {
@@ -296,30 +269,35 @@ describe('Submissions API Integration', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBeDefined();
     expect(res.body.error.field).toBe('signature');
-    cleanupSubmissionTestData(testData);
   });
 
-  it('should reject submission with signature for wrong image', async () => {
+  it('should reject submission with mismatched signature, image, or publicKey', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
 
-    // Submit image2 with signature for image1 (wrong signature)
-    const res = await request(API_URL)
+    // Test 1: Wrong image (signature for image1, but submitting image2)
+    const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
       .field('publicKey', testData1.publicKey)
       .field('signature', testData1.signature) // Signature for image1
       .attach('image', testData2.imagePath); // But submitting image2
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBeDefined();
-    expect(res.body.error.message).toContain('Invalid signature for public key and image hash');
+    expect(res1.status).toBe(400);
+    expect(res1.body.error.message).toContain('Invalid signature for public key and image hash');
 
-    cleanupSubmissionTestData(testData1);
-    cleanupSubmissionTestData(testData2);
+    // Test 2: Wrong publicKey (signature created with key1, but claiming key2)
+    const res2 = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('publicKey', testData2.publicKey) // Different public key
+      .field('signature', testData1.signature) // Signature from testData1
+      .attach('image', testData1.imagePath);
+
+    expect(res2.status).toBe(400);
+    expect(res2.body.error.message).toContain('Invalid signature for public key and image hash');
   });
 
-  // Test 4: Non-existent references
   it('should reject submission with non-existent chainId', async () => {
     const testData = createSubmissionTestData();
     const fakeChainId = '00000000-0000-0000-0000-000000000000';
@@ -333,7 +311,6 @@ describe('Submissions API Integration', () => {
 
     expect(res.status).toBe(404);
     expect(res.body.error.message).toContain('Chain');
-    cleanupSubmissionTestData(testData);
   });
 
   it('should reject submission to inactive challenge (not started)', async () => {
@@ -360,7 +337,6 @@ describe('Submissions API Integration', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain('not currently active');
-    cleanupSubmissionTestData(testData);
   });
 
   it('should reject submission to inactive challenge (ended)', async () => {
@@ -387,10 +363,8 @@ describe('Submissions API Integration', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain('not currently active');
-    cleanupSubmissionTestData(testData);
   });
 
-  // Test 5a: Duplicate submission with same image (should return 409 conflict)
   it('should reject duplicate image submission with 409', async () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
@@ -416,11 +390,8 @@ describe('Submissions API Integration', () => {
 
     expect(res2.status).toBe(409);
     expect(res2.body.error.message).toContain('already submitted');
-
-    cleanupSubmissionTestData(testData);
   });
 
-  // Test 5b: Different image for same challenge (should return 409)
   it('should reject different image submission for same user and challenge', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
@@ -454,13 +425,9 @@ describe('Submissions API Integration', () => {
 
     expect(res2.status).toBe(409);
     expect(res2.body.error.message).toContain('already submitted');
-
-    cleanupSubmissionTestData(testData1);
-    cleanupSubmissionTestData(testData2);
   });
 
-  // Test 6: Chain position increment
-  it('should increment chain position for sequential submissions', async () => {
+  it('should increment chain position and update chain length for sequential submissions', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
     createdUserAddresses.push(testData1.walletAddress, testData2.walletAddress);
@@ -492,6 +459,10 @@ describe('Submissions API Integration', () => {
     expect(res1.body.chainPosition).toBe(initialLength + 1);
     createdSubmissionIds.push(res1.body.id);
 
+    // Verify chain length updated
+    const lengthAfterFirst = await getChainLength(newChainId);
+    expect(lengthAfterFirst).toBe(initialLength + 1);
+
     // Second submission from different user with different image
     const res2 = await request(API_URL)
       .post('/api/submissions')
@@ -504,8 +475,9 @@ describe('Submissions API Integration', () => {
     expect(res2.body.chainPosition).toBe(initialLength + 2);
     createdSubmissionIds.push(res2.body.id);
 
-    cleanupSubmissionTestData(testData1);
-    cleanupSubmissionTestData(testData2);
+    // Verify chain length updated again
+    const lengthAfterSecond = await getChainLength(newChainId);
+    expect(lengthAfterSecond).toBe(initialLength + 2);
   });
 
   // Test 7: GET submission by ID
@@ -536,8 +508,6 @@ describe('Submissions API Integration', () => {
       storageKey: createRes.body.storageKey,
       walletAddress: testData.walletAddress,
     });
-
-    cleanupSubmissionTestData(testData);
   });
 
   // Test 8: GET submissions by wallet address
@@ -561,64 +531,108 @@ describe('Submissions API Integration', () => {
 
     expect(getRes.status).toBe(200);
     expect(Array.isArray(getRes.body)).toBe(true);
-    expect(getRes.body.length).toBeGreaterThan(0);
+    expect(getRes.body.length).toBe(1);
     expect(getRes.body[0].walletAddress).toBe(testData.walletAddress);
-
-    cleanupSubmissionTestData(testData);
   });
 
   // Test 9: GET submissions by chain
   it('should retrieve submissions for a chain', async () => {
-    const testData = createSubmissionTestData();
-    createdUserAddresses.push(testData.walletAddress);
+    const testData1 = createSubmissionTestData();
+    const testData2 = createSubmissionTestData();
+    createdUserAddresses.push(testData1.walletAddress, testData2.walletAddress);
 
-    const createRes = await request(API_URL)
+    // Create a fresh challenge for this test
+    const newChallengeId = await createTestChallenge({
+      title: 'Chain Query Test',
+      startDaysFromNow: -1,
+      endDaysFromNow: 7,
+    });
+    createdChallengeIds.push(newChallengeId);
+
+    // Get its chain
+    const chainsRes = await request(API_URL).get(`/api/chains?challengeId=${newChallengeId}`);
+    const newChainId = chainsRes.body[0].id;
+
+    // Create 2 submissions
+    const res1 = await request(API_URL)
       .post('/api/submissions')
-      .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
-      .field('signature', testData.signature)
-      .attach('image', testData.imagePath);
+      .field('chainId', newChainId)
+      .field('publicKey', testData1.publicKey)
+      .field('signature', testData1.signature)
+      .attach('image', testData1.imagePath);
 
-    expect(createRes.status).toBe(201);
-    createdSubmissionIds.push(createRes.body.id);
+    expect(res1.status).toBe(201);
+    createdSubmissionIds.push(res1.body.id);
 
-    const getRes = await request(API_URL).get(`/api/submissions?chainId=${chainId}`);
+    const res2 = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', newChainId)
+      .field('publicKey', testData2.publicKey)
+      .field('signature', testData2.signature)
+      .attach('image', testData2.imagePath);
+
+    expect(res2.status).toBe(201);
+    createdSubmissionIds.push(res2.body.id);
+
+    // Query by chain
+    const getRes = await request(API_URL).get(`/api/submissions?chainId=${newChainId}`);
 
     expect(getRes.status).toBe(200);
     expect(Array.isArray(getRes.body)).toBe(true);
-    expect(getRes.body.length).toBeGreaterThan(0);
-    expect(getRes.body[0].chainId).toBe(chainId);
-
-    cleanupSubmissionTestData(testData);
+    expect(getRes.body.length).toBe(2);
+    expect(getRes.body.every((s: any) => s.chainId === newChainId)).toBe(true);
   });
 
   // Test 10: GET submissions by challenge
   it('should retrieve submissions for a challenge', async () => {
-    const testData = createSubmissionTestData();
-    createdUserAddresses.push(testData.walletAddress);
+    const testData1 = createSubmissionTestData();
+    const testData2 = createSubmissionTestData();
+    createdUserAddresses.push(testData1.walletAddress, testData2.walletAddress);
 
-    const createRes = await request(API_URL)
+    // Create a fresh challenge for this test
+    const newChallengeId = await createTestChallenge({
+      title: 'Challenge Query Test',
+      startDaysFromNow: -1,
+      endDaysFromNow: 7,
+    });
+    createdChallengeIds.push(newChallengeId);
+
+    // Get its chain
+    const chainsRes = await request(API_URL).get(`/api/chains?challengeId=${newChallengeId}`);
+    const newChainId = chainsRes.body[0].id;
+
+    // Create 2 submissions
+    const res1 = await request(API_URL)
       .post('/api/submissions')
-      .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
-      .field('signature', testData.signature)
-      .attach('image', testData.imagePath);
+      .field('chainId', newChainId)
+      .field('publicKey', testData1.publicKey)
+      .field('signature', testData1.signature)
+      .attach('image', testData1.imagePath);
 
-    expect(createRes.status).toBe(201);
-    createdSubmissionIds.push(createRes.body.id);
+    expect(res1.status).toBe(201);
+    createdSubmissionIds.push(res1.body.id);
 
-    const getRes = await request(API_URL).get(`/api/submissions?challengeId=${challengeId}`);
+    const res2 = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', newChainId)
+      .field('publicKey', testData2.publicKey)
+      .field('signature', testData2.signature)
+      .attach('image', testData2.imagePath);
+
+    expect(res2.status).toBe(201);
+    createdSubmissionIds.push(res2.body.id);
+
+    // Query by challenge
+    const getRes = await request(API_URL).get(`/api/submissions?challengeId=${newChallengeId}`);
 
     expect(getRes.status).toBe(200);
     expect(Array.isArray(getRes.body)).toBe(true);
-    expect(getRes.body.length).toBeGreaterThan(0);
-    expect(getRes.body[0].challengeId).toBe(challengeId);
-
-    cleanupSubmissionTestData(testData);
+    expect(getRes.body.length).toBe(2);
+    expect(getRes.body.every((s: any) => s.challengeId === newChallengeId)).toBe(true);
   });
 
-  // Test 11: GET submissions by status
   it('should retrieve submissions filtered by status', async () => {
+    // todo: need to test status changes
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
 
@@ -640,57 +654,12 @@ describe('Submissions API Integration', () => {
     expect(getRes.body.length).toBeGreaterThan(0);
     // All returned submissions should have 'uploaded' status
     expect(getRes.body.every((sub: any) => sub.status === 'uploading')).toBe(true);
-
-    cleanupSubmissionTestData(testData);
   });
 
-  // Test 13: Response shape validation
-  it('should return properly formatted response with camelCase fields', async () => {
-    const testData = createSubmissionTestData();
-    createdUserAddresses.push(testData.walletAddress);
-
-    await request(API_URL).post('/api/users').send({ walletAddress: testData.walletAddress });
-
-    const res = await request(API_URL)
-      .post('/api/submissions')
-      .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
-      .field('signature', testData.signature)
-      .field('tagline', 'Shape test')
-      .attach('image', testData.imagePath);
-
-    expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({
-      id: expect.any(String),
-      sha256Hash: expect.any(String),
-      walletAddress: expect.any(String),
-      tokenOwnerAddress: expect.any(String),
-      publicKey: expect.any(String),
-      signature: expect.any(String),
-      challengeId: expect.any(String),
-      chainId: expect.any(String),
-      tagline: 'Shape test',
-      chainPosition: expect.any(Number),
-      status: 'uploading',
-      retryCount: 0,
-      challengeVerified: false,
-      createdAt: expect.any(String),
-      updatedAt: expect.any(String),
-    });
-
-    // Should NOT include private key in response
-    expect(res.body.tokenOwnerPrivateKey).toBeUndefined();
-
-    createdSubmissionIds.push(res.body.id);
-    cleanupSubmissionTestData(testData);
-  });
-
-  // Test 14: Job queue integration
   it('todo: should enqueue proof generation job after submission', async () => {
     // todo - should we enqueue proof generation now or after the admin approves the submission
   });
 
-  // Test 15: Chain length update
   it('should update chain length when submission is created', async () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
@@ -714,11 +683,8 @@ describe('Submissions API Integration', () => {
     // Check chain length increased
     const updatedLength = await getChainLength(chainId);
     expect(updatedLength).toBe(initialLength + 1);
-
-    cleanupSubmissionTestData(testData);
   });
 
-  // Test 16: Challenge participant count update
   it('should increment challenge participant count on first submission', async () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
@@ -753,7 +719,5 @@ describe('Submissions API Integration', () => {
     // Check participant count increased
     const updatedRes = await request(API_URL).get(`/api/challenges/${newChallengeId}`);
     expect(updatedRes.body.participantCount).toBe(initialCount + 1);
-
-    cleanupSubmissionTestData(testData);
   });
 });
