@@ -1,11 +1,21 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { UploadHandler } from '../../src/handlers/upload.handler.js';
+import { ImageAuthenticityService } from '../../src/services/image/verification.service.js';
 import fs from 'fs';
 
 vi.mock('fs', () => ({
   default: {
     readFileSync: vi.fn(),
   },
+}));
+
+// Mock the authenticity-zkapp to avoid ZK circuit loading
+vi.mock('authenticity-zkapp', () => ({
+  hashImageOffCircuit: vi.fn(),
+  prepareImageVerification: vi.fn(),
+  Secp256r1: vi.fn(),
+  Ecdsa: vi.fn(),
+  Bytes32: { fromHex: vi.fn() },
 }));
 
 describe('UploadHandler', () => {
@@ -23,18 +33,10 @@ describe('UploadHandler', () => {
   });
 
   describe('validateUploadRequest', () => {
-    // Mock the verification service for testing
-    const mockVerificationService = {
-      parseSignatureData: vi.fn().mockReturnValue({
-        signatureR: validSignatureR,
-        signatureS: validSignatureS,
-        publicKeyX: validPublicKeyX,
-        publicKeyY: validPublicKeyY,
-      }),
-    };
+    const verificationService = new ImageAuthenticityService();
 
     const handler: any = new UploadHandler(
-      mockVerificationService as any,
+      verificationService,
       null as any,
       null as any,
       null as any
@@ -82,6 +84,7 @@ describe('UploadHandler', () => {
 
     it('should reject invalid signature format', () => {
       fs.readFileSync = vi.fn().mockReturnValue(Buffer.from('test data'));
+
       expect(() => {
         handler.validateUploadRequest(
           mockFile,
@@ -96,14 +99,6 @@ describe('UploadHandler', () => {
     it('should accept valid ECDSA submission data', () => {
       const testBuffer = Buffer.from('test image data');
       fs.readFileSync = vi.fn().mockReturnValue(testBuffer);
-
-      // Reset the mock to return valid data for this test
-      mockVerificationService.parseSignatureData.mockReturnValue({
-        signatureR: validSignatureR,
-        signatureS: validSignatureS,
-        publicKeyX: validPublicKeyX,
-        publicKeyY: validPublicKeyY,
-      });
 
       const result = handler.validateUploadRequest(
         mockFile,
