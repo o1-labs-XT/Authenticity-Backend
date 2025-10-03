@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { UploadHandler } from '../../src/handlers/upload.handler.js';
-import { PrivateKey, Signature, Field } from 'o1js';
 import fs from 'fs';
 
 vi.mock('fs', () => ({
@@ -10,65 +9,117 @@ vi.mock('fs', () => ({
 }));
 
 describe('UploadHandler', () => {
-  let validPublicKey: string;
-  let validSignature: string;
+  let validSignatureR: string;
+  let validSignatureS: string;
+  let validPublicKeyX: string;
+  let validPublicKeyY: string;
 
   beforeAll(() => {
-    const privateKey = PrivateKey.random();
-    validPublicKey = privateKey.toPublicKey().toBase58();
-    validSignature = Signature.create(privateKey, [Field(123456)]).toBase58();
+    // Valid 64-character hex strings
+    validSignatureR = '1234567890abcdef'.repeat(4);
+    validSignatureS = 'fedcba0987654321'.repeat(4);
+    validPublicKeyX = 'abcdef1234567890'.repeat(4);
+    validPublicKeyY = '0987654321fedcba'.repeat(4);
   });
 
   describe('validateUploadRequest', () => {
-    const handler: any = new UploadHandler(null as any, null as any, null as any, null as any);
+    // Mock the verification service for testing
+    const mockVerificationService = {
+      parseSignatureData: vi.fn().mockReturnValue({
+        signatureR: validSignatureR,
+        signatureS: validSignatureS,
+        publicKeyX: validPublicKeyX,
+        publicKeyY: validPublicKeyY,
+      }),
+    };
+
+    const handler: any = new UploadHandler(
+      mockVerificationService as any,
+      null as any,
+      null as any,
+      null as any
+    );
     const mockFile: any = { path: '/tmp/test.jpg' };
 
     it('should reject when image is missing', () => {
       expect(() => {
-        handler.validateUploadRequest(undefined, validPublicKey, validSignature);
+        handler.validateUploadRequest(
+          undefined,
+          validSignatureR,
+          validSignatureS,
+          validPublicKeyX,
+          validPublicKeyY
+        );
       }).toThrow('No image file provided');
     });
 
-    it('should reject when signature is missing', () => {
-      expect(() => {
-        handler.validateUploadRequest(mockFile, validPublicKey, undefined);
-      }).toThrow('Signature is required');
-    });
+    it('should reject when signature components are missing', () => {
+      fs.readFileSync = vi.fn().mockReturnValue(Buffer.from('test data'));
 
-    it('should reject when publicKey is missing', () => {
       expect(() => {
-        handler.validateUploadRequest(mockFile, undefined, validSignature);
-      }).toThrow('Public key is required');
+        handler.validateUploadRequest(
+          mockFile,
+          validSignatureR,
+          undefined,
+          validPublicKeyX,
+          validPublicKeyY
+        );
+      }).toThrow('Missing required signature components');
     });
 
     it('should reject empty image data', () => {
       fs.readFileSync = vi.fn().mockReturnValue(Buffer.from(''));
       expect(() => {
-        handler.validateUploadRequest(mockFile, validPublicKey, validSignature);
+        handler.validateUploadRequest(
+          mockFile,
+          validSignatureR,
+          validSignatureS,
+          validPublicKeyX,
+          validPublicKeyY
+        );
       }).toThrow('Image buffer is empty');
     });
 
     it('should reject invalid signature format', () => {
       fs.readFileSync = vi.fn().mockReturnValue(Buffer.from('test data'));
       expect(() => {
-        handler.validateUploadRequest(mockFile, validPublicKey, 'invalid-sig');
-      }).toThrow('Invalid signature format');
+        handler.validateUploadRequest(
+          mockFile,
+          'invalid-sig',
+          validSignatureS,
+          validPublicKeyX,
+          validPublicKeyY
+        );
+      }).toThrow('Invalid hex format in signature components');
     });
 
-    it('should reject invalid publicKey format', () => {
-      fs.readFileSync = vi.fn().mockReturnValue(Buffer.from('test data'));
-      expect(() => {
-        handler.validateUploadRequest(mockFile, 'invalid-key', validSignature);
-      }).toThrow('Invalid public key format');
-    });
-
-    it('should accept valid submission data', () => {
+    it('should accept valid ECDSA submission data', () => {
       const testBuffer = Buffer.from('test image data');
       fs.readFileSync = vi.fn().mockReturnValue(testBuffer);
 
-      const result = handler.validateUploadRequest(mockFile, validPublicKey, validSignature);
+      // Reset the mock to return valid data for this test
+      mockVerificationService.parseSignatureData.mockReturnValue({
+        signatureR: validSignatureR,
+        signatureS: validSignatureS,
+        publicKeyX: validPublicKeyX,
+        publicKeyY: validPublicKeyY,
+      });
 
-      expect(result).toEqual(testBuffer);
+      const result = handler.validateUploadRequest(
+        mockFile,
+        validSignatureR,
+        validSignatureS,
+        validPublicKeyX,
+        validPublicKeyY
+      );
+
+      expect(result.imageBuffer).toEqual(testBuffer);
+      expect(result.signatureData).toEqual({
+        signatureR: validSignatureR,
+        signatureS: validSignatureS,
+        publicKeyX: validPublicKeyX,
+        publicKeyY: validPublicKeyY,
+      });
     });
   });
 });

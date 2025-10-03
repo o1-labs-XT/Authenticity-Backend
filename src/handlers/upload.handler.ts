@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction, Express } from 'express';
 import type {} from 'multer';
-import { Signature, PublicKey, PrivateKey } from 'o1js';
-import { ImageAuthenticityService } from '../services/image/verification.service.js';
+import { PrivateKey } from 'o1js';
+import {
+  ImageAuthenticityService,
+  ECDSASignatureData,
+} from '../services/image/verification.service.js';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
 import { MinioStorageService } from '../services/storage/minio.service.js';
@@ -28,24 +31,18 @@ export class UploadHandler {
   ) {}
 
   /**
-   * Validate upload request data
+   * Validate upload request data for ECDSA format
    */
   private validateUploadRequest(
     file: Express.Multer.File | undefined,
-    publicKey: string | undefined,
-    signature: string | undefined
-  ): Buffer {
+    signatureR: string | undefined,
+    signatureS: string | undefined,
+    publicKeyX: string | undefined,
+    publicKeyY: string | undefined
+  ): { imageBuffer: Buffer; signatureData: ECDSASignatureData } {
     // Validate required fields
     if (!file) {
       throw Errors.badRequest('No image file provided', 'image');
-    }
-
-    if (!publicKey) {
-      throw Errors.badRequest('Public key is required', 'publicKey');
-    }
-
-    if (!signature) {
-      throw Errors.badRequest('Signature is required', 'signature');
     }
 
     // Read image buffer
@@ -56,21 +53,19 @@ export class UploadHandler {
       throw Errors.badRequest('Image buffer is empty', 'image');
     }
 
-    // Validate public key format
-    try {
-      PublicKey.fromBase58(publicKey);
-    } catch {
-      throw Errors.badRequest('Invalid public key format', 'publicKey');
+    // Parse and validate ECDSA signature components
+    const signatureData = this.verificationService.parseSignatureData(
+      signatureR,
+      signatureS,
+      publicKeyX,
+      publicKeyY
+    );
+
+    if ('error' in signatureData) {
+      throw Errors.badRequest(signatureData.error, 'signature');
     }
 
-    // Validate signature format
-    try {
-      Signature.fromBase58(signature);
-    } catch {
-      throw Errors.badRequest('Invalid signature format', 'signature');
-    }
-
-    return imageBuffer;
+    return { imageBuffer, signatureData };
   }
 
   /**
@@ -87,10 +82,16 @@ export class UploadHandler {
 
       // Extract from multipart form data
       const file = req.file;
-      const { publicKey, signature } = req.body;
+      const { signatureR, signatureS, publicKeyX, publicKeyY } = req.body;
 
       // Validate request and get image buffer
-      const imageBuffer = this.validateUploadRequest(file, publicKey, signature);
+      const { imageBuffer, signatureData } = this.validateUploadRequest(
+        file,
+        signatureR,
+        signatureS,
+        publicKeyX,
+        publicKeyY
+      );
 
       // Compute SHA256 hash of image
       const sha256Hash = this.verificationService.hashImage(imageBuffer);
@@ -111,12 +112,11 @@ export class UploadHandler {
         return;
       }
 
-      // Verify signature and prepare image for proof generation
-      logger.debug('Verifying signature');
+      // Verify ECDSA signature and prepare image for proof generation
+      logger.debug('Verifying ECDSA signature');
       const verificationResult = this.verificationService.verifyAndPrepareImage(
         file!.path,
-        signature,
-        publicKey
+        signatureData
       );
 
       if (!verificationResult.isValid) {
@@ -124,7 +124,7 @@ export class UploadHandler {
         // Clean up uploaded file
         fs.unlinkSync(file!.path);
         throw Errors.badRequest(
-          verificationResult.error || 'Signature verification failed',
+          verificationResult.error || 'ECDSA signature verification failed',
           'signature'
         );
       }
@@ -140,8 +140,14 @@ export class UploadHandler {
         sha256Hash,
         tokenOwnerAddress,
         tokenOwnerPrivate,
-        creatorPublicKey: publicKey,
-        signature,
+        creatorPublicKey: JSON.stringify({
+          x: signatureData.publicKeyX,
+          y: signatureData.publicKeyY,
+        }),
+        signature: JSON.stringify({
+          r: signatureData.signatureR,
+          s: signatureData.signatureS,
+        }),
       });
 
       // Upload image to MinIO
@@ -165,8 +171,14 @@ export class UploadHandler {
       try {
         const jobId = await this.jobQueue.enqueueProofGeneration({
           sha256Hash,
-          signature,
-          publicKey,
+          signature: JSON.stringify({
+            r: signatureData.signatureR,
+            s: signatureData.signatureS,
+          }),
+          publicKey: JSON.stringify({
+            x: signatureData.publicKeyX,
+            y: signatureData.publicKeyY,
+          }),
           storageKey,
           tokenOwnerAddress,
           tokenOwnerPrivateKey: tokenOwnerPrivate,
