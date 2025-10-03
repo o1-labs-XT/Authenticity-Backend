@@ -4,9 +4,17 @@ import path from 'path';
 import FormData from 'form-data';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 // Import ECDSA functionality from authenticity-zkapp
-import { generateECKeyPair, computeOnChainCommitment, Ecdsa } from 'authenticity-zkapp';
+import { 
+  generateECKeyPair, 
+  prepareImageVerification, 
+  Ecdsa, 
+  Secp256r1 
+} from 'authenticity-zkapp';
 
 dotenv.config();
 
@@ -14,7 +22,17 @@ dotenv.config();
 // const API_URL = 'https://authenticity-backend-production.up.railway.app';
 // const API_URL = 'https://authenticity-api-staging.up.railway.app';
 const API_URL = 'http://localhost:3000';
-const IMAGE_PATH = process.env.IMAGE_PATH || '../../../Desktop/demo.png'; // Update this to your test image
+
+async function generateRandomImage(): Promise<string> {
+  // Generate random image data (1KB of random bytes)
+  const randomData = crypto.randomBytes(1024);
+
+  // Save to temp file
+  const tempFile = join(tmpdir(), `test-image-${Date.now()}.bin`);
+  await fs.promises.writeFile(tempFile, randomData);
+
+  return tempFile;
+}
 
 console.log(`Using API URL: ${API_URL}`);
 
@@ -22,21 +40,24 @@ async function main(): Promise<void> {
   try {
     // Generate ECDSA keypair
     const keyPair = generateECKeyPair();
-
+    
     console.log('Public Key X:', keyPair.publicKeyXHex);
     console.log('Public Key Y:', keyPair.publicKeyYHex);
-    console.log('Private Key:', keyPair.privateKeyHex);
+    console.log('Private Key:', keyPair.privateKeyBigInt);
 
-    const imageData = fs.readFileSync(IMAGE_PATH);
-    const commitment = await computeOnChainCommitment(imageData);
-    console.log(`📷 Image loaded: ${IMAGE_PATH}\n#️⃣ SHA-256 hash: ${commitment.sha256}\n`);
+    const imageFile = await generateRandomImage();
+    
+    // Prepare image verification inputs (this gives us the correct hash format)
+    const verificationInputs = prepareImageVerification(imageFile);
+    console.log(`📷 Image loaded: ${imageFile}\n#️⃣ Expected hash: ${verificationInputs.expectedHash.toHex()}\n`);
 
-    // Create Bytes32 from the hash (this is what the server expects to verify against)
-    const { Bytes32 } = await import('authenticity-zkapp');
-    const commitmentBytes = Bytes32.fromHex(commitment.sha256);
-
-    // Create ECDSA signature using signHash since the server uses verifySignedHash
-    const signature = Ecdsa.signHash(commitmentBytes, keyPair.privateKeyBigInt);
+    // Create ECDSA signature using the correct format from the example
+    const creatorKey = Secp256r1.Scalar.from(keyPair.privateKeyBigInt);
+    
+    const signature = Ecdsa.signHash(
+      verificationInputs.expectedHash,
+      creatorKey.toBigInt()
+    );
 
     // Extract bigint values from the signature components
     const signatureData = signature.toBigInt();
@@ -45,8 +66,8 @@ async function main(): Promise<void> {
 
     // Create multipart form with ECDSA signature components
     const form = new FormData();
-    form.append('image', fs.createReadStream(IMAGE_PATH), {
-      filename: path.basename(IMAGE_PATH),
+    form.append('image', fs.createReadStream(imageFile), {
+      filename: path.basename(imageFile) + '.png',
       contentType: 'image/png',
     });
     form.append('signatureR', signatureR);
@@ -63,7 +84,7 @@ async function main(): Promise<void> {
     });
 
     console.log(response.data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('\n❌ Error:', error.message);
     if (error.response) {
       console.error('Response data:', error.response.data);
