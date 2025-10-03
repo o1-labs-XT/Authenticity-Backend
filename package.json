@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev:api": "tsx src/index.ts",
-    "dev:worker": "tsx src/worker.ts",
+    "dev:worker": "tsx src/proofWorker.ts",
     "dev:monitoring": "tsx src/monitoringWorker.ts",
     "build": "tsc",
     "start": "npm run db:migrate && tsx scripts/compile-zkapp.ts && node dist/index.js",
