@@ -51,10 +51,11 @@ export class ImageAuthenticityService {
         .verify(publicKey, verificationInputs.expectedHash.toFields())
         .toBoolean();
 
+      // todo: should this throw? add logging
       if (!isValid) {
         return {
           isValid: false,
-          error: 'Signature does not match image hash',
+          error: 'Invalid signature for public key and image hash',
         };
       }
 

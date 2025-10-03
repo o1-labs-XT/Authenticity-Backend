@@ -14,6 +14,7 @@ import { createAdminRoutes } from './routes/admin.routes.js';
 import { createChallengesRoutes } from './routes/challenges.routes.js';
 import { createChainsRoutes } from './routes/chains.routes.js';
 import { createUsersRoutes } from './routes/users.routes.js';
+import { createSubmissionsRoutes } from './routes/submissions.routes.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 import { loggingMiddleware } from './middleware/logging.middleware.js';
 import { contextMiddleware } from './middleware/context.middleware.js';
@@ -24,6 +25,7 @@ import { AdminHandler } from '../handlers/admin.handler.js';
 import { ChallengesHandler } from '../handlers/challenges.handler.js';
 import { ChainsHandler } from '../handlers/chains.handler.js';
 import { UsersHandler } from '../handlers/users.handler.js';
+import { SubmissionsHandler } from '../handlers/submissions.handler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,6 +37,7 @@ export interface ServerDependencies {
   challengesHandler: ChallengesHandler;
   chainsHandler: ChainsHandler;
   usersHandler: UsersHandler;
+  submissionsHandler: SubmissionsHandler;
 }
 
 export function createServer(dependencies: ServerDependencies): Express {
@@ -123,6 +126,9 @@ export function createServer(dependencies: ServerDependencies): Express {
 
   const usersRoutes = createUsersRoutes(dependencies.usersHandler);
   app.use('/api/users', usersRoutes);
+
+  const submissionsRoutes = createSubmissionsRoutes(dependencies.submissionsHandler);
+  app.use('/api/submissions', submissionsRoutes);
 
   // 404 handler
   app.use((req, res) => {

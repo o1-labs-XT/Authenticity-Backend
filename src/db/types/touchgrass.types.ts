@@ -31,17 +31,24 @@ export interface Chain {
 export interface Submission {
   id: string;
   sha256_hash: string;
-  wallet_address: string;
-  token_owner_address: string;
-  token_owner_private_key?: string | null;
-  public_key: string;
+  wallet_address: string; // User's wallet address (public key)
   signature: string;
   challenge_id: string;
   chain_id: string;
-  storage_key?: string | null;
+  storage_key: string;
   tagline?: string | null;
   chain_position: number;
-  status: 'pending' | 'proving' | 'awaiting_confirmation' | 'verified' | 'failed';
+  status:
+    | 'uploading'
+    | 'verifying'
+    | 'awaiting_review'
+    | 'rejected'
+    | 'publishing'
+    | 'confirming'
+    | 'verified'
+    | 'pending_position'
+    | 'complete'
+    | 'failed';
   transaction_id?: string | null;
   failure_reason?: string | null;
   retry_count: number;

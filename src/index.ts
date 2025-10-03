@@ -5,6 +5,7 @@ import { AuthenticityRepository } from './db/repositories/authenticity.repositor
 import { ChallengesRepository } from './db/repositories/challenges.repository.js';
 import { ChainsRepository } from './db/repositories/chains.repository.js';
 import { UsersRepository } from './db/repositories/users.repository.js';
+import { SubmissionsRepository } from './db/repositories/submissions.repository.js';
 import { ImageAuthenticityService } from './services/image/verification.service.js';
 import { MinioStorageService } from './services/storage/minio.service.js';
 import { JobQueueService } from './services/queue/jobQueue.service.js';
@@ -15,6 +16,7 @@ import { AdminHandler } from './handlers/admin.handler.js';
 import { ChallengesHandler } from './handlers/challenges.handler.js';
 import { ChainsHandler } from './handlers/chains.handler.js';
 import { UsersHandler } from './handlers/users.handler.js';
+import { SubmissionsHandler } from './handlers/submissions.handler.js';
 import { logger } from './utils/logger.js';
 
 async function main() {
@@ -31,6 +33,7 @@ async function main() {
     const challengesRepository = new ChallengesRepository(dbConnection.getAdapter());
     const chainsRepository = new ChainsRepository(dbConnection.getAdapter());
     const usersRepository = new UsersRepository(dbConnection.getAdapter());
+    const submissionsRepository = new SubmissionsRepository(dbConnection.getAdapter());
 
     // Initialize services
     logger.info('Initializing services...');
@@ -52,6 +55,15 @@ async function main() {
     const challengesHandler = new ChallengesHandler(challengesRepository);
     const chainsHandler = new ChainsHandler(chainsRepository);
     const usersHandler = new UsersHandler(usersRepository);
+    const submissionsHandler = new SubmissionsHandler(
+      submissionsRepository,
+      usersRepository,
+      chainsRepository,
+      challengesRepository,
+      verificationService,
+      jobQueue,
+      storageService
+    );
 
     // Create and start server
     const app = createServer({
@@ -62,6 +74,7 @@ async function main() {
       challengesHandler,
       chainsHandler,
       usersHandler,
+      submissionsHandler,
     });
 
     const port = config.port;

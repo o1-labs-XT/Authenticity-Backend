@@ -267,6 +267,150 @@ paths:
         '404':
           description: Chain not found
 
+  # Submissions endpoints
+  /submissions:
+    post:
+      tags: [Submissions]
+      summary: Create a new submission
+      description: Upload image with cryptographic signature to submit to a challenge chain
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image, chainId, walletAddress, signature]
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Image file to submit
+                chainId:
+                  type: string
+                  format: uuid
+                  description: Chain ID to submit to
+                walletAddress:
+                  type: string
+                  description: User's wallet address (public key in base58)
+                signature:
+                  type: string
+                  description: Cryptographic signature of image hash in base58
+                tagline:
+                  type: string
+                  maxLength: 200
+                  description: Optional tagline for the submission
+      responses:
+        '201':
+          description: Submission created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+        '400':
+          description: Invalid request (missing fields, invalid format, empty image, inactive challenge)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Chain not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate submission (image already submitted or user already submitted to this challenge)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: File too large
+        '415':
+          description: Unsupported media type
+
+    get:
+      tags: [Submissions]
+      summary: Get submissions with optional filters
+      parameters:
+        - name: walletAddress
+          in: query
+          schema:
+            type: string
+          description: Filter by user wallet address
+        - name: chainId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by chain ID
+        - name: challengeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by challenge ID
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [uploading, uploaded, proving, publishing, verified, failed]
+          description: Filter by submission status
+      responses:
+        '200':
+          description: List of submissions (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Submission'
+
+  /submissions/{id}:
+    get:
+      tags: [Submissions]
+      summary: Get submission by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Submission found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+        '404':
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [Submissions]
+      summary: Delete submission
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Submission deleted
+        '404':
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # Upload endpoints (existing)
   /upload:
     post:
@@ -559,23 +703,24 @@ components:
         sha256Hash:
           type: string
           description: SHA-256 hash of the image
-        tokenOwnerAddress:
+        walletAddress:
           type: string
-          description: Random address for token ownership
-        userWalletAddress:
+          description: User's wallet address (public key in base58)
+        signature:
           type: string
-          description: User's wallet address
+          description: Cryptographic signature in base58
         challengeId:
           type: string
           format: uuid
         chainId:
           type: string
           format: uuid
-        imageUrl:
+        storageKey:
           type: string
-          description: MinIO storage URL
+          description: MinIO storage key for the image
         tagline:
           type: string
+          nullable: true
           description: User's tagline for the submission
           maxLength: 200
         chainPosition:
@@ -584,13 +729,27 @@ components:
           example: 5
         status:
           type: string
-          enum: [pending, proving, publishing, verifying, verified, failed]
-          description: Proof generation status
+          enum: [uploading, uploaded, proving, publishing, verified, failed]
+          description: Submission status
         transactionId:
           type: string
           nullable: true
           description: Mina blockchain transaction ID when verified
+        failureReason:
+          type: string
+          nullable: true
+          description: Error message if submission failed
+        retryCount:
+          type: integer
+          description: Number of retry attempts
+          example: 0
+        challengeVerified:
+          type: boolean
+          description: Whether the submission has been verified for the challenge
         createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
 
