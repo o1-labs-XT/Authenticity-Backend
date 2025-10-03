@@ -706,9 +706,6 @@ components:
         walletAddress:
           type: string
           description: User's wallet address (public key in base58)
-        tokenOwnerAddress:
-          type: string
-          description: Random address for token ownership
         signature:
           type: string
           description: Cryptographic signature in base58

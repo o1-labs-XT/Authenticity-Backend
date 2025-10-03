@@ -6,8 +6,6 @@ import { Errors } from '../../utils/errors.js';
 export interface CreateSubmissionInput {
   sha256Hash: string;
   walletAddress: string; // User's wallet address (public key)
-  tokenOwnerAddress: string;
-  tokenOwnerPrivateKey: string;
   signature: string;
   challengeId: string;
   chainId: string;
@@ -35,8 +33,6 @@ export class SubmissionsRepository {
           .insert({
             sha256_hash: input.sha256Hash,
             wallet_address: input.walletAddress,
-            token_owner_address: input.tokenOwnerAddress,
-            token_owner_private_key: input.tokenOwnerPrivateKey,
             signature: input.signature,
             challenge_id: input.challengeId,
             chain_id: input.chainId,

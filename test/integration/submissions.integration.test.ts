@@ -125,7 +125,6 @@ describe('Submissions API Integration', () => {
       id: expect.any(String),
       sha256Hash: expect.any(String),
       walletAddress: testData.walletAddress,
-      tokenOwnerAddress: expect.any(String),
       signature: testData.signature,
       challengeId: challengeId,
       chainId: chainId,
@@ -137,9 +136,6 @@ describe('Submissions API Integration', () => {
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     });
-
-    // Should NOT include private key in response
-    expect(res.body.tokenOwnerPrivateKey).toBeUndefined();
 
     // Verify user was auto-created
     const userRes = await request(API_URL).get(`/api/users/${testData.walletAddress}`);

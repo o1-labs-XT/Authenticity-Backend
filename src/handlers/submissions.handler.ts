@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import type { Express } from 'express';
 import type {} from 'multer';
-import { PublicKey, Signature, PrivateKey } from 'o1js';
+import { PublicKey, Signature } from 'o1js';
 import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { UsersRepository } from '../db/repositories/users.repository.js';
 import { ChainsRepository } from '../db/repositories/chains.repository.js';
@@ -18,7 +18,6 @@ export interface SubmissionResponse {
   id: string;
   sha256Hash: string;
   walletAddress: string; // User's wallet address (public key)
-  tokenOwnerAddress: string;
   signature: string;
   challengeId: string;
   chainId: string;
@@ -50,7 +49,6 @@ export class SubmissionsHandler {
       id: submission.id,
       sha256Hash: submission.sha256_hash,
       walletAddress: submission.wallet_address,
-      tokenOwnerAddress: submission.token_owner_address,
       signature: submission.signature,
       challengeId: submission.challenge_id,
       chainId: submission.chain_id,
@@ -168,13 +166,6 @@ export class SubmissionsHandler {
         );
       }
 
-      // Generate random token owner address
-      // todo: use public key, remove token owner key and tokenOwnerPrivate fields in db
-      const tokenOwnerKey = PrivateKey.random();
-      const tokenOwnerAddress = tokenOwnerKey.toPublicKey().toBase58();
-      const tokenOwnerPrivate = tokenOwnerKey.toBase58();
-      logger.debug({ tokenOwnerAddress }, 'Generated token owner');
-
       // Upload image to MinIO
       storageKey = await this.storageService.uploadImage(sha256Hash, imageBuffer);
       logger.debug({ storageKey, sha256Hash }, 'Image uploaded to MinIO');
@@ -183,8 +174,6 @@ export class SubmissionsHandler {
       submission = await this.submissionsRepo.create({
         sha256Hash,
         walletAddress,
-        tokenOwnerAddress,
-        tokenOwnerPrivateKey: tokenOwnerPrivate,
         signature,
         challengeId: challenge.id,
         chainId: chainId!,
