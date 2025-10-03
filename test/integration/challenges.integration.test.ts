@@ -1,13 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import request from 'supertest';
-import {
-  API_URL,
-  ADMIN_USERNAME,
-  ADMIN_PASSWORD,
-  getRelativeDate,
-  createTestChallenge,
-  cleanupChallenges,
-} from './utils/test-helpers.js';
+import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD } from './config.js';
+import { getRelativeDate, createTestChallenge, cleanupChallenges } from './utils/test-helpers.js';
 
 describe('Challenges API Integration', () => {
   const createdIds: string[] = [];

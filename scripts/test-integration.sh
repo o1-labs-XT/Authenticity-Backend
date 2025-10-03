@@ -4,8 +4,10 @@ set -e
 # Use test database
 export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/authenticity_test"
 
-# Set admin password for tests to call protected routes
-export ADMIN_PASSWORD="testpassword123"
+# Set test environment variables for integration tests
+export TEST_API_URL="http://localhost:3000"
+export TEST_ADMIN_USERNAME="admin"
+export TEST_ADMIN_PASSWORD="serverpass"
 
 # Cleanup function
 cleanup() {
@@ -16,8 +18,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Start PostgreSQL
-docker-compose up -d postgres
+# Start PostgreSQL and MinIO
+docker-compose up -d postgres minio
 
 # Wait for PostgreSQL
 until docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; do

@@ -1,10 +1,5 @@
 import request from 'supertest';
-
-export const API_URL = 'http://localhost:3000';
-// credentials for calling protected api routes
-// todo: set this up so that tests can be run against local api easily
-export const ADMIN_USERNAME = 'admin';
-export const ADMIN_PASSWORD = 'testpassword123';
+import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD } from '../config.js';
 
 /**
  * Creates a date relative to the current date

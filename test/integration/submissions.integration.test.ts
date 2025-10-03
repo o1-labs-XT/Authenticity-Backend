@@ -4,8 +4,8 @@ import { PrivateKey, Signature } from 'o1js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { prepareImageVerification } from 'authenticity-zkapp';
+import { API_URL } from './config.js';
 import {
-  API_URL,
   createTestChallenge,
   cleanupChallenges,
   cleanupUsers,
