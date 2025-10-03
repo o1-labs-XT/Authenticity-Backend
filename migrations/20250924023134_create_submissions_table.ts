@@ -4,10 +4,9 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('submissions', (table) => {
     table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.string('sha256_hash', 64).notNullable().unique();
-    table.string('wallet_address', 255).notNullable(); // Foreign key to users
+    table.string('wallet_address', 255).notNullable(); // User's wallet address (public key)
     table.string('token_owner_address', 255).notNullable();
     table.string('token_owner_private_key', 255).notNullable();
-    table.string('public_key', 255).notNullable(); // Must match wallet_address
     table.string('signature', 500).notNullable();
     table.uuid('challenge_id').notNullable();
     table.uuid('chain_id').notNullable();

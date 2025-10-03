@@ -279,7 +279,7 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [image, chainId, publicKey, signature]
+              required: [image, chainId, walletAddress, signature]
               properties:
                 image:
                   type: string
@@ -289,9 +289,9 @@ paths:
                   type: string
                   format: uuid
                   description: Chain ID to submit to
-                publicKey:
+                walletAddress:
                   type: string
-                  description: User's public key in base58
+                  description: User's wallet address (public key in base58)
                 signature:
                   type: string
                   description: Cryptographic signature of image hash in base58
@@ -705,13 +705,10 @@ components:
           description: SHA-256 hash of the image
         walletAddress:
           type: string
-          description: User's wallet address (same as publicKey)
+          description: User's wallet address (public key in base58)
         tokenOwnerAddress:
           type: string
           description: Random address for token ownership
-        publicKey:
-          type: string
-          description: User's public key in base58
         signature:
           type: string
           description: Cryptographic signature in base58

@@ -31,10 +31,9 @@ export interface Chain {
 export interface Submission {
   id: string;
   sha256_hash: string;
-  wallet_address: string;
+  wallet_address: string; // User's wallet address (public key)
   token_owner_address: string;
   token_owner_private_key: string;
-  public_key: string;
   signature: string;
   challenge_id: string;
   chain_id: string;

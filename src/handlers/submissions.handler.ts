@@ -17,9 +17,8 @@ import fs from 'fs';
 export interface SubmissionResponse {
   id: string;
   sha256Hash: string;
-  walletAddress: string;
+  walletAddress: string; // User's wallet address (public key)
   tokenOwnerAddress: string;
-  publicKey: string;
   signature: string;
   challengeId: string;
   chainId: string;
@@ -52,7 +51,6 @@ export class SubmissionsHandler {
       sha256Hash: submission.sha256_hash,
       walletAddress: submission.wallet_address,
       tokenOwnerAddress: submission.token_owner_address,
-      publicKey: submission.public_key,
       signature: submission.signature,
       challengeId: submission.challenge_id,
       chainId: submission.chain_id,
@@ -72,7 +70,7 @@ export class SubmissionsHandler {
   private validateSubmissionRequest(
     file: Express.Multer.File | undefined,
     chainId: string | undefined,
-    publicKey: string | undefined,
+    walletAddress: string | undefined,
     signature: string | undefined
   ): void {
     if (!file) {
@@ -83,19 +81,19 @@ export class SubmissionsHandler {
       throw Errors.badRequest('chainId is required', 'chainId');
     }
 
-    if (!publicKey) {
-      throw Errors.badRequest('publicKey is required', 'publicKey');
+    if (!walletAddress) {
+      throw Errors.badRequest('walletAddress is required', 'walletAddress');
     }
 
     if (!signature) {
       throw Errors.badRequest('signature is required', 'signature');
     }
 
-    // Validate public key format
+    // Validate wallet address format (it's a public key in base58)
     try {
-      PublicKey.fromBase58(publicKey);
+      PublicKey.fromBase58(walletAddress);
     } catch {
-      throw Errors.badRequest('Invalid public key format', 'publicKey');
+      throw Errors.badRequest('Invalid wallet address format', 'walletAddress');
     }
 
     // Validate signature format
@@ -118,19 +116,16 @@ export class SubmissionsHandler {
       logger.debug('Processing submission request');
 
       const file = req.file;
-      const { chainId, publicKey, signature, tagline } = req.body;
+      const { chainId, walletAddress, signature, tagline } = req.body;
 
       // Validate request
-      this.validateSubmissionRequest(file, chainId, publicKey, signature);
+      this.validateSubmissionRequest(file, chainId, walletAddress, signature);
 
       // Read image buffer
       const imageBuffer = fs.readFileSync(file!.path);
       if (!imageBuffer || imageBuffer.length === 0) {
         throw Errors.badRequest('Image buffer is empty', 'image');
       }
-
-      // todo: rename to wallet address
-      const walletAddress = publicKey;
 
       // Compute SHA256 hash of image
       const sha256Hash = this.verificationService.hashImage(imageBuffer);
@@ -162,7 +157,7 @@ export class SubmissionsHandler {
       const verificationResult = this.verificationService.verifyAndPrepareImage(
         file!.path,
         signature,
-        publicKey
+        walletAddress
       );
 
       if (!verificationResult.isValid) {
@@ -190,7 +185,6 @@ export class SubmissionsHandler {
         walletAddress,
         tokenOwnerAddress,
         tokenOwnerPrivateKey: tokenOwnerPrivate,
-        publicKey,
         signature,
         challengeId: challenge.id,
         chainId: chainId!,

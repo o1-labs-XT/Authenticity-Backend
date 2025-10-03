@@ -18,7 +18,6 @@ interface SubmissionTestData {
   imageBuffer: Buffer;
   imagePath: string;
   signature: string;
-  publicKey: string;
   privateKey: PrivateKey;
   sha256Hash: string;
   walletAddress: string;
@@ -52,7 +51,6 @@ function createSubmissionTestData(): SubmissionTestData {
     imageBuffer,
     imagePath,
     signature,
-    publicKey: walletAddress,
     privateKey,
     sha256Hash,
     walletAddress,
@@ -117,7 +115,7 @@ describe('Submissions API Integration', () => {
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .field('tagline', 'My first submission!')
       .attach('image', testData.imagePath);
@@ -128,7 +126,6 @@ describe('Submissions API Integration', () => {
       sha256Hash: expect.any(String),
       walletAddress: testData.walletAddress,
       tokenOwnerAddress: expect.any(String),
-      publicKey: testData.publicKey,
       signature: testData.signature,
       challengeId: challengeId,
       chainId: chainId,
@@ -162,7 +159,7 @@ describe('Submissions API Integration', () => {
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .field('tagline', 'Existing user submission')
       .attach('image', testData.imagePath);
@@ -180,7 +177,7 @@ describe('Submissions API Integration', () => {
     const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature);
 
     expect(res1.status).toBe(400);
@@ -194,7 +191,7 @@ describe('Submissions API Integration', () => {
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', emptyImagePath);
 
@@ -206,7 +203,7 @@ describe('Submissions API Integration', () => {
 
     const res = await request(API_URL)
       .post('/api/submissions')
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
@@ -214,7 +211,7 @@ describe('Submissions API Integration', () => {
     expect(res.body.error.field).toBe('chainId');
   });
 
-  it('should reject submission without publicKey', async () => {
+  it('should reject submission without walletAddress', async () => {
     const testData = createSubmissionTestData();
 
     const res = await request(API_URL)
@@ -224,7 +221,7 @@ describe('Submissions API Integration', () => {
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(400);
-    expect(res.body.error.field).toBe('publicKey');
+    expect(res.body.error.field).toBe('walletAddress');
   });
 
   it('should reject submission without signature', async () => {
@@ -233,7 +230,7 @@ describe('Submissions API Integration', () => {
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(400);
@@ -241,19 +238,19 @@ describe('Submissions API Integration', () => {
   });
 
   // Test 3: Input validation
-  it('should reject submission with invalid publicKey format', async () => {
+  it('should reject submission with invalid walletAddress format', async () => {
     const testData = createSubmissionTestData();
 
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', 'invalid-key')
+      .field('walletAddress', 'invalid-key')
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBeDefined();
-    expect(res.body.error.field).toBe('publicKey');
+    expect(res.body.error.field).toBe('walletAddress');
   });
 
   it('should reject submission with invalid signature format', async () => {
@@ -262,7 +259,7 @@ describe('Submissions API Integration', () => {
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', 'invalid-signature')
       .attach('image', testData.imagePath);
 
@@ -271,7 +268,7 @@ describe('Submissions API Integration', () => {
     expect(res.body.error.field).toBe('signature');
   });
 
-  it('should reject submission with mismatched signature, image, or publicKey', async () => {
+  it('should reject submission with mismatched signature, image, or walletAddress', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
 
@@ -279,18 +276,18 @@ describe('Submissions API Integration', () => {
     const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData1.publicKey)
+      .field('walletAddress', testData1.walletAddress)
       .field('signature', testData1.signature) // Signature for image1
       .attach('image', testData2.imagePath); // But submitting image2
 
     expect(res1.status).toBe(400);
     expect(res1.body.error.message).toContain('Invalid signature for public key and image hash');
 
-    // Test 2: Wrong publicKey (signature created with key1, but claiming key2)
+    // Test 2: Wrong walletAddress (signature created with key1, but claiming key2)
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData2.publicKey) // Different public key
+      .field('walletAddress', testData2.walletAddress) // Different wallet address
       .field('signature', testData1.signature) // Signature from testData1
       .attach('image', testData1.imagePath);
 
@@ -305,7 +302,7 @@ describe('Submissions API Integration', () => {
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', fakeChainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
@@ -331,7 +328,7 @@ describe('Submissions API Integration', () => {
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', futureChainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
@@ -357,7 +354,7 @@ describe('Submissions API Integration', () => {
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', pastChainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
@@ -373,7 +370,7 @@ describe('Submissions API Integration', () => {
     const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
@@ -384,7 +381,7 @@ describe('Submissions API Integration', () => {
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
@@ -401,7 +398,7 @@ describe('Submissions API Integration', () => {
     const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData1.publicKey)
+      .field('walletAddress', testData1.walletAddress)
       .field('signature', testData1.signature)
       .attach('image', testData1.imagePath);
 
@@ -419,7 +416,7 @@ describe('Submissions API Integration', () => {
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData1.publicKey)
+      .field('walletAddress', testData1.walletAddress)
       .field('signature', signature2)
       .attach('image', testData2.imagePath);
 
@@ -451,7 +448,7 @@ describe('Submissions API Integration', () => {
     const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', newChainId)
-      .field('publicKey', testData1.publicKey)
+      .field('walletAddress', testData1.walletAddress)
       .field('signature', testData1.signature)
       .attach('image', testData1.imagePath);
 
@@ -467,7 +464,7 @@ describe('Submissions API Integration', () => {
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', newChainId)
-      .field('publicKey', testData2.publicKey)
+      .field('walletAddress', testData2.walletAddress)
       .field('signature', testData2.signature)
       .attach('image', testData2.imagePath);
 
@@ -488,7 +485,7 @@ describe('Submissions API Integration', () => {
     const createRes = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .field('tagline', 'Test GET')
       .attach('image', testData.imagePath);
@@ -518,7 +515,7 @@ describe('Submissions API Integration', () => {
     const createRes = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
@@ -557,7 +554,7 @@ describe('Submissions API Integration', () => {
     const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', newChainId)
-      .field('publicKey', testData1.publicKey)
+      .field('walletAddress', testData1.walletAddress)
       .field('signature', testData1.signature)
       .attach('image', testData1.imagePath);
 
@@ -567,7 +564,7 @@ describe('Submissions API Integration', () => {
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', newChainId)
-      .field('publicKey', testData2.publicKey)
+      .field('walletAddress', testData2.walletAddress)
       .field('signature', testData2.signature)
       .attach('image', testData2.imagePath);
 
@@ -605,7 +602,7 @@ describe('Submissions API Integration', () => {
     const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', newChainId)
-      .field('publicKey', testData1.publicKey)
+      .field('walletAddress', testData1.walletAddress)
       .field('signature', testData1.signature)
       .attach('image', testData1.imagePath);
 
@@ -615,7 +612,7 @@ describe('Submissions API Integration', () => {
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', newChainId)
-      .field('publicKey', testData2.publicKey)
+      .field('walletAddress', testData2.walletAddress)
       .field('signature', testData2.signature)
       .attach('image', testData2.imagePath);
 
@@ -639,7 +636,7 @@ describe('Submissions API Integration', () => {
     const createRes = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
@@ -673,7 +670,7 @@ describe('Submissions API Integration', () => {
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
@@ -709,7 +706,7 @@ describe('Submissions API Integration', () => {
     const res = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', newChainId)
-      .field('publicKey', testData.publicKey)
+      .field('walletAddress', testData.walletAddress)
       .field('signature', testData.signature)
       .attach('image', testData.imagePath);
 
