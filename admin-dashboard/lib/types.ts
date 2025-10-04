@@ -29,11 +29,22 @@ export interface Chain {
 }
 
 export interface Submission {
-  id: number;
-  userWalletAddress: string;
-  chainPosition: number;
-  tagline: string;
+  id: string;
   sha256Hash: string;
+  walletAddress: string;
+  signature: string;
+  challengeId: string;
+  chainId: string;
+  storageKey: string;
+  tagline?: string;
+  chainPosition: number;
+  status: string;
+  transactionId?: string;
+  failureReason?: string;
+  retryCount: number;
+  challengeVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface AuthenticityRecord {
