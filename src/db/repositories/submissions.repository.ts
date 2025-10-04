@@ -39,7 +39,7 @@ export class SubmissionsRepository {
             storage_key: input.storageKey,
             tagline: input.tagline,
             chain_position: chainPosition,
-            status: 'uploading',
+            status: 'awaiting_review',
           })
           .returning('*');
 
@@ -105,6 +105,19 @@ export class SubmissionsRepository {
     }
 
     return query.orderBy('created_at', 'desc');
+  }
+
+  async update(id: string, updates: Partial<Submission>): Promise<Submission | null> {
+    const knex = this.db.getKnex();
+    const [updated] = await knex('submissions')
+      .where('id', id)
+      .update({
+        ...updates,
+        updated_at: knex.fn.now(),
+      })
+      .returning('*');
+
+    return updated || null;
   }
 
   async delete(id: string): Promise<boolean> {

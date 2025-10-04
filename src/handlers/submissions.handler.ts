@@ -1,5 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
-import type { Express } from 'express';
+import { Request, Response, NextFunction, Express } from 'express';
 import type {} from 'multer';
 import { PublicKey, Signature } from 'o1js';
 import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
@@ -241,6 +240,60 @@ export class SubmissionsHandler {
       });
 
       res.json(submissions.map((s) => this.toResponse(s)));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async reviewSubmission(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { challengeVerified, failureReason } = req.body;
+
+      if (challengeVerified === undefined) {
+        throw Errors.badRequest('challengeVerified is required', 'challengeVerified');
+      }
+
+      // Check submission exists and is in correct state
+      const submission = await this.submissionsRepo.findById(id);
+      if (!submission) {
+        throw Errors.notFound('Submission');
+      }
+
+      if (submission.status !== 'awaiting_review') {
+        throw Errors.badRequest(
+          `Submission cannot be reviewed in status: ${submission.status}`,
+          'status'
+        );
+      }
+
+      const updates: Partial<Submission> = {
+        challenge_verified: challengeVerified,
+        status: challengeVerified ? 'processing' : 'rejected',
+        failure_reason: challengeVerified
+          ? null
+          : failureReason || 'Image does not satisfy challenge criteria',
+      };
+
+      // TODO: When job queue is enabled, enqueue proof generation job here
+      // if (challengeVerified) {
+      //   const jobId = await this.jobQueue.enqueueProofGeneration({
+      //     sha256Hash: submission.sha256_hash,
+      //     signature: submission.signature,
+      //     walletAddress: submission.wallet_address,
+      //     storageKey: submission.storage_key,
+      //     uploadedAt: new Date(submission.created_at),
+      //     correlationId: (req as Request & { correlationId: string }).correlationId,
+      //   });
+      //   logger.info({ jobId, submissionId: id }, 'Proof generation job enqueued');
+      // }
+
+      const updated = await this.submissionsRepo.update(id, updates);
+      if (!updated) {
+        throw Errors.notFound('Submission');
+      }
+
+      res.json(this.toResponse(updated));
     } catch (error) {
       next(error);
     }

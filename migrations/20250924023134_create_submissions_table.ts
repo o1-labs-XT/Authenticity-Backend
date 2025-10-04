@@ -12,20 +12,9 @@ export async function up(knex: Knex): Promise<void> {
     table.string('tagline', 255).nullable();
     table.integer('chain_position').notNullable();
     table
-      .enum('status', [
-        'uploading',
-        'verifying',
-        'awaiting_review',
-        'rejected',
-        'publishing',
-        'confirming',
-        'verified',
-        'pending_position',
-        'complete',
-        'failed',
-      ])
+      .enum('status', ['awaiting_review', 'rejected', 'processing', 'complete'])
       .notNullable()
-      .defaultTo('uploading');
+      .defaultTo('awaiting_review');
     table.string('transaction_id', 255).nullable();
     table.text('failure_reason').nullable();
     table.integer('retry_count').notNullable().defaultTo(0);
