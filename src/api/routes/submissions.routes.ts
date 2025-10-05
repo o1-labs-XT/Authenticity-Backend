@@ -8,6 +8,7 @@ export function createSubmissionsRoutes(handler: SubmissionsHandler): Router {
 
   // Public endpoints
   router.post('/', imageUpload.single('image'), handler.createSubmission.bind(handler));
+  router.get('/:id/image', handler.getSubmissionImage.bind(handler));
   router.get('/:id', handler.getSubmission.bind(handler));
   router.get('/', handler.getSubmissions.bind(handler));
 

@@ -299,6 +299,25 @@ export class SubmissionsHandler {
     }
   }
 
+  async getSubmissionImage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      const submission = await this.submissionsRepo.findById(id);
+      if (!submission) {
+        throw Errors.notFound('Submission');
+      }
+
+      const imageBuffer = await this.storageService.downloadImage(submission.storage_key);
+
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.send(imageBuffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async deleteSubmission(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
