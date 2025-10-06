@@ -14,6 +14,21 @@ export async function GET(request: NextRequest, { params }: { params: { path: st
   }
 
   const response = await fetch(url, { headers });
+
+  // Handle image responses (binary data)
+  const contentType = response.headers.get('content-type');
+  if (contentType?.startsWith('image/')) {
+    const imageBuffer = await response.arrayBuffer();
+    return new NextResponse(imageBuffer, {
+      status: response.status,
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': response.headers.get('cache-control') || 'public, max-age=3600',
+      },
+    });
+  }
+
+  // Handle JSON responses
   const data = await response.json().catch(() => ({ error: response.statusText }));
   return NextResponse.json(data, { status: response.status });
 }
@@ -45,6 +60,29 @@ export async function POST(request: NextRequest, { params }: { params: { path: s
     method: 'POST',
     headers,
     body,
+  });
+
+  const data = await response.json().catch(() => ({ error: response.statusText }));
+  return NextResponse.json(data, { status: response.status });
+}
+
+export async function PATCH(request: NextRequest, { params }: { params: { path: string[] } }) {
+  const path = params.path.join('/');
+  const url = `${API_URL}/api/${path}`;
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (AUTH) {
+    headers.Authorization = `Basic ${AUTH}`;
+  }
+
+  const jsonBody = await request.json();
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(jsonBody),
   });
 
   const data = await response.json().catch(() => ({ error: response.statusText }));

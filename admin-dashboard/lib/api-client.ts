@@ -110,6 +110,7 @@ class ApiClient {
       return this.request<Submission[]>(`submissions${queryString ? `?${queryString}` : ''}`);
     },
     get: (id: string) => this.request<Submission>(`submissions/${id}`),
+    getImageUrl: (id: string) => `/api/proxy/submissions/${id}/image`,
     create: async (formData: FormData): Promise<Submission> => {
       const response = await fetch('/api/proxy/submissions', {
         method: 'POST',
@@ -122,6 +123,11 @@ class ApiClient {
 
       return response.json();
     },
+    review: (id: string, data: { challengeVerified: boolean; failureReason?: string }) =>
+      this.request<Submission>(`submissions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
     delete: (id: string) => this.request<void>(`submissions/${id}`, { method: 'DELETE' }),
   };
 }

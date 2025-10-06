@@ -4,7 +4,7 @@ import { PrivateKey } from 'o1js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { prepareImageVerification, generateECKeyPair, Ecdsa, Secp256r1 } from 'authenticity-zkapp';
-import { API_URL } from './config.js';
+import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD } from './config.js';
 import {
   createTestChallenge,
   cleanupChallenges,
@@ -38,7 +38,7 @@ function createSubmissionTestData(): SubmissionTestData {
 
   const imagePath = path.join(
     tmpDir,
-    `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.png`
+    `test-${Date.now()}-${Math.random().toString(36).substring(2, 11)}.png`
   );
   const imageBuffer = Buffer.from(imagePath);
   fs.writeFileSync(imagePath, imageBuffer);
@@ -148,7 +148,7 @@ describe('Submissions API Integration', () => {
       chainId: chainId,
       tagline: 'My first submission!',
       chainPosition: expect.any(Number),
-      status: 'uploading',
+      status: 'awaiting_review',
       retryCount: 0,
       challengeVerified: false,
       createdAt: expect.any(String),
@@ -571,7 +571,7 @@ describe('Submissions API Integration', () => {
     expect(getRes.body).toMatchObject({
       id: submissionId,
       tagline: 'Test GET',
-      status: 'uploading',
+      status: 'awaiting_review',
       sha256Hash: createRes.body.sha256Hash,
       storageKey: createRes.body.storageKey,
       walletAddress: testData.walletAddress,
@@ -732,18 +732,18 @@ describe('Submissions API Integration', () => {
     expect(createRes.status).toBe(201);
     createdSubmissionIds.push(createRes.body.id);
 
-    // Query for submissions with 'uploading' status
-    const getRes = await request(API_URL).get('/api/submissions?status=uploading');
+    // Query for submissions with 'awaiting_review' status
+    const getRes = await request(API_URL).get('/api/submissions?status=awaiting_review');
 
     expect(getRes.status).toBe(200);
     expect(Array.isArray(getRes.body)).toBe(true);
     expect(getRes.body.length).toBeGreaterThan(0);
-    // All returned submissions should have 'uploaded' status
-    expect(getRes.body.every((sub: any) => sub.status === 'uploading')).toBe(true);
+    // All returned submissions should have 'awaiting_review' status
+    expect(getRes.body.every((sub: any) => sub.status === 'awaiting_review')).toBe(true);
   });
 
-  it('todo: should enqueue proof generation job after submission', async () => {
-    // todo - should we enqueue proof generation now or after the admin approves the submission
+  it('todo: should enqueue proof generation job after admin approval', async () => {
+    // TODO: Implement job queue integration - jobs should be enqueued when admin approves (PATCH with challengeVerified=true)
   });
 
   it('should update chain length when submission is created', async () => {
@@ -811,5 +811,211 @@ describe('Submissions API Integration', () => {
     // Check participant count increased
     const updatedRes = await request(API_URL).get(`/api/challenges/${newChallengeId}`);
     expect(updatedRes.body.participantCount).toBe(initialCount + 1);
+  });
+
+  // ===== Admin Review Tests =====
+
+  it('should allow admin to approve a submission', async () => {
+    const testData = createSubmissionTestData();
+    createdUserAddresses.push(testData.walletAddress);
+
+    // Create submission
+    const createRes = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('walletAddress', testData.walletAddress)
+      .field('signature', testData.signature)
+      .attach('image', testData.imagePath);
+
+    expect(createRes.status).toBe(201);
+    const submissionId = createRes.body.id;
+    createdSubmissionIds.push(submissionId);
+
+    // Approve submission
+    const approveRes = await request(API_URL)
+      .patch(`/api/submissions/${submissionId}`)
+      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
+      .send({ challengeVerified: true });
+
+    expect(approveRes.status).toBe(200);
+    expect(approveRes.body.challengeVerified).toBe(true);
+    expect(approveRes.body.status).toBe('processing');
+    expect(approveRes.body.failureReason).toBeUndefined();
+  });
+
+  it('should allow admin to reject a submission with reason', async () => {
+    const testData = createSubmissionTestData();
+    createdUserAddresses.push(testData.walletAddress);
+
+    // Create submission
+    const createRes = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('walletAddress', testData.walletAddress)
+      .field('signature', testData.signature)
+      .attach('image', testData.imagePath);
+
+    expect(createRes.status).toBe(201);
+    const submissionId = createRes.body.id;
+    createdSubmissionIds.push(submissionId);
+
+    // Reject submission
+    const rejectRes = await request(API_URL)
+      .patch(`/api/submissions/${submissionId}`)
+      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
+      .send({
+        challengeVerified: false,
+        failureReason: 'Image is too blurry',
+      });
+
+    expect(rejectRes.status).toBe(200);
+    expect(rejectRes.body.challengeVerified).toBe(false);
+    expect(rejectRes.body.status).toBe('rejected');
+    expect(rejectRes.body.failureReason).toBe('Image is too blurry');
+  });
+
+  it('should use default failure reason when rejecting without explicit reason', async () => {
+    const testData = createSubmissionTestData();
+    createdUserAddresses.push(testData.walletAddress);
+
+    // Create submission
+    const createRes = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('walletAddress', testData.walletAddress)
+      .field('signature', testData.signature)
+      .attach('image', testData.imagePath);
+
+    expect(createRes.status).toBe(201);
+    const submissionId = createRes.body.id;
+    createdSubmissionIds.push(submissionId);
+
+    // Reject without explicit failure reason
+    const rejectRes = await request(API_URL)
+      .patch(`/api/submissions/${submissionId}`)
+      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
+      .send({ challengeVerified: false });
+
+    expect(rejectRes.status).toBe(200);
+    expect(rejectRes.body.challengeVerified).toBe(false);
+    expect(rejectRes.body.status).toBe('rejected');
+    expect(rejectRes.body.failureReason).toBe('Image does not satisfy challenge criteria');
+  });
+
+  it('should require challengeVerified field for updates', async () => {
+    const testData = createSubmissionTestData();
+    createdUserAddresses.push(testData.walletAddress);
+
+    // Create submission
+    const createRes = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('walletAddress', testData.walletAddress)
+      .field('signature', testData.signature)
+      .attach('image', testData.imagePath);
+
+    expect(createRes.status).toBe(201);
+    const submissionId = createRes.body.id;
+    createdSubmissionIds.push(submissionId);
+
+    // Try to update without challengeVerified
+    const updateRes = await request(API_URL)
+      .patch(`/api/submissions/${submissionId}`)
+      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
+      .send({});
+
+    expect(updateRes.status).toBe(400);
+    expect(updateRes.body.error.field).toBe('challengeVerified');
+  });
+
+  it('should require admin authentication for updating submissions', async () => {
+    const testData = createSubmissionTestData();
+    createdUserAddresses.push(testData.walletAddress);
+
+    // Create submission
+    const createRes = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('walletAddress', testData.walletAddress)
+      .field('signature', testData.signature)
+      .attach('image', testData.imagePath);
+
+    expect(createRes.status).toBe(201);
+    const submissionId = createRes.body.id;
+    createdSubmissionIds.push(submissionId);
+
+    // Try to update without auth
+    const updateRes = await request(API_URL)
+      .patch(`/api/submissions/${submissionId}`)
+      .send({ challengeVerified: true });
+
+    expect(updateRes.status).toBe(401);
+  });
+
+  it('should return 404 when updating non-existent submission', async () => {
+    const updateRes = await request(API_URL)
+      .patch('/api/submissions/00000000-0000-0000-0000-000000000000')
+      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
+      .send({ challengeVerified: true });
+
+    expect(updateRes.status).toBe(404);
+  });
+
+  it('should reject review when submission is not in awaiting_review status', async () => {
+    const testData = createSubmissionTestData();
+    createdUserAddresses.push(testData.walletAddress);
+
+    // Create submission
+    const createRes = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('walletAddress', testData.walletAddress)
+      .field('signature', testData.signature)
+      .attach('image', testData.imagePath);
+
+    expect(createRes.status).toBe(201);
+    const submissionId = createRes.body.id;
+    createdSubmissionIds.push(submissionId);
+
+    // Approve submission (changes status from awaiting_review to processing)
+    const approveRes = await request(API_URL)
+      .patch(`/api/submissions/${submissionId}`)
+      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
+      .send({ challengeVerified: true });
+
+    expect(approveRes.status).toBe(200);
+    expect(approveRes.body.status).toBe('processing');
+
+    // Try to review again (should fail because status is now processing)
+    const secondReviewRes = await request(API_URL)
+      .patch(`/api/submissions/${submissionId}`)
+      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
+      .send({ challengeVerified: false, failureReason: 'Changed my mind' });
+
+    expect(secondReviewRes.status).toBe(400);
+    expect(secondReviewRes.body.error.field).toBe('status');
+    expect(secondReviewRes.body.error.message).toContain('processing');
+  });
+
+  it('should require admin authentication for deleting submissions', async () => {
+    const testData = createSubmissionTestData();
+    createdUserAddresses.push(testData.walletAddress);
+
+    // Create submission
+    const createRes = await request(API_URL)
+      .post('/api/submissions')
+      .field('chainId', chainId)
+      .field('walletAddress', testData.walletAddress)
+      .field('signature', testData.signature)
+      .attach('image', testData.imagePath);
+
+    expect(createRes.status).toBe(201);
+    const submissionId = createRes.body.id;
+    createdSubmissionIds.push(submissionId);
+
+    // Try to delete without auth
+    const deleteRes = await request(API_URL).delete(`/api/submissions/${submissionId}`);
+
+    expect(deleteRes.status).toBe(401);
   });
 });
