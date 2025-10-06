@@ -466,6 +466,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /submissions/{id}/image:
+    get:
+      tags: [Submissions]
+      summary: Get submission image
+      description: Download the image file for a submission from MinIO storage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Image file
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=3600
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # Upload endpoints (existing)
   /upload:
     post:
