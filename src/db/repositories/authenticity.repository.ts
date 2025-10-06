@@ -139,7 +139,7 @@ export class AuthenticityRepository {
   > {
     // TODO: Add submitted_block_height column to database schema
     // For now, using a stub constant for submitted_block_height
-    const STUB_SUBMITTED_HEIGHT = 12000; // TODO: Replace with actual submitted_block_height from database
+    const STUB_SUBMITTED_HEIGHT = 462094; // TODO: Replace with actual submitted_block_height from database
 
     const records = await this.adapter.getRecentTransactionsWithTxId(lookbackBlocks);
 

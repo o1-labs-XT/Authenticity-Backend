@@ -1,4 +1,9 @@
-import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authenticity-zkapp';
+import {
+  AuthenticityZkApp,
+  AuthenticityProof,
+  AuthenticityInputs,
+  BatchReducerUtils,
+} from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8 } from 'o1js';
 import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
 import { logger } from '../../utils/logger.js';
@@ -72,6 +77,8 @@ export class ProofPublishingService {
 
     // Ensure contract is compiled (o1js caches this internally)
     const compileTracker = new PerformanceTracker('publish.compile');
+    BatchReducerUtils.setContractInstance(this.zkApp);
+    await BatchReducerUtils.compile();
     await AuthenticityZkApp.compile();
     compileTracker.end('success');
 
@@ -84,7 +91,7 @@ export class ProofPublishingService {
       {
         feePayer: feePayer.toPublicKey().toBase58(),
         tokenOwner: tokenOwner.toBase58(),
-        creator: `(${proof.publicInput.publicKey.x.toString()}, ${proof.publicInput.publicKey.y.toString()})`,
+        creator: `(${proof.publicInput.publicKey.x.toBigInt()}, ${proof.publicInput.publicKey.y.toBigInt()})`,
       },
       'Transaction participants'
     );
