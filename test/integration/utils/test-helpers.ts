@@ -1,9 +1,5 @@
 import request from 'supertest';
-
-export const API_URL = 'http://localhost:3000';
-// credentials for calling protected api routes
-export const ADMIN_USERNAME = 'admin';
-export const ADMIN_PASSWORD = 'testpassword123';
+import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD } from '../config.js';
 
 /**
  * Creates a date relative to the current date
@@ -54,4 +50,29 @@ export const cleanupChallenges = async (ids: string[]): Promise<void> => {
         .catch(() => {})
     )
   );
+};
+
+/**
+ * Cleanup test users, ignoring errors
+ */
+export const cleanupUsers = async (walletAddresses: string[]): Promise<void> => {
+  await Promise.all(
+    walletAddresses.map((address) =>
+      request(API_URL)
+        .delete(`/api/users/${address}`)
+        .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
+        .catch(() => {})
+    )
+  );
+};
+
+/**
+ * Get current chain length for dynamic position assertions
+ */
+export const getChainLength = async (chainId: string): Promise<number> => {
+  const res = await request(API_URL).get(`/api/chains/${chainId}`);
+  if (res.status !== 200) {
+    throw new Error(`Failed to get chain length: ${res.status}`);
+  }
+  return res.body.length || 0;
 };

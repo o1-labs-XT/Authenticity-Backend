@@ -76,6 +76,7 @@ export class ImageAuthenticityService {
       // Verify ECDSA signature against the commitment
       const isValid = signature.verifySignedHash(commitment, publicKey).toBoolean();
 
+      // todo: should this throw? add logging
       if (!isValid) {
         return {
           isValid: false,

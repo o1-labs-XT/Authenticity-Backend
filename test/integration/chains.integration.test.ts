@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import request from 'supertest';
-import { API_URL, createTestChallenge, cleanupChallenges } from './utils/test-helpers.js';
+import { API_URL } from './config.js';
+import { createTestChallenge, cleanupChallenges } from './utils/test-helpers.js';
 
 describe('Chains API Integration', () => {
   const createdChallenges: string[] = [];

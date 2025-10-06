@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import request from 'supertest';
 import { PrivateKey } from 'o1js';
-import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD } from './utils/test-helpers.js';
+import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD } from './config.js';
 
 describe('Users API Integration', () => {
   const createdWallets: string[] = [];

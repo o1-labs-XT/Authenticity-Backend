@@ -1,4 +1,12 @@
-import type { Challenge, User, Chain, AuthenticityRecord, Job, JobStats } from './types';
+import type {
+  Challenge,
+  User,
+  Chain,
+  Submission,
+  AuthenticityRecord,
+  Job,
+  JobStats,
+} from './types';
 
 /**
  * API client wraps backend API calls with proxy routing.
@@ -9,6 +17,14 @@ import type { Challenge, User, Chain, AuthenticityRecord, Job, JobStats } from '
  * - Keeps API keys (ADMIN_API_KEY) server side
  */
 class ApiClient {
+  private async extractError(response: Response): Promise<never> {
+    const errorData = await response.json().catch(() => ({}));
+    // Backend returns errors as { error: { message: "...", code: "...", field: "..." } }
+    const errorMessage =
+      errorData.error?.message || errorData.message || `Request failed: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`/api/proxy/${path}`, {
       ...options,
@@ -19,8 +35,7 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Request failed: ${response.status}`);
+      await this.extractError(response);
     }
 
     // Handle 204 No Content
@@ -76,6 +91,38 @@ class ApiClient {
       this.request<{ jobs: Job[] }>(`admin/jobs/failed?limit=${limit}&offset=${offset}`),
     details: (jobId: string) => this.request<Job>(`admin/jobs/${jobId}`),
     retry: (jobId: string) => this.request<void>(`admin/jobs/${jobId}/retry`, { method: 'POST' }),
+  };
+
+  // Submissions
+  submissions = {
+    list: (filters?: {
+      walletAddress?: string;
+      chainId?: string;
+      challengeId?: string;
+      status?: string;
+    }) => {
+      const params = new URLSearchParams();
+      if (filters?.walletAddress) params.append('walletAddress', filters.walletAddress);
+      if (filters?.chainId) params.append('chainId', filters.chainId);
+      if (filters?.challengeId) params.append('challengeId', filters.challengeId);
+      if (filters?.status) params.append('status', filters.status);
+      const queryString = params.toString();
+      return this.request<Submission[]>(`submissions${queryString ? `?${queryString}` : ''}`);
+    },
+    get: (id: string) => this.request<Submission>(`submissions/${id}`),
+    create: async (formData: FormData): Promise<Submission> => {
+      const response = await fetch('/api/proxy/submissions', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        await this.extractError(response);
+      }
+
+      return response.json();
+    },
+    delete: (id: string) => this.request<void>(`submissions/${id}`, { method: 'DELETE' }),
   };
 }
 

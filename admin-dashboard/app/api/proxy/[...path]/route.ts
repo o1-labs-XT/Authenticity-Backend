@@ -21,19 +21,30 @@ export async function GET(request: NextRequest, { params }: { params: { path: st
 export async function POST(request: NextRequest, { params }: { params: { path: string[] } }) {
   const path = params.path.join('/');
   const url = `${API_URL}/api/${path}`;
-  const body = await request.json();
 
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
+  const contentType = request.headers.get('content-type');
+  const headers: HeadersInit = {};
+
   if (AUTH) {
     headers.Authorization = `Basic ${AUTH}`;
+  }
+
+  let body;
+
+  // Handle multipart/form-data (file uploads)
+  if (contentType?.includes('multipart/form-data')) {
+    body = await request.formData();
+  } else {
+    // Handle JSON
+    headers['Content-Type'] = 'application/json';
+    const jsonBody = await request.json();
+    body = JSON.stringify(jsonBody);
   }
 
   const response = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body,
   });
 
   const data = await response.json().catch(() => ({ error: response.statusText }));
