@@ -354,7 +354,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [uploading, uploaded, proving, publishing, verified, failed]
+            enum: [awaiting_review, rejected, processing, complete]
           description: Filter by submission status
       responses:
         '200':
@@ -391,9 +391,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+    patch:
+      tags: [Submissions]
+      summary: Review submission (admin only)
+      description: Approve or reject a submission. Can only review submissions in 'awaiting_review' status.
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeVerified]
+              properties:
+                challengeVerified:
+                  type: boolean
+                  description: True to approve, false to reject
+                  example: true
+                failureReason:
+                  type: string
+                  description: Optional reason for rejection (defaults to "Image does not satisfy challenge criteria" if not provided)
+                  example: "Image is too blurry"
+      responses:
+        '200':
+          description: Submission reviewed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+        '400':
+          description: Invalid request (missing challengeVerified, submission not in awaiting_review status)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - authentication required
+        '404':
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
     delete:
       tags: [Submissions]
-      summary: Delete submission
+      summary: Delete submission (admin only)
+      security:
+        - BasicAuth: []
       parameters:
         - name: id
           in: path
@@ -404,6 +457,8 @@ paths:
       responses:
         '204':
           description: Submission deleted
+        '401':
+          description: Unauthorized - authentication required
         '404':
           description: Submission not found
           content:
@@ -729,8 +784,13 @@ components:
           example: 5
         status:
           type: string
-          enum: [uploading, uploaded, proving, publishing, verified, failed]
-          description: Submission status
+          enum: [awaiting_review, rejected, processing, complete]
+          description: |
+            Submission status:
+            - awaiting_review: Waiting for admin review
+            - rejected: Admin rejected (terminal)
+            - processing: Proof generation, blockchain publishing, waiting for confirmations
+            - complete: Transaction confirmed (terminal)
         transactionId:
           type: string
           nullable: true
@@ -745,7 +805,7 @@ components:
           example: 0
         challengeVerified:
           type: boolean
-          description: Whether the submission has been verified for the challenge
+          description: Admin approval status (true = approved, false = rejected). Set via PATCH endpoint.
         createdAt:
           type: string
           format: date-time

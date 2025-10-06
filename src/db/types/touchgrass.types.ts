@@ -38,21 +38,11 @@ export interface Submission {
   storage_key: string;
   tagline?: string | null;
   chain_position: number;
-  status:
-    | 'uploading'
-    | 'verifying'
-    | 'awaiting_review'
-    | 'rejected'
-    | 'publishing'
-    | 'confirming'
-    | 'verified'
-    | 'pending_position'
-    | 'complete'
-    | 'failed';
+  status: 'awaiting_review' | 'rejected' | 'processing' | 'complete';
   transaction_id?: string | null;
   failure_reason?: string | null;
   retry_count: number;
-  challenge_verified: boolean;
+  challenge_verified: boolean; // true = admin approved, false = admin rejected
   created_at: string;
   updated_at: string;
 }

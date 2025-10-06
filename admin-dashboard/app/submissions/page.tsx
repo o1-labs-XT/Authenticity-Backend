@@ -11,6 +11,7 @@ export default function SubmissionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [reviewingSubmission, setReviewingSubmission] = useState<Submission | null>(null);
 
   const loadSubmissions = useCallback(async () => {
     try {
@@ -40,12 +41,45 @@ export default function SubmissionsPage() {
     }
   };
 
+  const handleReview = (submission: Submission) => {
+    setReviewingSubmission(submission);
+  };
+
+  const handleApprove = async () => {
+    if (!reviewingSubmission) return;
+    try {
+      await api.submissions.review(reviewingSubmission.id, { challengeVerified: true });
+      setReviewingSubmission(null);
+      await loadSubmissions();
+    } catch (error: any) {
+      alert(error?.message || 'Failed to approve submission');
+    }
+  };
+
+  const handleReject = async () => {
+    if (!reviewingSubmission) return;
+    const reason = prompt('Enter rejection reason:');
+    if (!reason) return;
+
+    try {
+      await api.submissions.review(reviewingSubmission.id, {
+        challengeVerified: false,
+        failureReason: reason,
+      });
+      setReviewingSubmission(null);
+      await loadSubmissions();
+    } catch (error: any) {
+      alert(error?.message || 'Failed to reject submission');
+    }
+  };
+
   const getStatusBadgeColor = (status: string) => {
     const colors: Record<string, string> = {
       uploading: 'bg-blue-100 text-blue-800',
       verifying: 'bg-yellow-100 text-yellow-800',
       awaiting_review: 'bg-purple-100 text-purple-800',
       rejected: 'bg-red-100 text-red-800',
+      processing: 'bg-indigo-100 text-indigo-800',
       publishing: 'bg-indigo-100 text-indigo-800',
       confirming: 'bg-orange-100 text-orange-800',
       verified: 'bg-green-100 text-green-800',
@@ -103,12 +137,22 @@ export default function SubmissionsPage() {
       key: 'actions',
       label: 'Actions',
       render: (s: Submission) => (
-        <button
-          onClick={() => handleDelete(s.id)}
-          className="text-red-600 hover:text-red-900"
-        >
-          Delete
-        </button>
+        <div className="flex gap-2">
+          {s.status === 'awaiting_review' && (
+            <button
+              onClick={() => handleReview(s)}
+              className="text-blue-600 hover:text-blue-900 font-medium"
+            >
+              Review
+            </button>
+          )}
+          <button
+            onClick={() => handleDelete(s.id)}
+            className="text-red-600 hover:text-red-900"
+          >
+            Delete
+          </button>
+        </div>
       )
     }
   ];
@@ -128,6 +172,7 @@ export default function SubmissionsPage() {
             <option value="verifying">Verifying</option>
             <option value="awaiting_review">Awaiting Review</option>
             <option value="rejected">Rejected</option>
+            <option value="processing">Processing</option>
             <option value="publishing">Publishing</option>
             <option value="confirming">Confirming</option>
             <option value="verified">Verified</option>
@@ -168,6 +213,99 @@ export default function SubmissionsPage() {
       <Card title={`${loading ? 'Loading...' : `Submissions (${submissions.length})`}`}>
         <DataTable data={submissions} columns={columns} />
       </Card>
+
+      {reviewingSubmission && (
+        <ReviewModal
+          submission={reviewingSubmission}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onClose={() => setReviewingSubmission(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Review Modal Component
+function ReviewModal({
+  submission,
+  onApprove,
+  onReject,
+  onClose,
+}: {
+  submission: Submission;
+  onApprove: () => void;
+  onReject: () => void;
+  onClose: () => void;
+}) {
+  const imageUrl = api.submissions.getImageUrl(submission.id);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto m-4">
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Review Submission</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-semibold">Wallet:</span>{' '}
+                  <span className="font-mono text-xs">{submission.walletAddress}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">Chain Position:</span> #{submission.chainPosition}
+                </div>
+                <div>
+                  <span className="font-semibold">Tagline:</span> {submission.tagline || '-'}
+                </div>
+                <div>
+                  <span className="font-semibold">Created:</span>{' '}
+                  {new Date(submission.createdAt).toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-2">Submitted Image:</h3>
+              <img
+                src={imageUrl}
+                alt="Submission"
+                className="w-full rounded border border-gray-300"
+              />
+            </div>
+
+            <div className="flex justify-end gap-4 pt-4 border-t">
+              <button
+                onClick={onClose}
+                className="px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onReject}
+                className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Reject
+              </button>
+              <button
+                onClick={onApprove}
+                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

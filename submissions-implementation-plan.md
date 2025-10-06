@@ -1,5 +1,75 @@
 # Submissions Resource Implementation Plan
 
+## 🎯 IMPLEMENTATION STATUS (Updated 2025-10-04)
+
+### ✅ COMPLETED COMPONENTS
+
+| Step | Component | Status | Tests | Notes |
+|------|-----------|--------|-------|-------|
+| - | **Database Migration** | ✅ Complete | N/A | `20250924023134_create_submissions_table.ts` |
+| 2 | **Database Repository** | ✅ Complete | ⚠️ Unit tests missing | Basic CRUD + transaction support |
+| 4 | **Handler Layer** | ✅ Complete | ⚠️ Unit tests missing | Full validation & error handling |
+| 6 | **Routes Layer** | ✅ Complete | N/A | Registered at `/api/submissions` |
+| 8 | **Server Integration** | ✅ Complete | N/A | Fully integrated in `src/index.ts` |
+| 1 | **Integration Tests** | ✅ Complete | ✅ **23/23 passing** | Comprehensive coverage |
+
+**Key Implementation Notes:**
+- ✅ Duplicate detection handled via DB unique constraint on `sha256_hash`
+- ✅ One submission per user per challenge enforced via unique constraint `(wallet_address, challenge_id)`
+- ✅ Participant count always increments (each submission = new participant due to unique constraint)
+- ✅ Token owner fields intentionally removed from schema
+- ✅ Chain length and participant count updated atomically via database transactions
+
+### ❌ INCOMPLETE / BLOCKED COMPONENTS
+
+| Step | Component | Status | Priority | Blocker |
+|------|-----------|--------|----------|---------|
+| 3 | **Repository Unit Tests** | ❌ Not Started | Medium | - |
+| 5 | **Handler Unit Tests** | ❌ Not Started | Medium | - |
+| 7 | **Worker Modifications** | ❌ Not Started | **🔴 CRITICAL** | Blocks proof generation |
+| 9 | **Worker Integration** | ❌ Not Started | **🔴 CRITICAL** | Depends on Step 7 |
+| - | **Admin Review PATCH Endpoint** | ✅ Complete | - | Integration tests passing |
+| - | **Job Queue Integration** | ⚠️ Commented Out | **🔴 CRITICAL** | TODO in handler |
+| 10 | **Upload Deprecation** | ❌ Not Started | Low | Can defer |
+
+### 🔴 CRITICAL BLOCKERS
+
+1. **Job Queue Disabled**: Proof generation enqueueing is commented out in handler
+   - Current state: Submissions created but no async processing happens
+   - Impact: Photos uploaded and admin-approved but never get proofs generated or published to blockchain
+
+2. **Worker Not Updated**: Worker still uses `AuthenticityRepository` instead of `SubmissionsRepository`
+   - Location: `src/workers/proofGenerationWorker.ts`
+   - Impact: Even if jobs were enqueued, worker couldn't process them
+
+3. ✅ **Admin Review Flow** - IMPLEMENTED
+   - `PATCH /api/submissions/:id` with `{ challengeVerified: true/false, failureReason? }`
+   - Admin can approve (→ `processing`) or reject (→ `rejected`) submissions
+   - Protected by `requireAdmin` middleware (basic auth)
+
+### 🟡 NON-CRITICAL ITEMS
+
+- Repository unit tests (Step 3) - integration tests provide coverage
+- Handler unit tests (Step 5) - integration tests provide coverage
+- Upload endpoint deprecation (Step 10) - can be done later
+
+### 📊 IMPLEMENTATION PROGRESS: 75%
+
+- **Core API (CRUD)**: 100% ✅ (All endpoints working including PATCH)
+- **Database Layer**: 100% ✅ (Migrations, repository, constraints)
+- **Testing**: 75% ⚠️ (Integration ✅ with admin tests, Unit tests ❌)
+- **Async Processing**: 0% ❌ (Job queue disabled, worker not updated)
+- **Admin Workflow**: 100% ✅ (PATCH endpoint implemented with auth)
+
+### 🎯 NEXT STEPS (Priority Order)
+
+1. **Enable job queue** in handler (uncomment TODO, trigger on admin approval)
+2. **Update worker** to use `SubmissionsRepository` and handle `processing` → `complete` state
+3. **Worker should set `status = 'complete'`** when transaction gets 5 confirmations
+4. **Add unit tests** for repository and handler (optional, low priority)
+
+---
+
 ## Overview
 
 This document provides a detailed, step-by-step implementation plan for building the **Submissions** resource, which will replace the existing `authenticity_records` table and `/api/upload` endpoint in the TouchGrass MVP.
@@ -12,8 +82,8 @@ This document provides a detailed, step-by-step implementation plan for building
 4. **User Tracking**: Submissions are linked to users via wallet address
 5. **Position Tracking**: Each submission has a `chain_position` within its chain
 6. **Admin Review**: Submissions require admin approval before blockchain publishing
-7. **Extended Status Flow**: `uploaded` → `verifying` → `awaiting_review` → `publishing` → `confirming` → `verified`
-8. **Two-Stage Worker**: Proof generation worker + blockchain publishing (triggered by admin approval)
+7. **Extended Status Flow**: `uploading` → `verifying` → `awaiting_review` → `publishing` → `confirming` → `verified`
+8. **No Token Owner**: Token owner fields removed from design (simplified)
 
 ### Design Principles
 
@@ -28,87 +98,125 @@ This document provides a detailed, step-by-step implementation plan for building
 
 ## Submission Flow Overview
 
-### User Flow
+### Simplified 4-State Machine
 
-1. **User takes photo**
-   - Client generates SHA256 hash of photo
-   - Client signs the hash with their Mina key
-   - Client uploads: image file, hash, signature, Mina address (public key), chainId
-   - **Status**: `uploaded`
-
-2. **Server verifies** (automatic, immediate)
-   - Signature matches address (public key validation)
-   - Signature matches image hash
-   - Image hash matches actual image
-   - Enqueues proof generation job
-   - **Status**: `verifying`
-
-3. **Server generates authenticity proof** (worker, async)
-   - Generates intermediate hash states from image
-   - Calls `AuthenticityProgram.verifyAuthenticity(hash, signature, publicKey)` with intermediate states as private input
-   - Proof demonstrates: (a) signature is valid for public key and hash, (b) prover has access to original image
-   - **Status**: `awaiting_review`
-
-4. **Admin verifies challenge criteria** (manual, admin dashboard)
-   - Image is unique
-   - Image satisfies challenge criteria (e.g., "photo of grass")
-   - Admin approves or rejects with reason
-   - **Status on approval**: `publishing` | **Status on rejection**: `rejected`
-
-5. **Server publishes proof to blockchain** (worker, triggered by approval)
-   - Calls `AuthenticityZkApp.verifyAndStore(chainId, imageProof)`
-   - Dispatches action with: tokenAddress, chainId, imageCreator publicKey, imageHash
-   - **Status**: `confirming`
-
-6. **Transaction confirmed** (worker polls blockchain)
-   - Transaction included in block
-   - **Status**: `verified`
-
-7. **TODO: Chain length settlement** (future)
-   - Server batches actions to update chain length on contract
-   - **Status**: `complete`
-
-### Status State Machine
-
-```
-uploaded → verifying → awaiting_review → [approved] → publishing → confirming → verified → [TODO: complete]
-                              ↓
-                         [rejected]
+```typescript
+export type SubmissionStatus =
+  | 'awaiting_review'  // Awaiting admin review
+  | 'rejected'         // Admin rejected (terminal)
+  | 'processing'       // Proof generation → tx submission → confirmations
+  | 'complete';        // Tx confirmed 5 times (terminal)
 ```
 
-### Rejection Flow
-- Admin can reject submission at `awaiting_review` stage
-- Rejection includes reason (stored in `failure_reason`)
-- User can view rejection reason
-- No blockchain transaction occurs for rejected submissions
+### Complete User Flow
+
+1. **User uploads photo** - ✅ IMPLEMENTED
+   - Client generates SHA256 hash and signs it with their Mina key
+   - Client uploads: image file, signature, wallet address (public key), chainId, tagline (optional)
+   - Server validates signature, stores image in MinIO, creates submission record
+   - **Initial Status**: `awaiting_review`
+
+2. **Admin reviews submission** - ✅ IMPLEMENTED
+   - Admin views submission in dashboard
+   - Admin checks if image meets challenge criteria (e.g., "photo of grass")
+   - **Approval**: `PATCH /api/submissions/:id { challengeVerified: true }`
+     - Sets `challenge_verified = true`
+     - Sets `status = 'processing'`
+     - Clears `failure_reason = null`
+     - TODO: Enqueues job for proof generation
+   - **Rejection**: `PATCH /api/submissions/:id { challengeVerified: false, failureReason: "..." }`
+     - Sets `challenge_verified = false`
+     - Sets `status = 'rejected'` (terminal)
+     - Sets `failure_reason` with admin's explanation
+
+3. **Worker processes approved submission** - ❌ NOT IMPLEMENTED
+   - Job queue triggers worker when admin approves
+   - Worker generates ZK proof of authenticity
+   - Worker publishes proof to blockchain
+   - Worker sets `transaction_id` after submission
+   - Worker waits for 5 confirmations
+   - **Status**: `processing` (throughout entire workflow)
+   - **Note**: If worker encounters errors, `failure_reason` is set but status remains `processing`
+
+4. **Transaction confirmed** - ❌ NOT IMPLEMENTED
+   - Worker detects 5 blockchain confirmations
+   - Sets `status = 'complete'` (terminal)
+
+### State Machine Diagram
+
+```
+awaiting_review ──[admin approves]──> processing ──[5 confirmations]──> complete (terminal)
+       │
+       └──[admin rejects]──> rejected (terminal)
+```
+
+**Current Implementation:**
+```
+awaiting_review ──[PATCH approved]──> processing (stuck, job queue disabled)
+       │
+       └──[PATCH rejected]──> rejected ✅
+```
+
+### State Descriptions
+
+#### `awaiting_review`
+- **When**: Initial state after successful upload
+- **Description**: Waiting for admin to review the image
+- **Fields**: `challenge_verified = false`, no `transaction_id`, no `failure_reason`
+
+#### `rejected` (terminal state)
+- **When**: Admin rejects the submission
+- **Description**: Image does not meet challenge criteria
+- **Fields**:
+  - `challenge_verified = false`
+  - `failure_reason` contains admin's rejection explanation
+  - No `transaction_id` (never goes to blockchain)
+
+#### `processing`
+- **When**: Admin approves the submission
+- **Description**: Worker is:
+  1. Generating ZK proof of authenticity
+  2. Publishing proof to blockchain
+  3. Waiting for transaction confirmations (0-5)
+- **Fields**:
+  - `challenge_verified = true`
+  - `transaction_id` set after tx submission (null before)
+  - `failure_reason` set if worker errors occur (otherwise null)
+
+#### `complete` (terminal state)
+- **When**: Transaction receives 5 confirmations on-chain
+- **Description**: Submission successfully verified and published
+- **Fields**:
+  - `challenge_verified = true`
+  - `transaction_id` contains blockchain transaction ID
+  - No `failure_reason`
 
 ---
 
-## Database Schema (Already Exists)
+## Database Schema ✅ IMPLEMENTED
 
-The `submissions` table migration already exists at `/migrations/20250924023134_create_submissions_table.ts`:
+The `submissions` table migration exists at `/migrations/20250924023134_create_submissions_table.ts`:
 
 ```sql
 CREATE TABLE submissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  sha256_hash VARCHAR(64) NOT NULL UNIQUE,
-  wallet_address VARCHAR(255) NOT NULL,  -- FK to users
-  token_owner_address VARCHAR(255) NOT NULL,
-  token_owner_private_key VARCHAR(255) NULL,
-  public_key VARCHAR(255) NOT NULL,  -- Must match wallet_address
-  signature VARCHAR(500) NOT NULL,
-  challenge_id UUID NOT NULL,  -- FK to challenges
-  chain_id UUID NOT NULL,  -- FK to chains
-  storage_key VARCHAR(255) NULL,
-  tagline VARCHAR(255) NULL,
-  chain_position INTEGER NOT NULL,
-  status ENUM('uploaded', 'verifying', 'awaiting_review', 'rejected', 'publishing', 'confirming', 'verified', 'failed') NOT NULL DEFAULT 'uploaded',
-  transaction_id VARCHAR(255) NULL,
-  failure_reason TEXT NULL,  -- Used for rejection reason or error message
-  retry_count INTEGER NOT NULL DEFAULT 0,
-  challenge_verified BOOLEAN NOT NULL DEFAULT false,  -- Set to true when admin approves
-  reviewed_at TIMESTAMP NULL,  -- When admin reviewed
-  reviewed_by VARCHAR(255) NULL,  -- Admin who reviewed (wallet address)
+  sha256_hash VARCHAR(64) NOT NULL UNIQUE,                    -- Unique image hash
+  wallet_address VARCHAR(255) NOT NULL,                       -- FK to users (public key)
+  signature VARCHAR(500) NOT NULL,                            -- Signature of image hash
+  challenge_id UUID NOT NULL,                                 -- FK to challenges
+  chain_id UUID NOT NULL,                                     -- FK to chains
+  storage_key VARCHAR(255) NOT NULL,                          -- MinIO object key
+  tagline VARCHAR(255) NULL,                                  -- User's tagline
+  chain_position INTEGER NOT NULL,                            -- Position in chain
+  status ENUM(
+    'uploading', 'verifying', 'awaiting_review', 'rejected',
+    'publishing', 'confirming', 'verified', 'pending_position',
+    'complete', 'failed'
+  ) NOT NULL DEFAULT 'uploading',
+  transaction_id VARCHAR(255) NULL,                           -- Blockchain tx ID
+  failure_reason TEXT NULL,                                   -- Rejection/error reason
+  retry_count INTEGER NOT NULL DEFAULT 0,                     -- Retry attempts
+  challenge_verified BOOLEAN NOT NULL DEFAULT false,          -- Admin approval flag
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
@@ -124,43 +232,23 @@ CREATE TABLE submissions (
   INDEX (sha256_hash),
   INDEX (status),
   INDEX (created_at),
-  INDEX (challenge_verified),  -- For filtering approved/pending review
 
   -- Constraints
   UNIQUE (wallet_address, challenge_id)  -- One submission per user per challenge
 );
 ```
 
-### Schema Changes Required
-
-**Migration Update Required**: Update status enum to include all new states:
-
-```typescript
-// Update status enum to include all new states:
-table.enum('status', [
-  'uploaded',
-  'verifying',
-  'awaiting_review',
-  'rejected',
-  'publishing',
-  'confirming',
-  'verified',
-  'failed'
-]).notNullable().defaultTo('uploaded');
-
-// Add index for filtering by review status
-table.index('challenge_verified');
-```
-
-### Key Schema Features
+### Key Schema Features ✅
 
 1. **UUID Primary Key**: Auto-generated unique identifier
-2. **Unique Constraint**: One submission per wallet per challenge
-3. **Foreign Keys**: Cascading deletes maintain referential integrity
-4. **Extended Status Enum**: 8 states covering entire submission lifecycle
-5. **Review Tracking**: `challenge_verified` for admin approval workflow
-6. **Timestamps**: Automatic creation and update tracking
-7. **Indexes**: Optimized for common query patterns including admin review filtering
+2. **Duplicate Prevention**: Unique constraint on `sha256_hash` prevents same image uploaded twice
+3. **One Submission Per Challenge**: Unique constraint on `(wallet_address, challenge_id)`
+4. **Foreign Keys**: Cascading deletes maintain referential integrity
+5. **Extended Status Enum**: 10 states covering entire submission lifecycle
+6. **Review Tracking**: `challenge_verified` boolean for admin approval workflow
+7. **Timestamps**: Automatic creation and update tracking via `created_at`/`updated_at`
+8. **Indexes**: Optimized for common query patterns (wallet, chain, challenge, hash, status)
+9. **No Token Owner**: Simplified design - no separate token owner fields needed
 
 ---
 
@@ -766,16 +854,13 @@ import { Errors } from '../../utils/errors.js';
 
 export interface CreateSubmissionInput {
   sha256Hash: string;
-  walletAddress: string;
-  tokenOwnerAddress: string;
-  tokenOwnerPrivateKey: string;
-  publicKey: string;
+  walletAddress: string;        // User's wallet address (public key)
   signature: string;
   challengeId: string;
   chainId: string;
-  storageKey?: string;
+  storageKey: string;            // MinIO object key
   tagline?: string;
-  chainPosition: number;
+  // Note: chainPosition calculated automatically in transaction
 }
 
 export class SubmissionsRepository {
@@ -789,44 +874,40 @@ export class SubmissionsRepository {
 
     try {
       const submission = await knex.transaction(async (trx: Knex.Transaction) => {
-        // 1. Insert submission
+        // 1. Get next chain position
+        const result = await trx('submissions')
+          .where('chain_id', input.chainId)
+          .max('chain_position as max_position')
+          .first();
+        const chainPosition = (result?.max_position || 0) + 1;
+
+        // 2. Insert submission
         const [newSubmission] = await trx('submissions')
           .insert({
             sha256_hash: input.sha256Hash,
             wallet_address: input.walletAddress,
-            token_owner_address: input.tokenOwnerAddress,
-            token_owner_private_key: input.tokenOwnerPrivateKey,
-            public_key: input.publicKey,
             signature: input.signature,
             challenge_id: input.challengeId,
             chain_id: input.chainId,
             storage_key: input.storageKey,
             tagline: input.tagline,
-            chain_position: input.chainPosition,
-            status: 'pending',
+            chain_position: chainPosition,
+            status: 'uploading',
           })
           .returning('*');
 
-        // 2. Update chain length and last_activity_at
+        // 3. Update chain length and last_activity_at
         await trx('chains')
           .where('id', input.chainId)
           .increment('length', 1)
           .update({ last_activity_at: knex.fn.now() });
 
-        // 3. Check if this is user's first submission to this challenge
-        const existingSubmissions = await trx('submissions')
-          .where('wallet_address', input.walletAddress)
-          .where('challenge_id', input.challengeId)
-          .count('* as count');
-
-        const isFirstSubmission = Number(existingSubmissions[0].count) === 1;
-
-        // 4. If first submission, increment challenge participant count
-        if (isFirstSubmission) {
-          await trx('challenges')
-            .where('id', input.challengeId)
-            .increment('participant_count', 1);
-        }
+        // 4. Increment challenge participant count
+        // Note: Due to unique constraint (wallet_address, challenge_id),
+        // each successful submission is guaranteed to be a new participant
+        await trx('challenges')
+          .where('id', input.challengeId)
+          .increment('participant_count', 1);
 
         return newSubmission;
       });
@@ -1134,13 +1215,11 @@ import fs from 'fs';
 export interface SubmissionResponse {
   id: string;
   sha256Hash: string;
-  walletAddress: string;
-  tokenOwnerAddress: string;
-  publicKey: string;
+  walletAddress: string;        // User's wallet address (public key)
   signature: string;
   challengeId: string;
   chainId: string;
-  storageKey?: string;
+  storageKey: string;
   tagline?: string;
   chainPosition: number;
   status: string;
@@ -1164,19 +1243,17 @@ export class SubmissionsHandler {
   ) {}
 
   /**
-   * Transform database model to API response (camelCase, exclude sensitive fields)
+   * Transform database model to API response (camelCase)
    */
   private toResponse(submission: Submission): SubmissionResponse {
     return {
       id: submission.id,
       sha256Hash: submission.sha256_hash,
       walletAddress: submission.wallet_address,
-      tokenOwnerAddress: submission.token_owner_address,
-      publicKey: submission.public_key,
       signature: submission.signature,
       challengeId: submission.challenge_id,
       chainId: submission.chain_id,
-      storageKey: submission.storage_key || undefined,
+      storageKey: submission.storage_key,
       tagline: submission.tagline || undefined,
       chainPosition: submission.chain_position,
       status: submission.status,
@@ -1195,10 +1272,9 @@ export class SubmissionsHandler {
   private validateSubmissionRequest(
     file: Express.Multer.File | undefined,
     chainId: string | undefined,
-    publicKey: string | undefined,
+    walletAddress: string | undefined,
     signature: string | undefined
-  ): { imageBuffer: Buffer; validatedChainId: string } {
-    // Validate required fields
+  ): void {
     if (!file) {
       throw Errors.badRequest('No image file provided', 'image');
     }
@@ -1207,32 +1283,19 @@ export class SubmissionsHandler {
       throw Errors.badRequest('chainId is required', 'chainId');
     }
 
-    if (!publicKey) {
-      throw Errors.badRequest('publicKey is required', 'publicKey');
+    if (!walletAddress) {
+      throw Errors.badRequest('walletAddress is required', 'walletAddress');
     }
 
     if (!signature) {
       throw Errors.badRequest('signature is required', 'signature');
     }
 
-    // Validate UUID format for chainId
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(chainId)) {
-      throw Errors.badRequest('Invalid chainId format', 'chainId');
-    }
-
-    // Read and validate image buffer
-    const imageBuffer = fs.readFileSync(file.path);
-    if (!imageBuffer || imageBuffer.length === 0) {
-      throw Errors.badRequest('Image buffer is empty', 'image');
-    }
-
-    // Validate public key format
+    // Validate wallet address format (it's a public key in base58)
     try {
-      PublicKey.fromBase58(publicKey);
+      PublicKey.fromBase58(walletAddress);
     } catch {
-      throw Errors.badRequest('Invalid public key format', 'publicKey');
+      throw Errors.badRequest('Invalid wallet address format', 'walletAddress');
     }
 
     // Validate signature format
@@ -1241,8 +1304,6 @@ export class SubmissionsHandler {
     } catch {
       throw Errors.badRequest('Invalid signature format', 'signature');
     }
-
-    return { imageBuffer, validatedChainId: chainId };
   }
 
   /**
@@ -1250,79 +1311,50 @@ export class SubmissionsHandler {
    */
   async createSubmission(
     req: Request,
-    res: Response<SubmissionResponse | { status: string; tokenOwnerAddress: string }>,
+    res: Response<SubmissionResponse>,
     next: NextFunction
   ): Promise<void> {
+    let storageKey: string | undefined;
+    let submission: Submission | undefined;
+
     try {
       logger.debug('Processing submission request');
 
-      // Extract from multipart form data
       const file = req.file;
-      const { chainId, publicKey, signature, tagline } = req.body;
+      const { chainId, walletAddress, signature, tagline } = req.body;
 
       // Validate request
-      const { imageBuffer, validatedChainId } = this.validateSubmissionRequest(
-        file,
-        chainId,
-        publicKey,
-        signature
-      );
+      this.validateSubmissionRequest(file, chainId, walletAddress, signature);
 
-      // Wallet address is derived from public key
-      const walletAddress = publicKey;
+      // Read image buffer
+      const imageBuffer = fs.readFileSync(file!.path);
+      if (!imageBuffer || imageBuffer.length === 0) {
+        throw Errors.badRequest('Image buffer is empty', 'image');
+      }
 
       // Compute SHA256 hash of image
       const sha256Hash = this.verificationService.hashImage(imageBuffer);
       logger.debug({ sha256Hash }, 'Image hash calculated');
 
-      // Check for duplicate image (exact same image submitted before)
-      const existingByHash = await this.submissionsRepo.findByHash(sha256Hash);
-      if (existingByHash) {
-        logger.info('Duplicate image detected');
-        fs.unlinkSync(file!.path); // Clean up temp file
-
-        res.status(200).json({
-          tokenOwnerAddress: existingByHash.token_owner_address,
-          status: 'duplicate',
-        });
-        return;
-      }
-
-      // Verify chain exists
-      const chain = await this.chainsRepo.findById(validatedChainId);
+      // Get chain and challenge
+      const chain = await this.chainsRepo.findById(chainId!);
       if (!chain) {
-        fs.unlinkSync(file!.path);
         throw Errors.notFound('Chain');
       }
-
-      const challengeId = chain.challenge_id;
-
-      // Verify challenge is active
-      const challenge = await this.challengesRepo.findById(challengeId);
+      const challenge = await this.challengesRepo.findById(chain.challenge_id);
       if (!challenge) {
-        fs.unlinkSync(file!.path);
         throw Errors.notFound('Challenge');
       }
 
+      // Verify challenge is active
       const now = new Date();
       const startTime = new Date(challenge.start_time);
       const endTime = new Date(challenge.end_time);
       if (now < startTime || now >= endTime) {
-        fs.unlinkSync(file!.path);
         throw Errors.badRequest('Challenge is not currently active');
       }
 
-      // Check if user has already submitted to this challenge
-      const hasSubmitted = await this.submissionsRepo.hasSubmittedToChallenge(
-        walletAddress,
-        challengeId
-      );
-      if (hasSubmitted) {
-        fs.unlinkSync(file!.path);
-        throw Errors.conflict('You have already submitted to this challenge');
-      }
-
-      // Ensure user exists (find or create)
+      // Ensure user exists
       await this.usersRepo.findOrCreate(walletAddress);
 
       // Verify signature
@@ -1330,113 +1362,60 @@ export class SubmissionsHandler {
       const verificationResult = this.verificationService.verifyAndPrepareImage(
         file!.path,
         signature,
-        publicKey
+        walletAddress
       );
 
       if (!verificationResult.isValid) {
         logger.warn({ error: verificationResult.error }, 'Invalid signature');
-        fs.unlinkSync(file!.path);
         throw Errors.badRequest(
           verificationResult.error || 'Signature verification failed',
           'signature'
         );
       }
 
-      // Generate random token owner address
-      const tokenOwnerKey = PrivateKey.random();
-      const tokenOwnerAddress = tokenOwnerKey.toPublicKey().toBase58();
-      const tokenOwnerPrivate = tokenOwnerKey.toBase58();
-      logger.debug({ tokenOwnerAddress }, 'Generated token owner');
-
-      // Get next chain position
-      const chainPosition = await this.submissionsRepo.getNextChainPosition(
-        validatedChainId
-      );
-
       // Upload image to MinIO
-      let storageKey: string;
-      try {
-        storageKey = await this.storageService.uploadImage(sha256Hash, imageBuffer);
-        logger.debug({ storageKey, sha256Hash }, 'Image uploaded to MinIO');
-      } catch (error) {
-        logger.error({ err: error }, 'Failed to upload image to MinIO');
-        fs.unlinkSync(file!.path);
-        throw error;
-      }
+      storageKey = await this.storageService.uploadImage(sha256Hash, imageBuffer);
+      logger.debug({ storageKey, sha256Hash }, 'Image uploaded to MinIO');
 
       // Create submission (with transaction for chain/challenge updates)
-      let submission: Submission;
-      try {
-        submission = await this.submissionsRepo.create({
-          sha256Hash,
-          walletAddress,
-          tokenOwnerAddress,
-          tokenOwnerPrivateKey: tokenOwnerPrivate,
-          publicKey,
-          signature,
-          challengeId,
-          chainId: validatedChainId,
-          storageKey,
-          tagline,
-          chainPosition,
-        });
-      } catch (error) {
-        logger.error({ err: error }, 'Failed to create submission');
-        // Clean up MinIO
-        try {
-          await this.storageService.deleteImage(storageKey);
-        } catch (deleteError) {
-          logger.warn({ err: deleteError }, 'Failed to delete MinIO image after failure');
-        }
-        fs.unlinkSync(file!.path);
-        throw error;
-      }
+      submission = await this.submissionsRepo.create({
+        sha256Hash,
+        walletAddress,
+        signature,
+        challengeId: challenge.id,
+        chainId: chainId!,
+        storageKey,
+        tagline,
+      });
 
-      // Clean up temp file after successful creation
-      fs.unlinkSync(file!.path);
+      // TODO: Enable job queue for proof generation
+      // const jobId = await this.jobQueue.enqueueProofGeneration({
+      //   sha256Hash,
+      //   signature,
+      //   walletAddress,
+      //   storageKey,
+      //   uploadedAt: new Date(),
+      //   correlationId: (req as Request & { correlationId: string }).correlationId,
+      // });
+      // logger.info({ jobId, submissionId: submission.id }, 'Proof generation job enqueued');
 
-      // Enqueue job for proof generation
-      try {
-        const jobId = await this.jobQueue.enqueueProofGeneration({
-          sha256Hash,
-          signature,
-          publicKey,
-          storageKey,
-          tokenOwnerAddress,
-          tokenOwnerPrivateKey: tokenOwnerPrivate,
-          uploadedAt: new Date(),
-          correlationId: (req as Request & { correlationId: string }).correlationId,
-        });
-
-        // Update submission with job ID
-        await this.submissionsRepo.update(submission.id, {
-          // Store job_id if we add it to schema later
-        });
-
-        logger.info({ jobId, submissionId: submission.id }, 'Proof generation job enqueued');
-      } catch (error) {
-        logger.error({ err: error }, 'Failed to enqueue job');
-        // Clean up submission and MinIO on job failure
-        await this.submissionsRepo.delete(submission.id);
-        try {
-          await this.storageService.deleteImage(storageKey);
-        } catch (deleteError) {
-          logger.warn({ err: deleteError }, 'Failed to delete MinIO image after job failure');
-        }
-        throw error;
-      }
-
-      // Return submission
       res.status(201).json(this.toResponse(submission));
     } catch (error) {
       logger.error({ err: error }, 'Submission handler error');
 
-      // Clean up temp file if it exists
-      if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
+      // Clean up MinIO if upload succeeded but database failed
+      if (storageKey) {
+        await this.storageService.deleteImage(storageKey).catch((err) => {
+          logger.warn({ err }, 'Failed to delete MinIO image during cleanup');
+        });
       }
 
       next(error);
+    } finally {
+      // Always clean up temp file
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
     }
   }
 
