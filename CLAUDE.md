@@ -15,18 +15,22 @@ docker-compose up -d  # Starts PostgreSQL, pgweb, MinIO, Grafana, Loki, Promtail
 # Grafana: http://localhost:3001 (admin/admin)
 
 # Run services (in separate terminals):
-npm run dev:api       # Start API server with hot reload (port 3000)
-npm run dev:worker    # Start worker service with hot reload
+npm run dev:api         # Start API server with hot reload (port 3000)
+npm run dev:worker      # Start proof generation worker with hot reload
+npm run dev:monitoring  # Start blockchain monitoring worker with hot reload
 
 # Production commands:
-npm run build         # Build TypeScript to dist/
-npm run start         # Run migrations, compile zkApp, start API
-npm run start:api     # Run migrations and start API server
-npm run start:worker  # Compile zkApp and start worker service
+npm run build           # Build TypeScript to dist/
+npm run start           # Run migrations, compile zkApp, start API
+npm run start:api       # Run migrations and start API server
+npm run start:worker    # Compile zkApp and start proof generation worker
+npm run start:monitoring # Start blockchain monitoring worker
 
 # MinIO bucket setup (first time only):
 docker-compose exec minio mc alias set local http://minio:9000 minioadmin minioadmin
 docker-compose exec minio mc mb local/authenticity --ignore-existing
+# Alternative for local development:
+docker-compose exec minio mc mb /data/authenticity-local
 ```
 
 ### Database Management
@@ -50,9 +54,15 @@ npm run db:migrate      # Rerun migrations
 ### Testing & Code Quality
 ```bash
 npm run test:unit        # Run unit tests only (excludes integration)
-npm run test:integration # Run integration tests with test database
+npm run test:integration # Run integration tests with test database (uses scripts/test-integration.sh)
 npm run lint            # Run ESLint
 npm run format          # Format code with Prettier
+
+# Pre-commit hooks (Husky + lint-staged):
+# - Automatically runs ESLint with auto-fix
+# - Runs Prettier formatting
+# - Builds TypeScript to check for compilation errors
+# - For admin-dashboard: runs TypeScript check and linting
 
 # Manual testing scripts
 IMAGE_PATH=./image.png API_URL=http://localhost:3000 tsx test-upload.mts
@@ -88,6 +98,8 @@ docker-compose up -d loki grafana promtail
 ## High-Level Architecture
 
 TouchGrass MVP: A social photo challenge platform with zero-knowledge proof verification on Mina Protocol. Users participate in daily challenges by submitting photos that are cryptographically verified for authenticity.
+
+The system includes both a backend API and an admin dashboard (Next.js app) for managing challenges, users, job queues, and submissions.
 
 ### Core Flow
 1. **Upload**: Client uploads image with cryptographic signature
@@ -139,6 +151,10 @@ src/
 │   ├── admin.handler.ts     # Job queue management
 │   └── challenges.handler.ts # TouchGrass challenge endpoints
 ├── services/
+│   ├── blockchain/
+│   │   ├── archiveNode.service.ts   # Mina archive node GraphQL queries
+│   │   ├── minaNode.service.ts      # Mina node queries using o1js fetchLastBlock
+│   │   └── monitoring.service.ts    # Transaction status aggregation and logging
 │   ├── image/
 │   │   └── verification.service.ts  # SHA256 hashing, signature verification using o1js
 │   ├── queue/
@@ -152,9 +168,17 @@ src/
 │   ├── logger.ts        # Pino logger with correlation IDs
 │   └── performance.ts   # Performance tracking utilities
 ├── workers/
-│   └── proofGenerationWorker.ts    # Job processor with context propagation
+│   ├── proofGenerationWorker.ts    # Proof generation job processor 
+│   └── blockchainMonitorWorker.ts  # Blockchain monitoring job processor
 ├── index.ts             # API server entry point with dependency wiring
-└── worker.ts            # Worker service entry point
+├── worker.ts            # Proof generation worker service entry point
+└── monitoringWorker.ts  # Blockchain monitoring worker service entry point
+
+admin-dashboard/         # Next.js admin interface
+├── app/                # App router pages (jobs, challenges, users, chains)
+├── components/         # Reusable UI components
+├── lib/               # API client and types
+└── middleware.ts      # Next.js middleware
 
 migrations/              # Knex database migrations
 test/                    # Unit tests with Vitest
@@ -178,6 +202,9 @@ test/                    # Unit tests with Vitest
 - **ProofGenerationService**: Generates ZK proofs using o1js circuits
 - **ProofPublishingService**: Publishes proofs to Mina blockchain
 - **JobQueueService**: pg-boss wrapper with singleton keys to prevent duplicates
+- **ArchiveNodeService**: Queries Mina archive node for transaction status via GraphQL
+- **MinaNodeService**: Queries Mina node for block height using o1js fetchLastBlock
+- **BlockchainMonitoringService**: Aggregates and logs transaction status (pending/included/final/abandoned)
 
 ### Database
 - **PostgresAdapter**: Instance-based Knex wrapper (NOT static methods) with connection pooling
@@ -186,12 +213,16 @@ test/                    # Unit tests with Vitest
 - **Migrations**: Schema managed via Knex migrations
 - **Status values**: `pending`, `processing`, `verified`, `failed`
 
-### Worker
-- **ProofGenerationWorker**: Processes jobs from pg-boss queue with context propagation
-- Updates status throughout lifecycle
-- Handles retries (3 attempts with exponential backoff)
-- Downloads images from MinIO, generates proofs, publishes to blockchain
-- Cleans up temporary files and MinIO storage after processing
+### Workers
+- **ProofGenerationWorker**: Processes proof generation jobs from pg-boss queue with context propagation
+  - Updates status throughout lifecycle
+  - Handles retries (3 attempts with exponential backoff)
+  - Downloads images from MinIO, generates proofs, publishes to blockchain
+  - Cleans up temporary files and MinIO storage after processing
+- **BlockchainMonitorWorker**: Lightweight monitoring service for transaction status
+  - Queries Mina archive node every 5 minutes to track transaction status
+  - Logs transaction categorization (pending/included/final/abandoned)
+  - Independent deployment with minimal resource requirements
 
 ## API Endpoints
 
@@ -245,17 +276,23 @@ MINIO_BUCKET=authenticity
 CIRCUIT_CACHE_PATH=./cache  # zkApp compilation cache
 ADMIN_API_KEY=<api_key>     # Required for admin endpoints in production
 SSL_REQUIRED=false          # Enable SSL for PostgreSQL in production
+
+# On-Chain Monitoring Configuration
+ARCHIVE_NODE_ENDPOINT=https://api.minascan.io/node/berkeley/v1/graphql  # Default for testnet
+MINA_NODE_ENDPOINT=https://api.minascan.io/node/berkeley/v1/graphql     # Default for testnet
+MONITORING_ENABLED=true     # Enable blockchain transaction monitoring (default: true)
 ```
 
 ## Implementation Details
 
 ### Job Queue (pg-boss)
-- Queue name: `proof-generation`
+- Queue names: `proof-generation`, `blockchain-monitoring`
 - Singleton key prevents duplicate jobs for same hash
 - Retry policy: 3 attempts with exponential backoff
 - Job retention: 24 hours for auditing
 - Jobs carry correlation IDs for distributed tracing
 - Worker concurrency: Configurable via pg-boss
+- Monitoring job: Runs every 5 minutes to check transaction status on-chain
 
 ### Database Schema
 
@@ -317,12 +354,13 @@ updated_at              -- Last modified
 ## Deployment
 
 ### Railway Configuration
-- **API Service**: Lightweight (512MB RAM)
-- **Worker Service**: Heavy (2GB RAM for proof generation)
+- **API Service**: Lightweight (512MB RAM), 2 replicas
+- **Worker Service**: Heavy (2GB RAM for proof generation), 2 replicas
+- **Monitoring Service**: Lightweight (512MB RAM), 1 replica for blockchain monitoring
 - **MinIO Service**: S3-compatible storage for image files
 - **Health Checks**: 180s timeout, 3 restart attempts
 - **Auto-migrations**: Run at API startup
-- **Circuit Compilation**: At worker startup
+- **Circuit Compilation**: At proof generation worker startup
 - **Graceful Shutdown**: Signal handling for clean termination
 
 ### Railway CLI
@@ -369,11 +407,24 @@ services:
 5. **Start services**:
    - Terminal 1: `npm run dev:api`
    - Terminal 2: `npm run dev:worker`
+   - Terminal 3: `npm run dev:monitoring` (optional, for blockchain monitoring)
 6. **Access tools**:
    - API: http://localhost:3000
    - pgweb: http://localhost:8081
    - MinIO: http://localhost:9001
    - Grafana: http://localhost:3001
+
+### Admin Dashboard Development
+```bash
+# In admin-dashboard directory:
+cd admin-dashboard
+npm install
+npm run dev          # Start admin dashboard on port 3000 (default Next.js port)
+
+# Admin dashboard commands:
+npm run build        # Build for production
+npm run precommit    # TypeScript check and linting (used by main project pre-commit)
+```
 
 ## Common Issues & Solutions
 

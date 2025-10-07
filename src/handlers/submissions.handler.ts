@@ -1,11 +1,14 @@
 import { Request, Response, NextFunction, Express } from 'express';
 import type {} from 'multer';
-import { PublicKey, Signature } from 'o1js';
+import { PublicKey } from 'o1js';
 import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { UsersRepository } from '../db/repositories/users.repository.js';
 import { ChainsRepository } from '../db/repositories/chains.repository.js';
 import { ChallengesRepository } from '../db/repositories/challenges.repository.js';
-import { ImageAuthenticityService } from '../services/image/verification.service.js';
+import {
+  ImageAuthenticityService,
+  ECDSASignatureData,
+} from '../services/image/verification.service.js';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
 import { MinioStorageService } from '../services/storage/minio.service.js';
 import { Submission } from '../db/types/touchgrass.types.js';
@@ -68,8 +71,11 @@ export class SubmissionsHandler {
     file: Express.Multer.File | undefined,
     chainId: string | undefined,
     walletAddress: string | undefined,
-    signature: string | undefined
-  ): void {
+    signatureR: string | undefined,
+    signatureS: string | undefined,
+    publicKeyX: string | undefined,
+    publicKeyY: string | undefined
+  ): { imageBuffer: Buffer; signatureData: ECDSASignatureData } {
     if (!file) {
       throw Errors.badRequest('No image file provided', 'image');
     }
@@ -82,10 +88,6 @@ export class SubmissionsHandler {
       throw Errors.badRequest('walletAddress is required', 'walletAddress');
     }
 
-    if (!signature) {
-      throw Errors.badRequest('signature is required', 'signature');
-    }
-
     // Validate wallet address format (it's a public key in base58)
     try {
       PublicKey.fromBase58(walletAddress);
@@ -93,12 +95,27 @@ export class SubmissionsHandler {
       throw Errors.badRequest('Invalid wallet address format', 'walletAddress');
     }
 
-    // Validate signature format
-    try {
-      Signature.fromBase58(signature);
-    } catch {
-      throw Errors.badRequest('Invalid signature format', 'signature');
+    // Read image buffer
+    const imageBuffer = fs.readFileSync(file.path);
+
+    // Validate image buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw Errors.badRequest('Image buffer is empty', 'image');
     }
+
+    // Parse and validate ECDSA signature components
+    const signatureData = this.verificationService.parseSignatureData(
+      signatureR,
+      signatureS,
+      publicKeyX,
+      publicKeyY
+    );
+
+    if ('error' in signatureData) {
+      throw Errors.badRequest(signatureData.error, 'signature');
+    }
+
+    return { imageBuffer, signatureData };
   }
 
   async createSubmission(
@@ -113,16 +130,19 @@ export class SubmissionsHandler {
       logger.debug('Processing submission request');
 
       const file = req.file;
-      const { chainId, walletAddress, signature, tagline } = req.body;
+      const { chainId, walletAddress, signatureR, signatureS, publicKeyX, publicKeyY, tagline } =
+        req.body;
 
-      // Validate request
-      this.validateSubmissionRequest(file, chainId, walletAddress, signature);
-
-      // Read image buffer
-      const imageBuffer = fs.readFileSync(file!.path);
-      if (!imageBuffer || imageBuffer.length === 0) {
-        throw Errors.badRequest('Image buffer is empty', 'image');
-      }
+      // Validate request and get image buffer and signature data
+      const { imageBuffer, signatureData } = this.validateSubmissionRequest(
+        file,
+        chainId,
+        walletAddress,
+        signatureR,
+        signatureS,
+        publicKeyX,
+        publicKeyY
+      );
 
       // Compute SHA256 hash of image
       const sha256Hash = this.verificationService.hashImage(imageBuffer);
@@ -153,8 +173,7 @@ export class SubmissionsHandler {
       logger.debug('Verifying signature');
       const verificationResult = this.verificationService.verifyAndPrepareImage(
         file!.path,
-        signature,
-        walletAddress
+        signatureData
       );
 
       if (!verificationResult.isValid) {
@@ -173,7 +192,10 @@ export class SubmissionsHandler {
       submission = await this.submissionsRepo.create({
         sha256Hash,
         walletAddress,
-        signature,
+        signature: JSON.stringify({
+          r: signatureData.signatureR,
+          s: signatureData.signatureS,
+        }),
         challengeId: challenge.id,
         chainId: chainId!,
         storageKey,

@@ -21,3 +21,12 @@ startCommand = "npm run start:worker"
 restartPolicyType = "on-failure"
 restartPolicyMaxRetries = 3
 numReplicas = 2
+
+# Blockchain Monitoring Service Configuration
+[[services]]
+name = "monitoring"
+buildCommand = "npm install && npm run build"
+startCommand = "npm run start:monitoring"
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 3
+numReplicas = 1

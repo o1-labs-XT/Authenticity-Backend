@@ -13,6 +13,11 @@ export interface ProofGenerationJobData {
   correlationId?: string;
 }
 
+export interface BlockchainMonitoringJobData {
+  scheduledAt: Date;
+  lookbackBlocks?: number;
+}
+
 export class JobQueueService {
   private boss: PgBoss;
 
@@ -23,8 +28,9 @@ export class JobQueueService {
   async start(): Promise<void> {
     await this.boss.start();
 
-    // Create queue if it doesn't exist
+    // Create queues if they don't exist
     await this.boss.createQueue('proof-generation');
+    await this.boss.createQueue('blockchain-monitoring');
     logger.info('Job queue started');
   }
 
@@ -88,6 +94,42 @@ export class JobQueueService {
       logger.info({ jobId }, 'Job retried successfully');
     } catch (error) {
       logger.error({ err: error, jobId }, 'Failed to retry job');
+      throw error;
+    }
+  }
+
+  async scheduleMonitoringJob(): Promise<void> {
+    try {
+      // Schedule recurring job every 5 minutes
+      await this.boss.schedule(
+        'blockchain-monitoring',
+        '*/5 * * * *',
+        {
+          scheduledAt: new Date(),
+          lookbackBlocks: 100,
+        },
+        {
+          singletonKey: 'blockchain-monitoring-singleton',
+        }
+      );
+
+      logger.info('Blockchain monitoring job scheduled (every 5 minutes)');
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to schedule monitoring job');
+      throw error;
+    }
+  }
+
+  async enqueueMonitoringJob(data: BlockchainMonitoringJobData): Promise<string> {
+    try {
+      const jobId = await this.boss.send('blockchain-monitoring', data, {
+        singletonKey: 'blockchain-monitoring-manual',
+      });
+
+      logger.debug({ jobId }, 'Monitoring job enqueued');
+      return jobId || '';
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to enqueue monitoring job');
       throw error;
     }
   }
