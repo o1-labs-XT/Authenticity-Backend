@@ -9,19 +9,14 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 // Import ECDSA functionality from authenticity-zkapp
-import { 
-  generateECKeyPair, 
-  prepareImageVerification, 
-  Ecdsa, 
-  Secp256r1 
-} from 'authenticity-zkapp';
+import { generateECKeyPair, prepareImageVerification, Ecdsa, Secp256r1 } from 'authenticity-zkapp';
 
 dotenv.config();
 
 // Configuration
 // const API_URL = 'https://authenticity-backend-production.up.railway.app';
 // const API_URL = 'https://authenticity-api-staging.up.railway.app';
-const API_URL = 'http://localhost:3000';
+const API_URL = process.env.API_URL || 'http://localhost:3000';
 
 async function generateRandomImage(): Promise<string> {
   // Generate random image data (1KB of random bytes)
@@ -40,24 +35,23 @@ async function main(): Promise<void> {
   try {
     // Generate ECDSA keypair
     const keyPair = generateECKeyPair();
-    
+
     console.log('Public Key X:', keyPair.publicKeyXHex);
     console.log('Public Key Y:', keyPair.publicKeyYHex);
     console.log('Private Key:', keyPair.privateKeyBigInt);
 
     const imageFile = await generateRandomImage();
-    
+
     // Prepare image verification inputs (this gives us the correct hash format)
     const verificationInputs = prepareImageVerification(imageFile);
-    console.log(`📷 Image loaded: ${imageFile}\n#️⃣ Expected hash: ${verificationInputs.expectedHash.toHex()}\n`);
+    console.log(
+      `📷 Image loaded: ${imageFile}\n#️⃣ Expected hash: ${verificationInputs.expectedHash.toHex()}\n`
+    );
 
     // Create ECDSA signature using the correct format from the example
     const creatorKey = Secp256r1.Scalar.from(keyPair.privateKeyBigInt);
-    
-    const signature = Ecdsa.signHash(
-      verificationInputs.expectedHash,
-      creatorKey.toBigInt()
-    );
+
+    const signature = Ecdsa.signHash(verificationInputs.expectedHash, creatorKey.toBigInt());
 
     // Extract bigint values from the signature components
     const signatureData = signature.toBigInt();
