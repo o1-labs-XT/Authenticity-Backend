@@ -11,6 +11,7 @@ export interface AuthenticityRecord {
   created_at: string;
   verified_at?: string | null;
   transaction_id?: string | null;
+  transaction_submitted_block_height?: number | null;
   job_id?: string | null;
   processing_started_at?: string | null;
   failed_at?: string | null;

@@ -40,6 +40,7 @@ export interface Submission {
   chain_position: number;
   status: 'awaiting_review' | 'rejected' | 'processing' | 'complete';
   transaction_id?: string | null;
+  transaction_submitted_block_height?: number | null;
   failure_reason?: string | null;
   retry_count: number;
   challenge_verified: boolean; // true = admin approved, false = admin rejected

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction, Express } from 'express';
 import type {} from 'multer';
-import { PublicKey } from 'o1js';
+import { PrivateKey, PublicKey } from 'o1js';
 import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { UsersRepository } from '../db/repositories/users.repository.js';
 import { ChainsRepository } from '../db/repositories/chains.repository.js';
@@ -28,6 +28,7 @@ export interface SubmissionResponse {
   chainPosition: number;
   status: string;
   transactionId?: string;
+  transactionSubmittedBlockHeight?: number;
   failureReason?: string;
   retryCount: number;
   challengeVerified: boolean;
@@ -59,6 +60,7 @@ export class SubmissionsHandler {
       chainPosition: submission.chain_position,
       status: submission.status,
       transactionId: submission.transaction_id || undefined,
+      transactionSubmittedBlockHeight: submission.transaction_submitted_block_height || undefined,
       failureReason: submission.failure_reason || undefined,
       retryCount: submission.retry_count,
       challengeVerified: submission.challenge_verified,
@@ -203,17 +205,25 @@ export class SubmissionsHandler {
       });
 
       // TODO: configure admin approval flow to Enqueue job for proof generation
-      // const jobId = await this.jobQueue.enqueueProofGeneration({
-      //   sha256Hash,
-      //   signature,
-      //   publicKey,
-      //   storageKey,
-      //   tokenOwnerAddress,
-      //   tokenOwnerPrivateKey: tokenOwnerPrivate,
-      //   uploadedAt: new Date(),
-      //   correlationId: (req as Request & { correlationId: string }).correlationId,
-      // });
-      // logger.info({ jobId, submissionId: submission.id }, 'Proof generation job enqueued');
+      // TODO: Temporarily enqueue job directly for the V2 internal demo
+      const jobId = await this.jobQueue.enqueueProofGeneration({
+        sha256Hash,
+        signature: JSON.stringify({
+          r: signatureData.signatureR,
+          s: signatureData.signatureS,
+        }),
+        publicKey: JSON.stringify({
+          x: signatureData.publicKeyX,
+          y: signatureData.publicKeyY,
+        }),
+        storageKey,
+        tokenOwnerAddress: walletAddress,
+        tokenOwnerPrivateKey: PrivateKey.random().toBase58(), // TODO: Can probably remove this
+        uploadedAt: new Date(),
+        // logging correlation id
+        correlationId: (req as Request & { correlationId: string }).correlationId,
+      });
+      logger.info({ jobId, submissionId: submission.id }, 'Proof generation job enqueued');
 
       res.status(201).json(this.toResponse(submission));
     } catch (error) {

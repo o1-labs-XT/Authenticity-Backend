@@ -16,6 +16,7 @@ export async function up(knex: Knex): Promise<void> {
       .notNullable()
       .defaultTo('awaiting_review');
     table.string('transaction_id', 255).nullable();
+    table.integer('transaction_submitted_block_height').nullable();
     table.text('failure_reason').nullable();
     table.integer('retry_count').notNullable().defaultTo(0);
     table.boolean('challenge_verified').notNullable().defaultTo(false);
