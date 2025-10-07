@@ -4,7 +4,7 @@ import {
   AuthenticityInputs,
   BatchReducerUtils,
 } from 'authenticity-zkapp';
-import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8 } from 'o1js';
+import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8, Cache } from 'o1js';
 import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
 import { MinaNodeService } from '../blockchain/minaNode.service.js';
 import { logger } from '../../utils/logger.js';
@@ -77,11 +77,13 @@ export class ProofPublishingService {
 
     logger.info({ sha256Hash }, 'Publishing proof to blockchain');
 
-    // Ensure contract is compiled (o1js caches this internally)
+    // Ensure contract is compiled
+    const cacheDir = process.env.CIRCUIT_CACHE_PATH || './cache';
+    const cache = Cache.FileSystem(cacheDir);
     const compileTracker = new PerformanceTracker('publish.compile');
     BatchReducerUtils.setContractInstance(this.zkApp);
-    await BatchReducerUtils.compile();
-    await AuthenticityZkApp.compile();
+    await BatchReducerUtils.compile(); // TODO: add caching option
+    await AuthenticityZkApp.compile({ cache });
     compileTracker.end('success');
 
     // Parse addresses and keys
