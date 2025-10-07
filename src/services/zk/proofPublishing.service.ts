@@ -6,6 +6,7 @@ import {
 } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8 } from 'o1js';
 import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
+import { MinaNodeService } from '../blockchain/minaNode.service.js';
 import { logger } from '../../utils/logger.js';
 import { Errors } from '../../utils/errors.js';
 import { PerformanceTracker } from '../../utils/performance.js';
@@ -19,7 +20,8 @@ export class ProofPublishingService {
     zkAppAddress: string,
     feePayerKey: string,
     network: string,
-    private repository?: AuthenticityRepository
+    private repository?: AuthenticityRepository,
+    private minaNodeService?: MinaNodeService
   ) {
     this.zkAppAddress = zkAppAddress;
     this.feePayerKey = feePayerKey;
@@ -98,6 +100,23 @@ export class ProofPublishingService {
 
     logger.debug('Creating transaction...');
 
+    // Capture current block height before submitting transaction
+    let submittedBlockHeight: number | undefined;
+    if (this.minaNodeService) {
+      try {
+        submittedBlockHeight = await this.minaNodeService.getCurrentBlockHeight();
+        logger.debug(
+          { submittedBlockHeight },
+          'Captured current block height before transaction submission'
+        );
+      } catch (error) {
+        logger.warn(
+          { err: error },
+          'Failed to capture current block height, proceeding without it'
+        );
+      }
+    }
+
     try {
       // Create transaction to verify and store the proof on-chain
       const txn = await Mina.transaction({ sender: feePayer.toPublicKey(), fee: 1e9 }, async () => {
@@ -126,14 +145,21 @@ export class ProofPublishingService {
 
       logger.info({ transactionHash: pendingTxn.hash }, 'Transaction sent');
 
-      // Save transaction ID to database immediately after sending
+      // Save transaction ID and block height to database immediately after sending
       if (this.repository) {
-        await this.repository.updateRecord(sha256Hash, {
-          transaction_id: pendingTxn.hash,
-        });
+        const updateData: { transaction_id: string; transaction_submitted_block_height?: number } =
+          {
+            transaction_id: pendingTxn.hash,
+          };
+
+        if (submittedBlockHeight !== undefined) {
+          updateData.transaction_submitted_block_height = submittedBlockHeight;
+        }
+
+        await this.repository.updateRecord(sha256Hash, updateData);
         logger.debug(
-          { sha256Hash, transactionHash: pendingTxn.hash },
-          'Transaction ID saved to database'
+          { sha256Hash, transactionHash: pendingTxn.hash, submittedBlockHeight },
+          'Transaction ID and block height saved to database'
         );
       }
 

@@ -5,6 +5,7 @@ import { ImageAuthenticityService } from './services/image/verification.service.
 import { MinioStorageService } from './services/storage/minio.service.js';
 import { ProofGenerationService } from './services/zk/proofGeneration.service.js';
 import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
+import { MinaNodeService } from './services/blockchain/minaNode.service.js';
 import { ProofGenerationWorker } from './workers/proofGenerationWorker.js';
 import PgBoss from 'pg-boss';
 import { logger } from './utils/logger.js';
@@ -33,6 +34,7 @@ async function startWorker() {
     logger.info('Initializing services...');
     const verificationService = new ImageAuthenticityService();
     const storageService = new MinioStorageService();
+    const minaNodeService = new MinaNodeService(config.minaNodeEndpoint);
 
     logger.info('Initializing proof generation service...');
     const proofGenerationService = new ProofGenerationService();
@@ -42,7 +44,8 @@ async function startWorker() {
       config.zkappAddress,
       config.feePayerPrivateKey,
       config.minaNetwork,
-      repository
+      repository,
+      minaNodeService
     );
 
     // Start worker

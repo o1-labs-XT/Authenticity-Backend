@@ -9,6 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Prerequisites: Start infrastructure services
 docker-compose up -d  # Starts PostgreSQL, pgweb, MinIO, Grafana, Loki, Promtail
 
+# Requirements: Node.js >=20.0.0, npm >=10.0.0
+
 # Access tools
 # pgweb: http://localhost:8081 (database UI, no login required)
 # MinIO: http://localhost:9001 (admin/minioadmin)
@@ -16,7 +18,7 @@ docker-compose up -d  # Starts PostgreSQL, pgweb, MinIO, Grafana, Loki, Promtail
 
 # Run services (in separate terminals):
 npm run dev:api         # Start API server with hot reload (port 3000)
-npm run dev:worker      # Start proof generation worker with hot reload
+npm run dev:worker      # Start proof generation worker with hot reload  
 npm run dev:monitoring  # Start blockchain monitoring worker with hot reload
 
 # Production commands:
@@ -53,10 +55,11 @@ npm run db:migrate      # Rerun migrations
 
 ### Testing & Code Quality
 ```bash
-npm run test:unit        # Run unit tests only (excludes integration)
-npm run test:integration # Run integration tests with test database (uses scripts/test-integration.sh)
-npm run lint            # Run ESLint
-npm run format          # Format code with Prettier
+npm run test:unit                # Run unit tests only (excludes integration)
+npm run test:integration         # Run integration tests with test database (uses scripts/test-integration.sh)
+npm run test:integration:local   # Run integration tests directly with vitest (local mode)
+npm run lint                     # Run ESLint
+npm run format                   # Format code with Prettier
 
 # Pre-commit hooks (Husky + lint-staged):
 # - Automatically runs ESLint with auto-fix

@@ -137,17 +137,13 @@ export class AuthenticityRepository {
       sha256Hash: string;
     }>
   > {
-    // TODO: Add submitted_block_height column to database schema
-    // For now, using a stub constant for submitted_block_height
-    const STUB_SUBMITTED_HEIGHT = 462094; // TODO: Replace with actual submitted_block_height from database
-
     const records = await this.adapter.getRecentTransactionsWithTxId(lookbackBlocks);
 
     return records
-      .filter((record) => record.transaction_id) // Only include records with transaction IDs
+      .filter((record) => record.transaction_id && record.transaction_submitted_block_height) // Only include records with transaction IDs and block heights
       .map((record) => ({
         hash: record.transaction_id!,
-        submittedHeight: STUB_SUBMITTED_HEIGHT, // TODO: Use record.submitted_block_height when column is added
+        submittedHeight: record.transaction_submitted_block_height!,
         sha256Hash: record.sha256_hash,
       }));
   }

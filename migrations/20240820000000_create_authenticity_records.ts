@@ -15,6 +15,7 @@ export async function up(knex: Knex): Promise<void> {
       table.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
       table.timestamp('verified_at').nullable();
       table.string('transaction_id').nullable();
+      table.integer('transaction_submitted_block_height').nullable();
 
       // Indexes for performance
       table.index('status');
