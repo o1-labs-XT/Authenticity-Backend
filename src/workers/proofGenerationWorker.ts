@@ -131,8 +131,7 @@ export class ProofGenerationWorker {
               // Clean up temp file and MinIO
               try {
                 await fs.unlink(tempPath);
-                await this.storageService.deleteImage(storageKey); // Delete from MinIO
-                logger.debug('Cleaned up temp file and MinIO');
+                logger.debug('Cleaned up temp file');
               } catch (cleanupError) {
                 logger.warn({ err: cleanupError }, 'Failed to clean up');
               }
@@ -166,7 +165,6 @@ export class ProofGenerationWorker {
               if (isLastRetry) {
                 try {
                   await fs.unlink(tempPath);
-                  await this.storageService.deleteImage(storageKey);
                   logger.debug('Cleaned up after final failure');
                 } catch (cleanupError) {
                   logger.warn({ err: cleanupError }, 'Failed to clean up after failure');
