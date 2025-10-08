@@ -6,6 +6,7 @@ import {
 } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8, Cache } from 'o1js';
 import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
+import { SubmissionsRepository } from '../../db/repositories/submissions.repository.js';
 import { MinaNodeService } from '../blockchain/minaNode.service.js';
 import { logger } from '../../utils/logger.js';
 import { Errors } from '../../utils/errors.js';
@@ -21,6 +22,7 @@ export class ProofPublishingService {
     feePayerKey: string,
     network: string,
     private repository?: AuthenticityRepository,
+    private submissionsRepository?: SubmissionsRepository,
     private minaNodeService?: MinaNodeService
   ) {
     this.zkAppAddress = zkAppAddress;
@@ -147,8 +149,8 @@ export class ProofPublishingService {
 
       logger.info({ transactionHash: pendingTxn.hash }, 'Transaction sent');
 
-      // Save transaction ID and block height to database immediately after sending
-      if (this.repository) {
+      // Save transaction ID and block height to both databases immediately after sending
+      if (this.repository || this.submissionsRepository) {
         const updateData: { transaction_id: string; transaction_submitted_block_height?: number } =
           {
             transaction_id: pendingTxn.hash,
@@ -158,10 +160,25 @@ export class ProofPublishingService {
           updateData.transaction_submitted_block_height = submittedBlockHeight;
         }
 
-        await this.repository.updateRecord(sha256Hash, updateData);
+        const updatePromises = [];
+
+        // Update authenticity_records table
+        if (this.repository) {
+          updatePromises.push(this.repository.updateRecord(sha256Hash, updateData));
+        }
+
+        // Update submissions table
+        if (this.submissionsRepository) {
+          updatePromises.push(
+            this.submissionsRepository.updateBySha256Hash(sha256Hash, updateData)
+          );
+        }
+
+        await Promise.all(updatePromises);
+
         logger.debug(
           { sha256Hash, transactionHash: pendingTxn.hash, submittedBlockHeight },
-          'Transaction ID and block height saved to database'
+          'Transaction ID and block height saved to database(s)'
         );
       }
 

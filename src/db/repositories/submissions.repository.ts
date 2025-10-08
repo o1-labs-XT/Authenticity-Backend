@@ -124,4 +124,25 @@ export class SubmissionsRepository {
     const deleted = await this.db.getKnex()('submissions').where('id', id).delete();
     return deleted > 0;
   }
+
+  async findBySha256Hash(sha256Hash: string): Promise<Submission | null> {
+    const result = await this.db.getKnex()('submissions').where('sha256_hash', sha256Hash).first();
+    return result || null;
+  }
+
+  async updateBySha256Hash(
+    sha256Hash: string,
+    updates: Partial<Submission>
+  ): Promise<Submission | null> {
+    const knex = this.db.getKnex();
+    const [updated] = await knex('submissions')
+      .where('sha256_hash', sha256Hash)
+      .update({
+        ...updates,
+        updated_at: knex.fn.now(),
+      })
+      .returning('*');
+
+    return updated || null;
+  }
 }
