@@ -1,11 +1,6 @@
 import { logger } from '../../utils/logger.js';
 import { ActionResult } from './archiveNode.service.js';
-
-export interface TransactionInfo {
-  hash: string;
-  submittedHeight: number;
-  sha256Hash: string; // Link back to our records
-}
+import { TransactionInfo } from '../../db/repositories/submissions.repository.js';
 
 export interface TransactionStatusReport {
   pending: TransactionInfo[];

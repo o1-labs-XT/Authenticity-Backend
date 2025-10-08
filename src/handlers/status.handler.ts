@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
 import { Errors } from '../utils/errors.js';
 
@@ -13,7 +13,7 @@ export interface StatusResponse {
 }
 
 export class StatusHandler {
-  constructor(private repository: AuthenticityRepository) {}
+  constructor(private repository: SubmissionsRepository) {}
 
   /**
    * Get the status of a proof generation for a given SHA256 hash
@@ -32,18 +32,32 @@ export class StatusHandler {
         throw Errors.badRequest('Invalid SHA256 hash format', 'sha256Hash');
       }
 
-      // Get status from database
-      const recordStatus = await this.repository.getRecordStatus(sha256Hash);
+      // Get submission from database
+      const submission = await this.repository.findBySha256Hash(sha256Hash);
 
-      if (!recordStatus) {
+      if (!submission) {
         throw Errors.notFound('Record for this SHA256 hash');
+      }
+
+      // Map submission status to expected format
+      let status: 'pending' | 'verified';
+      switch (submission.status) {
+        case 'complete':
+          status = 'verified';
+          break;
+        case 'awaiting_review':
+        case 'processing':
+        case 'rejected':
+        default:
+          status = 'pending';
+          break;
       }
 
       // Return status information
       res.json({
-        status: recordStatus.status as 'pending' | 'verified',
-        tokenOwnerAddress: recordStatus.tokenOwnerAddress,
-        transactionId: recordStatus.transactionId || undefined,
+        status,
+        tokenOwnerAddress: undefined, // Submissions don't have token owner addresses
+        transactionId: submission.transaction_id || undefined,
       });
     } catch (error) {
       next(error);

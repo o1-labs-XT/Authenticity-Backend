@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
-import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { logger } from '../utils/logger.js';
 
 export class AdminHandler {
   constructor(
     private jobQueue: JobQueueService,
-    private repository: AuthenticityRepository
+    private repository: SubmissionsRepository
   ) {}
 
   async getJobStats(req: Request, res: Response): Promise<void> {
@@ -54,8 +54,8 @@ export class AdminHandler {
 
       // Update database status back to pending
       if (job.data?.sha256Hash) {
-        await this.repository.updateRecord(job.data.sha256Hash, {
-          status: 'pending',
+        await this.repository.updateBySha256Hash(job.data.sha256Hash, {
+          status: 'awaiting_review',
           failed_at: null,
           failure_reason: null,
         });

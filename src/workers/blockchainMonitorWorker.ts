@@ -1,19 +1,19 @@
 import PgBoss from 'pg-boss';
-import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import {
+  SubmissionsRepository,
+  TransactionInfo,
+} from '../db/repositories/submissions.repository.js';
 import { BlockchainMonitoringJobData } from '../services/queue/jobQueue.service.js';
 import { ArchiveNodeService } from '../services/blockchain/archiveNode.service.js';
 import { MinaNodeService } from '../services/blockchain/minaNode.service.js';
-import {
-  BlockchainMonitoringService,
-  TransactionInfo,
-} from '../services/blockchain/monitoring.service.js';
+import { BlockchainMonitoringService } from '../services/blockchain/monitoring.service.js';
 import { logger, withContext } from '../utils/logger.js';
 import { PerformanceTracker } from '../utils/performance.js';
 
 export class BlockchainMonitorWorker {
   constructor(
     private boss: PgBoss,
-    private repository: AuthenticityRepository,
+    private repository: SubmissionsRepository,
     private archiveNodeService: ArchiveNodeService,
     private minaNodeService: MinaNodeService,
     private monitoringService: BlockchainMonitoringService,

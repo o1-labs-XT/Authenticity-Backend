@@ -3,6 +3,12 @@ import { Submission } from '../types/touchgrass.types.js';
 import { Knex } from 'knex';
 import { Errors } from '../../utils/errors.js';
 
+export interface TransactionInfo {
+  hash: string;
+  submittedHeight: number;
+  sha256Hash: string;
+}
+
 export interface CreateSubmissionInput {
   sha256Hash: string;
   walletAddress: string; // User's wallet address (public key)
@@ -144,5 +150,47 @@ export class SubmissionsRepository {
       .returning('*');
 
     return updated || null;
+  }
+
+  async getStatusCounts(): Promise<Record<string, number>> {
+    const results = await this.db
+      .getKnex()('submissions')
+      .select('status')
+      .count('* as count')
+      .groupBy('status');
+
+    const counts: Record<string, number> = {};
+    for (const result of results) {
+      counts[result.status] = parseInt(result.count as string);
+    }
+
+    return counts;
+  }
+
+  async getFailedRecords(limit: number, offset: number): Promise<Submission[]> {
+    return this.db
+      .getKnex()('submissions')
+      .where('status', 'rejected')
+      .orderBy('failed_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getRecentTransactionsForMonitoring(lookbackBlocks: number): Promise<TransactionInfo[]> {
+    const results = await this.db
+      .getKnex()('submissions')
+      .select('transaction_id', 'transaction_submitted_block_height', 'sha256_hash')
+      .whereNotNull('transaction_id')
+      .whereNotNull('transaction_submitted_block_height')
+      .orderBy('transaction_submitted_block_height', 'desc')
+      .limit(lookbackBlocks * 10); // Get more records than blocks to ensure coverage
+
+    return results
+      .filter((result) => result.transaction_id && result.transaction_submitted_block_height)
+      .map((result) => ({
+        hash: result.transaction_id!,
+        submittedHeight: result.transaction_submitted_block_height!,
+        sha256Hash: result.sha256_hash,
+      }));
   }
 }

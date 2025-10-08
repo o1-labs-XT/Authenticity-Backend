@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { ErrorResponse } from '../api/middleware/error.middleware.js';
 import { Errors } from '../utils/errors.js';
 
@@ -13,7 +13,7 @@ export interface TokenOwnerResponse {
 }
 
 export class TokenOwnerHandler {
-  constructor(private repository: AuthenticityRepository) {}
+  constructor(private repository: SubmissionsRepository) {}
 
   /**
    * Get the token owner address for a given SHA256 hash
@@ -33,21 +33,35 @@ export class TokenOwnerHandler {
         throw Errors.badRequest('Invalid SHA256 hash format', 'sha256Hash');
       }
 
-      // Get record from database
-      const record = await this.repository.getRecordByHash(sha256Hash);
+      // Get submission from database
+      const submission = await this.repository.findBySha256Hash(sha256Hash);
 
-      if (!record) {
-        // No record found - image has not been verified on chain
+      if (!submission) {
+        // No submission found - image has not been submitted
         res.json({
           found: false,
         });
         return;
       }
 
-      // Return token owner address and status
+      // Map submission status to expected format
+      let status: 'pending' | 'verified';
+      switch (submission.status) {
+        case 'complete':
+          status = 'verified';
+          break;
+        case 'awaiting_review':
+        case 'processing':
+        case 'rejected':
+        default:
+          status = 'pending';
+          break;
+      }
+
+      // Return status (submissions don't have token owner addresses)
       res.json({
-        tokenOwnerAddress: record.token_owner_address,
-        status: record.status as 'pending' | 'verified',
+        tokenOwnerAddress: undefined, // Submissions don't have token owner addresses
+        status,
         found: true,
       });
     } catch (error) {
