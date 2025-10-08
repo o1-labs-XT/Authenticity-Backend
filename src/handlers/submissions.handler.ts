@@ -230,11 +230,12 @@ export class SubmissionsHandler {
       logger.error({ err: error }, 'Submission handler error');
 
       // Clean up MinIO if upload succeeded but database failed
-      if (storageKey) {
-        await this.storageService.deleteImage(storageKey).catch((err) => {
-          logger.warn({ err }, 'Failed to delete MinIO image during cleanup');
-        });
-      }
+      // TODO: Commenting out for now... Easier for debugging if we keep everything
+      // if (storageKey) {
+      // await this.storageService.deleteImage(storageKey).catch((err) => {
+      //   logger.warn({ err }, 'Failed to delete MinIO image during cleanup');
+      // });
+      // }
 
       next(error);
     } finally {
