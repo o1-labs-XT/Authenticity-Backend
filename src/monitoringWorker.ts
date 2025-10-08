@@ -1,6 +1,6 @@
 import { config } from './config/index.js';
 import { DatabaseConnection } from './db/database.js';
-import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
+import { SubmissionsRepository } from './db/repositories/submissions.repository.js';
 import { ArchiveNodeService } from './services/blockchain/archiveNode.service.js';
 import { MinaNodeService } from './services/blockchain/minaNode.service.js';
 import { BlockchainMonitoringService } from './services/blockchain/monitoring.service.js';
@@ -29,7 +29,7 @@ async function startMonitoringWorker() {
       connectionString: config.databaseUrl,
     });
     await dbConnection.initialize();
-    const repository = new AuthenticityRepository(dbConnection.getAdapter());
+    const repository = new SubmissionsRepository(dbConnection.getAdapter());
 
     // Initialize pg-boss
     logger.info('Initializing pg-boss...');

@@ -1,5 +1,6 @@
 import PgBoss from 'pg-boss';
 import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import {
   ImageAuthenticityService,
   ECDSASignatureData,
@@ -17,6 +18,7 @@ export class ProofGenerationWorker {
   constructor(
     private boss: PgBoss,
     private repository: AuthenticityRepository,
+    private submissionsRepository: SubmissionsRepository,
     private imageAuthenticityService: ImageAuthenticityService,
     private proofGenerationService: ProofGenerationService,
     private proofPublishingService: ProofPublishingService,
@@ -72,13 +74,25 @@ export class ProofGenerationWorker {
             const tempPath = `/tmp/${sha256Hash}.png`;
 
             try {
-              // Update status to processing
-              await this.repository.updateRecord(sha256Hash, {
-                status: 'processing',
-                processing_started_at: new Date().toISOString(),
-                retry_count:
-                  (job as PgBoss.JobWithMetadata<ProofGenerationJobData>).retryCount || 0,
-              });
+              // Update status to processing in both tables
+              const retryCount =
+                (job as PgBoss.JobWithMetadata<ProofGenerationJobData>).retryCount || 0;
+              const processingStartedAt = new Date().toISOString();
+
+              await Promise.all([
+                // Update authenticity_records table
+                this.repository.updateRecord(sha256Hash, {
+                  status: 'processing',
+                  processing_started_at: processingStartedAt,
+                  retry_count: retryCount,
+                }),
+                // Update submissions table
+                this.submissionsRepository.updateBySha256Hash(sha256Hash, {
+                  status: 'processing',
+                  processing_started_at: processingStartedAt,
+                  retry_count: retryCount,
+                }),
+              ]);
 
               // Step 1: Download image from MinIO to temp file
               const imageBuffer = await this.storageService.downloadImage(storageKey);
@@ -121,12 +135,23 @@ export class ProofGenerationWorker {
               );
               publishTracker.end('success', { transactionId });
 
-              // Step 4: Update database with success
-              await this.repository.updateRecord(sha256Hash, {
-                status: 'verified',
-                transaction_id: transactionId,
-                verified_at: new Date().toISOString(),
-              });
+              // Step 4: Update database with success in both tables
+              const verifiedAt = new Date().toISOString();
+
+              await Promise.all([
+                // Update authenticity_records table
+                this.repository.updateRecord(sha256Hash, {
+                  status: 'verified',
+                  transaction_id: transactionId,
+                  verified_at: verifiedAt,
+                }),
+                // Update submissions table
+                this.submissionsRepository.updateBySha256Hash(sha256Hash, {
+                  status: 'complete',
+                  transaction_id: transactionId,
+                  verified_at: verifiedAt,
+                }),
+              ]);
 
               // Clean up temp file and MinIO
               try {
@@ -152,13 +177,27 @@ export class ProofGenerationWorker {
                 'Proof generation failed'
               );
 
-              // Update failure status
-              await this.repository.updateRecord(sha256Hash, {
-                status: isLastRetry ? 'failed' : 'pending',
-                failed_at: isLastRetry ? new Date().toISOString() : null,
-                failure_reason: error instanceof Error ? error.message : 'Unknown error',
-                retry_count: retryCount + 1,
-              });
+              // Update failure status in both tables
+              const failedAt = isLastRetry ? new Date().toISOString() : null;
+              const failureReason = error instanceof Error ? error.message : 'Unknown error';
+              const newRetryCount = retryCount + 1;
+
+              await Promise.all([
+                // Update authenticity_records table
+                this.repository.updateRecord(sha256Hash, {
+                  status: isLastRetry ? 'failed' : 'pending',
+                  failed_at: failedAt,
+                  failure_reason: failureReason,
+                  retry_count: newRetryCount,
+                }),
+                // Update submissions table
+                this.submissionsRepository.updateBySha256Hash(sha256Hash, {
+                  status: isLastRetry ? 'rejected' : 'awaiting_review',
+                  failed_at: failedAt,
+                  failure_reason: failureReason,
+                  retry_count: newRetryCount,
+                }),
+              ]);
 
               // Clean up on final failure
               // todo: revisit failure logic, we'll probably want to retain failed records

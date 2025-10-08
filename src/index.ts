@@ -49,9 +49,9 @@ async function main() {
       jobQueue,
       storageService
     );
-    const statusHandler = new StatusHandler(repository);
-    const tokenOwnerHandler = new TokenOwnerHandler(repository);
-    const adminHandler = new AdminHandler(jobQueue, repository);
+    const statusHandler = new StatusHandler(submissionsRepository);
+    const tokenOwnerHandler = new TokenOwnerHandler(submissionsRepository);
+    const adminHandler = new AdminHandler(jobQueue, submissionsRepository);
     const challengesHandler = new ChallengesHandler(challengesRepository);
     const chainsHandler = new ChainsHandler(chainsRepository);
     const usersHandler = new UsersHandler(usersRepository);
