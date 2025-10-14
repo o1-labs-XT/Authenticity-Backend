@@ -131,11 +131,7 @@ export class SubmissionsRepository {
     return deleted > 0;
   }
 
-  async findBySha256Hash(sha256Hash: string): Promise<Submission | null> {
-    const result = await this.db.getKnex()('submissions').where('sha256_hash', sha256Hash).first();
-    return result || null;
-  }
-
+  // todo: this is a duplicate, there should only be one update method
   async updateBySha256Hash(
     sha256Hash: string,
     updates: Partial<Submission>

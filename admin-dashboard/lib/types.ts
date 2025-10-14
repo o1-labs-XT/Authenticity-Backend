@@ -57,32 +57,6 @@ export interface AuthenticityRecord {
   verifiedAt?: string;
 }
 
-export interface Job {
-  id: string;
-  state: string;
-  data: any;
-  output?: any;
-  retrycount: number;
-  createdon: string;
-  completedon?: string;
-}
-
-export interface JobStats {
-  queue: {
-    created: number;
-    active: number;
-    completed: number;
-    failed: number;
-  };
-  database: {
-    pending: number;
-    processing: number;
-    verified: number;
-    failed: number;
-  };
-  timestamp: string;
-}
-
 export interface ApiError {
   message: string;
   error?: string;
