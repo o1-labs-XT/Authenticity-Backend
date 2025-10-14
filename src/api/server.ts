@@ -8,7 +8,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from '../config/index.js';
 import { createStatusRoutes } from './routes/status.routes.js';
-import { createTokenOwnerRoutes } from './routes/tokenOwner.routes.js';
 import { createAdminRoutes } from './routes/admin.routes.js';
 import { createChallengesRoutes } from './routes/challenges.routes.js';
 import { createChainsRoutes } from './routes/chains.routes.js';
@@ -18,7 +17,6 @@ import { errorMiddleware } from './middleware/error.middleware.js';
 import { loggingMiddleware } from './middleware/logging.middleware.js';
 import { contextMiddleware } from './middleware/context.middleware.js';
 import { StatusHandler } from '../handlers/status.handler.js';
-import { TokenOwnerHandler } from '../handlers/tokenOwner.handler.js';
 import { AdminHandler } from '../handlers/admin.handler.js';
 import { ChallengesHandler } from '../handlers/challenges.handler.js';
 import { ChainsHandler } from '../handlers/chains.handler.js';
@@ -29,7 +27,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface ServerDependencies {
   statusHandler: StatusHandler;
-  tokenOwnerHandler: TokenOwnerHandler;
   adminHandler: AdminHandler;
   challengesHandler: ChallengesHandler;
   chainsHandler: ChainsHandler;
@@ -105,10 +102,8 @@ export function createServer(dependencies: ServerDependencies): Express {
 
   // Mount API routes
   const statusRoutes = createStatusRoutes(dependencies.statusHandler);
-  const tokenOwnerRoutes = createTokenOwnerRoutes(dependencies.tokenOwnerHandler);
 
   app.use('/api', statusRoutes);
-  app.use('/api', tokenOwnerRoutes);
 
   const adminRoutes = createAdminRoutes(dependencies.adminHandler);
   app.use('/api', adminRoutes);

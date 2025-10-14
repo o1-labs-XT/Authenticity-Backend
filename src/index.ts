@@ -9,7 +9,6 @@ import { ImageAuthenticityService } from './services/image/verification.service.
 import { MinioStorageService } from './services/storage/minio.service.js';
 import { JobQueueService } from './services/queue/jobQueue.service.js';
 import { StatusHandler } from './handlers/status.handler.js';
-import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
 import { AdminHandler } from './handlers/admin.handler.js';
 import { ChallengesHandler } from './handlers/challenges.handler.js';
 import { ChainsHandler } from './handlers/chains.handler.js';
@@ -41,7 +40,6 @@ async function main() {
 
     // Initialize handlers
     const statusHandler = new StatusHandler(submissionsRepository);
-    const tokenOwnerHandler = new TokenOwnerHandler(submissionsRepository);
     const adminHandler = new AdminHandler(jobQueue, submissionsRepository);
     const challengesHandler = new ChallengesHandler(challengesRepository);
     const chainsHandler = new ChainsHandler(chainsRepository);
@@ -59,7 +57,6 @@ async function main() {
     // Create and start server
     const app = createServer({
       statusHandler,
-      tokenOwnerHandler,
       adminHandler,
       challengesHandler,
       chainsHandler,
