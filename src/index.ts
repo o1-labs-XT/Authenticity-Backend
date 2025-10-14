@@ -1,7 +1,6 @@
 import { config } from './config/index.js';
 import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
-import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { ChallengesRepository } from './db/repositories/challenges.repository.js';
 import { ChainsRepository } from './db/repositories/chains.repository.js';
 import { UsersRepository } from './db/repositories/users.repository.js';
@@ -29,7 +28,6 @@ async function main() {
       connectionString: config.databaseUrl,
     });
     await dbConnection.initialize();
-    const repository = new AuthenticityRepository(dbConnection.getAdapter());
     const challengesRepository = new ChallengesRepository(dbConnection.getAdapter());
     const chainsRepository = new ChainsRepository(dbConnection.getAdapter());
     const usersRepository = new UsersRepository(dbConnection.getAdapter());
@@ -45,7 +43,7 @@ async function main() {
     // Initialize handlers
     const uploadHandler = new UploadHandler(
       verificationService,
-      repository,
+      submissionsRepository,
       jobQueue,
       storageService
     );

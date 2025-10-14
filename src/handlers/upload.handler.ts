@@ -5,7 +5,7 @@ import {
   ImageAuthenticityService,
   ECDSASignatureData,
 } from '../services/image/verification.service.js';
-import { AuthenticityRepository } from '../db/repositories/authenticity.repository.js';
+import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
 import { MinioStorageService } from '../services/storage/minio.service.js';
 import { logger } from '../utils/logger.js';
@@ -25,7 +25,7 @@ export interface UploadResponse {
 export class UploadHandler {
   constructor(
     private verificationService: ImageAuthenticityService,
-    private repository: AuthenticityRepository,
+    private repository: SubmissionsRepository,
     private jobQueue: JobQueueService,
     private storageService: MinioStorageService
   ) {}
@@ -98,15 +98,15 @@ export class UploadHandler {
       logger.debug({ sha256Hash }, 'Image hash calculated');
 
       // Check for existing record (duplicate detection)
-      const existing = await this.repository.checkExistingImage(sha256Hash);
-      if (existing.exists) {
+      const existing = await this.repository.findBySha256Hash(sha256Hash);
+      if (existing) {
         logger.info('Duplicate image detected');
 
         // Clean up uploaded file
         fs.unlinkSync(file!.path);
 
         res.json({
-          tokenOwnerAddress: existing.tokenOwnerAddress!,
+          tokenOwnerAddress: existing.wallet_address,
           status: 'duplicate',
         });
         return;
@@ -136,18 +136,18 @@ export class UploadHandler {
       logger.debug({ tokenOwnerAddress }, 'Generated token owner');
 
       // Insert pending record in database first
-      await this.repository.insertPendingRecord({
+      // Note: This is a simplified upload - for TouchGrass challenges, use /api/submissions/create
+      await this.repository.create({
         sha256Hash,
-        tokenOwnerAddress,
-        tokenOwnerPrivate,
-        creatorPublicKey: JSON.stringify({
-          x: signatureData.publicKeyX,
-          y: signatureData.publicKeyY,
-        }),
+        walletAddress: tokenOwnerAddress,
         signature: JSON.stringify({
           r: signatureData.signatureR,
           s: signatureData.signatureS,
         }),
+        challengeId: '1', // Default challenge - should be updated when integrated with challenges
+        chainId: '1', // Default chain
+        storageKey: '', // Will be updated after upload
+        tagline: '',
       });
 
       // Upload image to MinIO
@@ -155,10 +155,13 @@ export class UploadHandler {
       try {
         storageKey = await this.storageService.uploadImage(sha256Hash, imageBuffer);
         logger.debug({ storageKey, sha256Hash }, 'Image uploaded to MinIO');
+
+        // Update storage key
+        await this.repository.updateBySha256Hash(sha256Hash, { storage_key: storageKey });
       } catch (error) {
         logger.error({ err: error }, 'Failed to upload image to MinIO');
         // Clean up the database record
-        await this.repository.deleteRecord(sha256Hash);
+        await this.repository.delete(sha256Hash);
         // Clean up temp file
         fs.unlinkSync(file!.path);
         throw error;
@@ -187,14 +190,11 @@ export class UploadHandler {
           correlationId: (req as Request & { correlationId: string }).correlationId,
         });
 
-        // Update record with job ID for tracking
-        await this.repository.updateRecord(sha256Hash, { job_id: jobId });
-
         logger.info({ jobId }, 'Proof generation job enqueued');
       } catch (error) {
         logger.error({ err: error }, 'Failed to enqueue job');
         // Clean up the record if job enqueue fails
-        await this.repository.deleteRecord(sha256Hash);
+        await this.repository.delete(sha256Hash);
         // Try to clean up MinIO image
         try {
           await this.storageService.deleteImage(storageKey);
@@ -223,10 +223,10 @@ export class UploadHandler {
         // This shouldn't happen as we check for duplicates, but handle it anyway
         const sha256Hash = error.message.match(/hash ([\w\d]+)/)?.[1];
         if (sha256Hash) {
-          const existing = await this.repository.getRecordByHash(sha256Hash);
+          const existing = await this.repository.findBySha256Hash(sha256Hash);
           if (existing) {
             res.json({
-              tokenOwnerAddress: existing.token_owner_address,
+              tokenOwnerAddress: existing.wallet_address,
               status: 'duplicate',
             });
             return;
