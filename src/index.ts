@@ -8,7 +8,6 @@ import { SubmissionsRepository } from './db/repositories/submissions.repository.
 import { ImageAuthenticityService } from './services/image/verification.service.js';
 import { MinioStorageService } from './services/storage/minio.service.js';
 import { JobQueueService } from './services/queue/jobQueue.service.js';
-import { UploadHandler } from './handlers/upload.handler.js';
 import { StatusHandler } from './handlers/status.handler.js';
 import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
 import { AdminHandler } from './handlers/admin.handler.js';
@@ -41,12 +40,6 @@ async function main() {
     await jobQueue.start();
 
     // Initialize handlers
-    const uploadHandler = new UploadHandler(
-      verificationService,
-      submissionsRepository,
-      jobQueue,
-      storageService
-    );
     const statusHandler = new StatusHandler(submissionsRepository);
     const tokenOwnerHandler = new TokenOwnerHandler(submissionsRepository);
     const adminHandler = new AdminHandler(jobQueue, submissionsRepository);
@@ -65,7 +58,6 @@ async function main() {
 
     // Create and start server
     const app = createServer({
-      uploadHandler,
       statusHandler,
       tokenOwnerHandler,
       adminHandler,

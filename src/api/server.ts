@@ -7,7 +7,6 @@ import YAML from 'yamljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from '../config/index.js';
-import { createUploadRoutes } from './routes/upload.routes.js';
 import { createStatusRoutes } from './routes/status.routes.js';
 import { createTokenOwnerRoutes } from './routes/tokenOwner.routes.js';
 import { createAdminRoutes } from './routes/admin.routes.js';
@@ -18,7 +17,6 @@ import { createSubmissionsRoutes } from './routes/submissions.routes.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 import { loggingMiddleware } from './middleware/logging.middleware.js';
 import { contextMiddleware } from './middleware/context.middleware.js';
-import { UploadHandler } from '../handlers/upload.handler.js';
 import { StatusHandler } from '../handlers/status.handler.js';
 import { TokenOwnerHandler } from '../handlers/tokenOwner.handler.js';
 import { AdminHandler } from '../handlers/admin.handler.js';
@@ -30,7 +28,6 @@ import { SubmissionsHandler } from '../handlers/submissions.handler.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface ServerDependencies {
-  uploadHandler: UploadHandler;
   statusHandler: StatusHandler;
   tokenOwnerHandler: TokenOwnerHandler;
   adminHandler: AdminHandler;
@@ -107,11 +104,9 @@ export function createServer(dependencies: ServerDependencies): Express {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
   // Mount API routes
-  const uploadRoutes = createUploadRoutes(dependencies.uploadHandler);
   const statusRoutes = createStatusRoutes(dependencies.statusHandler);
   const tokenOwnerRoutes = createTokenOwnerRoutes(dependencies.tokenOwnerHandler);
 
-  app.use('/api', uploadRoutes);
   app.use('/api', statusRoutes);
   app.use('/api', tokenOwnerRoutes);
 
