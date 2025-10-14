@@ -7,7 +7,6 @@ import YAML from 'yamljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from '../config/index.js';
-import { createStatusRoutes } from './routes/status.routes.js';
 import { createAdminRoutes } from './routes/admin.routes.js';
 import { createChallengesRoutes } from './routes/challenges.routes.js';
 import { createChainsRoutes } from './routes/chains.routes.js';
@@ -16,7 +15,6 @@ import { createSubmissionsRoutes } from './routes/submissions.routes.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 import { loggingMiddleware } from './middleware/logging.middleware.js';
 import { contextMiddleware } from './middleware/context.middleware.js';
-import { StatusHandler } from '../handlers/status.handler.js';
 import { AdminHandler } from '../handlers/admin.handler.js';
 import { ChallengesHandler } from '../handlers/challenges.handler.js';
 import { ChainsHandler } from '../handlers/chains.handler.js';
@@ -26,7 +24,6 @@ import { SubmissionsHandler } from '../handlers/submissions.handler.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface ServerDependencies {
-  statusHandler: StatusHandler;
   adminHandler: AdminHandler;
   challengesHandler: ChallengesHandler;
   chainsHandler: ChainsHandler;
@@ -101,10 +98,6 @@ export function createServer(dependencies: ServerDependencies): Express {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
   // Mount API routes
-  const statusRoutes = createStatusRoutes(dependencies.statusHandler);
-
-  app.use('/api', statusRoutes);
-
   const adminRoutes = createAdminRoutes(dependencies.adminHandler);
   app.use('/api', adminRoutes);
 
