@@ -100,6 +100,7 @@ export class ImageAuthenticityService {
   /**
    * Parse signature data from request format
    */
+  // todo: update unit tests
   parseSignatureData(
     signatureR: string | undefined,
     signatureS: string | undefined,

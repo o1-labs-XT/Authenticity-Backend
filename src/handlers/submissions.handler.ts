@@ -69,6 +69,7 @@ export class SubmissionsHandler {
     };
   }
 
+  // todo: update unit tests for request validation
   private validateSubmissionRequest(
     file: Express.Multer.File | undefined,
     chainId: string | undefined,
