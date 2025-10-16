@@ -2,6 +2,13 @@ import { logger } from '../../utils/logger.js';
 import { ActionResult } from './archiveNode.service.js';
 import { TransactionInfo } from '../../db/repositories/submissions.repository.js';
 
+/**
+ * Aggregates transaction status by comparing submitted transactions from the database
+ * against on-chain data from the archive node. Categorizes transactions as pending,
+ * included, final (≥15 confirmations), or abandoned (>15 blocks without inclusion).
+ * Used by the blockchain monitoring worker to generate periodic status reports.
+ */
+
 export interface TransactionStatusReport {
   pending: TransactionInfo[];
   included: TransactionInfo[];

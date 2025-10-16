@@ -171,11 +171,11 @@ src/
 │   ├── logger.ts        # Pino logger with correlation IDs
 │   └── performance.ts   # Performance tracking utilities
 ├── workers/
-│   ├── proofGenerationWorker.ts    # Proof generation job processor 
+│   ├── proofGenerationWorker.ts    # Proof generation job processor
 │   └── blockchainMonitorWorker.ts  # Blockchain monitoring job processor
-├── index.ts             # API server entry point with dependency wiring
-├── worker.ts            # Proof generation worker service entry point
-└── monitoringWorker.ts  # Blockchain monitoring worker service entry point
+├── index.ts                # API server entry point with dependency wiring
+├── startProofWorker.ts     # Proof generation worker service entry point
+└── startMonitoringWorker.ts # Blockchain monitoring worker service entry point
 
 admin-dashboard/         # Next.js admin interface
 ├── app/                # App router pages (jobs, challenges, users, chains)

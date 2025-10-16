@@ -1,5 +1,11 @@
 import { logger } from '../../utils/logger.js';
 
+/**
+ * Queries the Mina archive node via GraphQL to retrieve on-chain action data and transaction status.
+ * Used by the blockchain monitoring worker to check if submitted transactions have been included
+ * in blocks and to calculate confirmation counts based on distance from chain tip.
+ */
+
 export interface ActionResult {
   blockInfo: {
     height: number;
