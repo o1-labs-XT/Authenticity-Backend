@@ -10,6 +10,7 @@ import { MinaNodeService } from '../blockchain/minaNode.service.js';
 import { logger } from '../../utils/logger.js';
 import { Errors } from '../../utils/errors.js';
 import { PerformanceTracker } from '../../utils/performance.js';
+import { config } from '../../config/index.js';
 
 export class ProofPublishingService {
   private zkApp: AuthenticityZkApp;
@@ -78,8 +79,7 @@ export class ProofPublishingService {
     logger.info({ sha256Hash }, 'Publishing proof to blockchain');
 
     // Ensure contract is compiled
-    const cacheDir = process.env.CIRCUIT_CACHE_PATH || './cache';
-    const cache = Cache.FileSystem(cacheDir);
+    const cache = Cache.FileSystem(config.circuitCachePath);
     const compileTracker = new PerformanceTracker('publish.compile');
     BatchReducerUtils.setContractInstance(this.zkApp);
     await BatchReducerUtils.compile(); // TODO: add caching option

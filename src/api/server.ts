@@ -81,10 +81,9 @@ export function createServer(dependencies: ServerDependencies): Express {
   });
 
   const swaggerDocument = YAML.load(path.join(__dirname, '../../swagger/swagger.yaml'));
-  const baseUrl =
-    config.nodeEnv === 'development'
-      ? `http://localhost:${config.port}`
-      : `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  const baseUrl = config.railwayPublicDomain
+    ? `https://${config.railwayPublicDomain}`
+    : `http://localhost:${config.port}`;
   swaggerDocument.servers = [
     {
       url: `${baseUrl}/api`,

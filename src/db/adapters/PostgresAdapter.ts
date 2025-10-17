@@ -1,5 +1,6 @@
 import knex, { Knex } from 'knex';
 import { logger } from '../../utils/logger.js';
+import { config } from '../../config/index.js';
 
 export class PostgresAdapter {
   private knex: Knex;
@@ -12,7 +13,7 @@ export class PostgresAdapter {
       client: 'pg',
       connection: {
         connectionString: this.connectionString,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+        ssl: config.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
       },
       pool: {
         min: 2,

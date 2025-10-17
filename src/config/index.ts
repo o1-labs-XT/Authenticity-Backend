@@ -24,7 +24,14 @@ export interface Config {
   uploadMaxSize: number; // in bytes
 
   // Optional configurations
-  circuitCachePath?: string;
+  circuitCachePath: string;
+
+  // Logging
+  logLevel: string;
+  serviceName: string;
+
+  // Deployment
+  railwayPublicDomain?: string;
 
   // MinIO Storage
   minioEndpoint: string;
@@ -101,6 +108,10 @@ function parseConfig(): Config {
     corsOrigin: getRequired('CORS_ORIGIN'),
     uploadMaxSize: getRequiredNumber('UPLOAD_MAX_SIZE'),
     circuitCachePath: process.env.CIRCUIT_CACHE_PATH || './cache',
+    logLevel: process.env.LOG_LEVEL || 'debug',
+    serviceName:
+      process.env.SERVICE_NAME || (process.argv[1]?.includes('worker') ? 'worker' : 'api'),
+    railwayPublicDomain: process.env.RAILWAY_PUBLIC_DOMAIN,
     minioEndpoint: getRequired('MINIO_ENDPOINT'),
     minioAccessKey: getRequired('MINIO_ROOT_USER'),
     minioSecretKey: getRequired('MINIO_ROOT_PASSWORD'),
