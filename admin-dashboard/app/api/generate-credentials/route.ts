@@ -29,28 +29,35 @@ export async function POST(request: NextRequest) {
     writeFileSync(tempFilePath, buffer);
 
     // Dynamic import to avoid top-level await issues with o1js and authenticity-zkapp
-    const [{ PrivateKey, Signature }, { prepareImageVerification }] = await Promise.all([
-      import('o1js'),
-      import('authenticity-zkapp'),
-    ]);
+    const [{ PrivateKey }, { generateECKeyPair, prepareImageVerification, Ecdsa, Secp256r1 }] =
+      await Promise.all([import('o1js'), import('authenticity-zkapp')]);
+
+    // Generate ECDSA keypair
+    const keyPair = generateECKeyPair();
 
     // Use the same verification preparation as backend
     const verificationInputs = prepareImageVerification(tempFilePath);
 
-    // Generate random keypair
+    // Create ECDSA signature using the correct format
+    const creatorKey = Secp256r1.Scalar.from(keyPair.privateKeyBigInt);
+    const signature = Ecdsa.signHash(verificationInputs.expectedHash, creatorKey.toBigInt());
+
+    // Extract signature components as hex strings (64 chars each)
+    const signatureData = signature.toBigInt();
+    const signatureR = signatureData.r.toString(16).padStart(64, '0');
+    const signatureS = signatureData.s.toString(16).padStart(64, '0');
+
+    // Generate a random Mina wallet address for the submission
     const privateKey = PrivateKey.random();
     const publicKey = privateKey.toPublicKey();
     const walletAddress = publicKey.toBase58();
 
-    // Create signature using expectedHash.toFields() to match backend verification
-    const signature = Signature.create(
-      privateKey,
-      verificationInputs.expectedHash.toFields()
-    ).toBase58();
-
     return NextResponse.json({
       walletAddress,
-      signature,
+      signatureR,
+      signatureS,
+      publicKeyX: keyPair.publicKeyXHex,
+      publicKeyY: keyPair.publicKeyYHex,
     });
   } catch (error: any) {
     console.error('Failed to generate test credentials:', error);
