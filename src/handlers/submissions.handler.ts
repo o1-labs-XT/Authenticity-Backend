@@ -205,26 +205,11 @@ export class SubmissionsHandler {
         tagline,
       });
 
-      // TODO: configure admin approval flow to Enqueue job for proof generation
-      // TODO: Temporarily enqueue job directly for the V2 internal demo
-      const jobId = await this.jobQueue.enqueueProofGeneration({
-        sha256Hash,
-        signature: JSON.stringify({
-          r: signatureData.signatureR,
-          s: signatureData.signatureS,
-        }),
-        publicKey: JSON.stringify({
-          x: signatureData.publicKeyX,
-          y: signatureData.publicKeyY,
-        }),
-        storageKey,
-        tokenOwnerAddress: walletAddress,
-        tokenOwnerPrivateKey: PrivateKey.random().toBase58(), // TODO: Can probably remove this
-        uploadedAt: new Date(),
-        // logging correlation id
-        correlationId: (req as Request & { correlationId: string }).correlationId,
-      });
-      logger.info({ jobId, submissionId: submission.id }, 'Proof generation job enqueued');
+      // Note: Proof generation job will be enqueued after admin approval in reviewSubmission()
+      logger.info(
+        { submissionId: submission.id, sha256Hash },
+        'Submission created, awaiting admin review'
+      );
 
       res.status(201).json(this.toResponse(submission));
     } catch (error) {
@@ -309,18 +294,28 @@ export class SubmissionsHandler {
           : failureReason || 'Image does not satisfy challenge criteria',
       };
 
-      // TODO: When job queue is enabled, enqueue proof generation job here
-      // if (challengeVerified) {
-      //   const jobId = await this.jobQueue.enqueueProofGeneration({
-      //     sha256Hash: submission.sha256_hash,
-      //     signature: submission.signature,
-      //     walletAddress: submission.wallet_address,
-      //     storageKey: submission.storage_key,
-      //     uploadedAt: new Date(submission.created_at),
-      //     correlationId: (req as Request & { correlationId: string }).correlationId,
-      //   });
-      //   logger.info({ jobId, submissionId: id }, 'Proof generation job enqueued');
-      // }
+      // Enqueue proof generation job if approved
+      if (challengeVerified) {
+        // Extract public key from wallet address (it's stored as base58)
+        const publicKey = PublicKey.fromBase58(submission.wallet_address);
+        const publicKeyGroup = publicKey.toGroup();
+        const publicKeyJson = JSON.stringify({
+          x: publicKeyGroup.x.toString(),
+          y: publicKeyGroup.y.toString(),
+        });
+
+        const jobId = await this.jobQueue.enqueueProofGeneration({
+          sha256Hash: submission.sha256_hash,
+          signature: submission.signature,
+          publicKey: publicKeyJson,
+          storageKey: submission.storage_key,
+          tokenOwnerAddress: submission.wallet_address,
+          tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
+          uploadedAt: new Date(submission.created_at),
+          correlationId: (req as Request & { correlationId: string }).correlationId,
+        });
+        logger.info({ jobId, submissionId: id }, 'Proof generation job enqueued after approval');
+      }
 
       const updated = await this.submissionsRepo.update(id, updates);
       if (!updated) {
