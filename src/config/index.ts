@@ -46,6 +46,10 @@ export interface Config {
   archiveNodeEndpoint: string;
   minaNodeEndpoint: string;
   monitoringEnabled: boolean;
+
+  // Worker Configuration
+  workerRetryLimit: number;
+  workerTempDir: string;
 }
 
 /**
@@ -120,6 +124,8 @@ function parseConfig(): Config {
     archiveNodeEndpoint: getRequired('ARCHIVE_NODE_ENDPOINT'),
     minaNodeEndpoint: getRequired('MINA_NODE_ENDPOINT'),
     monitoringEnabled: getRequired('MONITORING_ENABLED') === 'true',
+    workerRetryLimit: parseInt(process.env.WORKER_RETRY_LIMIT || '3', 10),
+    workerTempDir: process.env.WORKER_TEMP_DIR || '/tmp',
   };
 
   // Throw if any errors
