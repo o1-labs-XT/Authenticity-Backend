@@ -295,6 +295,7 @@ export class SubmissionsHandler {
       // Enqueue proof generation job if approved
       if (challengeVerified) {
         // Extract public key from wallet address (it's stored as base58)
+        // TODO: this is the wrong key
         const publicKey = PublicKey.fromBase58(submission.wallet_address);
         const publicKeyGroup = publicKey.toGroup();
         const publicKeyJson = JSON.stringify({

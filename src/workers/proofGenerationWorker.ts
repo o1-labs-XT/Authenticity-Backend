@@ -25,16 +25,18 @@ export class ProofGenerationWorker {
     private storageService: MinioStorageService
   ) {}
 
+  /**
+   * Handles proof generation job queued by an admin approving a submission
+   * loads image from minio, generates verificationInputs for proof generation
+   * runs proof generation and triggers proof publishing
+   */
   async start(): Promise<void> {
-    // Handle proof generation jobs
     await this.boss.work<ProofGenerationJobData>(
       'proof-generation',
       { includeMetadata: true },
       async (jobs: PgBoss.JobWithMetadata<ProofGenerationJobData>[]) => {
         // Process jobs one at a time (batch size is 1)
         for (const job of jobs) {
-          // Run entire job with logging context
-          // Extract retry count once at the beginning
           const retryCount = job.retryCount || 0;
 
           await withContext(
@@ -48,6 +50,7 @@ export class ProofGenerationWorker {
               const jobTracker = new PerformanceTracker('job.proofGeneration', {
                 sha256Hash: job.data.sha256Hash,
               });
+              logger.info('Starting proof generation job');
 
               const {
                 sha256Hash,
@@ -75,8 +78,6 @@ export class ProofGenerationWorker {
                 throw Errors.internal(`Failed to parse ECDSA signature data: ${errorMessage}`);
               }
 
-              logger.info('Starting proof generation job');
-
               // temporary location for image downloaded from minio
               const tempPath = path.join(config.workerTempDir, `${sha256Hash}.png`);
 
@@ -95,7 +96,7 @@ export class ProofGenerationWorker {
                 await fs.writeFile(tempPath, imageBuffer);
 
                 // Step 2: Verify and prepare image
-                // todo: upload handler is already doing this
+                // POST submission handler also verifies the image but we run this to get the verificationInputs
                 logger.info('Verifying and preparing ECDSA signature');
                 const verifyTracker = new PerformanceTracker('job.verifyImage');
                 const { isValid, verificationInputs, commitment, error } =
