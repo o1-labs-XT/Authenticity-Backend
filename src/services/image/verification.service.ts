@@ -99,15 +99,21 @@ export class ImageAuthenticityService {
 
   /**
    * Parse signature data from request format
+   * If publicKeyX and publicKeyY are provided (from request), they will be validated
+   * If not provided, they must be passed in separately (from config)
    */
   parseSignatureData(
     signatureR: string | undefined,
     signatureS: string | undefined,
-    publicKeyX: string | undefined,
-    publicKeyY: string | undefined
+    publicKeyX?: string,
+    publicKeyY?: string
   ): ECDSASignatureData | { error: string } {
-    if (!signatureR || !signatureS || !publicKeyX || !publicKeyY) {
+    if (!signatureR || !signatureS) {
       return { error: 'Missing required signature components' };
+    }
+
+    if (!publicKeyX || !publicKeyY) {
+      return { error: 'Missing required public key components' };
     }
 
     // Validate hex format

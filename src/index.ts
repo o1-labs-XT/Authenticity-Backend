@@ -47,7 +47,8 @@ async function main() {
       challengesRepository,
       verificationService,
       jobQueue,
-      storageService
+      storageService,
+      config
     );
 
     // Create and start server

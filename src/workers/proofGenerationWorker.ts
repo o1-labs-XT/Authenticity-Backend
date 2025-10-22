@@ -55,22 +55,24 @@ export class ProofGenerationWorker {
               const {
                 sha256Hash,
                 signature,
-                publicKey,
                 storageKey,
                 tokenOwnerAddress: _tokenOwnerAddress, // currently unused
                 tokenOwnerPrivateKey,
               } = job.data;
 
-              // Parse ECDSA signature and public key data from JSON
+              // Parse ECDSA signature from JSON and get public key from config
               let signatureData: ECDSASignatureData;
               try {
                 const sigData = JSON.parse(signature);
-                const pubKeyData = JSON.parse(publicKey);
+                const publicKeyParts = config.signerPublicKey.split(',');
+                if (publicKeyParts.length !== 2) {
+                  throw new Error('SIGNER_PUBLIC_KEY must be in format "x,y" (hex strings)');
+                }
                 signatureData = {
                   signatureR: sigData.r,
                   signatureS: sigData.s,
-                  publicKeyX: pubKeyData.x,
-                  publicKeyY: pubKeyData.y,
+                  publicKeyX: publicKeyParts[0].trim(),
+                  publicKeyY: publicKeyParts[1].trim(),
                 };
               } catch (parseError) {
                 const errorMessage =
