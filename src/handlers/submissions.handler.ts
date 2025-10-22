@@ -69,7 +69,6 @@ export class SubmissionsHandler {
     };
   }
 
-  // todo: update unit tests for request validation
   private validateSubmissionRequest(
     file: Express.Multer.File | undefined,
     chainId: string | undefined,
@@ -195,9 +194,11 @@ export class SubmissionsHandler {
       let submission = await this.submissionsRepo.create({
         sha256Hash,
         walletAddress,
+        // todo: break into separate fields
         signature: JSON.stringify({
           r: signatureData.signatureR,
           s: signatureData.signatureS,
+          // todo: move to env var
           publicKey: {
             x: signatureData.publicKeyX,
             y: signatureData.publicKeyY,
@@ -223,6 +224,7 @@ export class SubmissionsHandler {
         }),
         storageKey,
         tokenOwnerAddress: walletAddress,
+        // todo: remove
         tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
         uploadedAt: new Date(),
         correlationId: (req as Request & { correlationId: string }).correlationId,
