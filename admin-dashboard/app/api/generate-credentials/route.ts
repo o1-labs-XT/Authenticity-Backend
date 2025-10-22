@@ -17,6 +17,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // TODO: better to have the backend sign the image and just return the signature
+
     // Get the fixed signer private key from environment
     const signerPrivateKey = process.env.SIGNER_PRIVATE_KEY;
     if (!signerPrivateKey) {
