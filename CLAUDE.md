@@ -265,6 +265,7 @@ test/                    # Unit tests with Vitest
 
 - `GET /health` - Health check
 - `GET /api/version` - API version
+- `GET /api-docs` - Swagger API documentation
 
 ### Admin Endpoints (require authentication)
 - `PATCH /api/submissions/:id` - Review submission (approve/reject)
@@ -285,7 +286,7 @@ test/                    # Unit tests with Vitest
 DATABASE_URL=postgresql://user:pass@host:5432/db
 MINA_NETWORK=testnet|mainnet
 ZKAPP_ADDRESS=<deployed_zkapp_address>
-FEE_PAYER_PRIVATE_KEY=<private_key>
+FEE_PAYER_PRIVATE_KEY=<private_key>  # MUST be the private key of the account that deployed the zkApp
 SIGNER_PUBLIC_KEY=<public_key_x>,<public_key_y>  # ECDSA public key for signature verification (hex format)
 PORT=3000
 NODE_ENV=development|production|test
@@ -312,6 +313,10 @@ SSL_REQUIRED=false          # Enable SSL for PostgreSQL in production
 ARCHIVE_NODE_ENDPOINT=https://api.minascan.io/node/berkeley/v1/graphql  # Default for testnet
 MINA_NODE_ENDPOINT=https://api.minascan.io/node/berkeley/v1/graphql     # Default for testnet
 MONITORING_ENABLED=true     # Enable blockchain transaction monitoring (default: true)
+
+# Worker Configuration
+WORKER_RETRY_LIMIT=3        # Number of retry attempts for failed proof generation jobs (default: 3)
+WORKER_TEMP_DIR=/tmp        # Temporary directory for downloaded images during processing (default: /tmp)
 ```
 
 ## Implementation Details
@@ -441,6 +446,7 @@ services:
    - Terminal 3: `npm run dev:monitoring` (optional, for blockchain monitoring)
 6. **Access tools**:
    - API: http://localhost:3000
+   - Swagger API docs: http://localhost:3000/api-docs
    - pgweb: http://localhost:8081
    - MinIO: http://localhost:9001
    - Grafana: http://localhost:3001
@@ -450,6 +456,10 @@ services:
 # In admin-dashboard directory:
 cd admin-dashboard
 npm install
+
+# Configure environment (uses .env.local, not .env)
+cp .env.example .env.local
+
 npm run dev          # Start admin dashboard on port 3000 (default Next.js port)
 
 # Admin dashboard commands:
