@@ -3,8 +3,8 @@ import request from 'supertest';
 import { PrivateKey } from 'o1js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { prepareImageVerification, generateECKeyPair, Ecdsa, Secp256r1 } from 'authenticity-zkapp';
-import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD } from './config.js';
+import { prepareImageVerification, Ecdsa, Secp256r1 } from 'authenticity-zkapp';
+import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD, SIGNER_PRIVATE_KEY } from './config.js';
 import {
   createTestChallenge,
   cleanupChallenges,
@@ -19,7 +19,6 @@ interface SubmissionTestData {
   imagePath: string;
   signatureR: string;
   signatureS: string;
-  ecdsaKeyPair: any; // Store the full keypair for potential reuse
   sha256Hash: string;
   walletAddress: string;
 }
@@ -41,15 +40,13 @@ function createSubmissionTestData(): SubmissionTestData {
   const imageBuffer = Buffer.from(imagePath);
   fs.writeFileSync(imagePath, imageBuffer);
 
-  // Generate ECDSA keypair using the zkapp helper
-  const ecdsaKeyPair = generateECKeyPair();
-
   // Use prepareImageVerification to get the correct hash format
   const verificationInputs = prepareImageVerification(imagePath);
   const sha256Hash = verificationInputs.expectedHash;
 
-  // Create ECDSA signature using the correct format (from test-upload.mts)
-  const creatorKey = Secp256r1.Scalar.from(ecdsaKeyPair.privateKeyBigInt);
+  // Create ECDSA signature using the SIGNER_PRIVATE_KEY from config
+  const signerPrivateKeyBigInt = BigInt(SIGNER_PRIVATE_KEY);
+  const creatorKey = Secp256r1.Scalar.from(signerPrivateKeyBigInt);
   const signature = Ecdsa.signHash(verificationInputs.expectedHash, creatorKey.toBigInt());
 
   // Extract signature components as hex strings
@@ -62,7 +59,6 @@ function createSubmissionTestData(): SubmissionTestData {
     imagePath,
     signatureR,
     signatureS,
-    ecdsaKeyPair,
     sha256Hash,
     walletAddress,
   };
@@ -287,26 +283,26 @@ describe('Submissions API Integration', () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
 
-    // Test 1: Modify one hex character in signatureR to make it invalid
-    const invalidSignatureR = testData1.signatureR.slice(0, -1) + '0'; // Change last char
+    // Test 1: Use signature from testData2's image with testData1's image (hash mismatch)
+    // testData2's signature is valid for testData2's image hash, but not for testData1's
     const res1 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
       .field('walletAddress', testData1.walletAddress)
-      .field('signatureR', invalidSignatureR) // Modified signature
-      .field('signatureS', testData1.signatureS)
-      .attach('image', testData1.imagePath);
+      .field('signatureR', testData2.signatureR) // Signature for different image
+      .field('signatureS', testData2.signatureS)
+      .attach('image', testData1.imagePath); // Different image
 
     expect(res1.status).toBe(400);
     expect(res1.body.error.message).toContain('ECDSA signature does not match image hash');
 
-    // Test 2: Use signature from testData2 with publicKey from testData1 (mismatch)
+    // Test 2: Use clearly corrupted signature (all zeros)
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
       .field('walletAddress', testData1.walletAddress)
-      .field('signatureR', testData2.signatureR) // Signature from testData2
-      .field('signatureS', testData2.signatureS) // Signature from testData2
+      .field('signatureR', '0'.repeat(64)) // Clearly invalid
+      .field('signatureS', '0'.repeat(64)) // Clearly invalid
       .attach('image', testData1.imagePath);
 
     expect(res2.status).toBe(400);
@@ -429,10 +425,10 @@ describe('Submissions API Integration', () => {
     expect(res1.status).toBe(201);
     createdSubmissionIds.push(res1.body.id);
 
-    // Create valid ECDSA signature for second image using same private key
+    // Create valid ECDSA signature for second image using the same signer key
     const verificationInputs2 = prepareImageVerification(testData2.imagePath);
-    const creatorKey = Secp256r1.Scalar.from(testData1.ecdsaKeyPair.privateKeyBigInt);
-    const signature2 = Ecdsa.signHash(verificationInputs2.expectedHash, creatorKey.toBigInt());
+    const signerKey = Secp256r1.Scalar.from(BigInt(SIGNER_PRIVATE_KEY));
+    const signature2 = Ecdsa.signHash(verificationInputs2.expectedHash, signerKey.toBigInt());
     const signatureData2 = signature2.toBigInt();
 
     // Second submission with different image but same user (should return 409)

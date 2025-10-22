@@ -53,6 +53,21 @@ docker-compose up -d    # Restart containers
 npm run db:migrate      # Rerun migrations
 ```
 
+### Security & Key Management
+```bash
+# Generate ECDSA keypair for image signature verification
+npx tsx scripts/generate-signer-keypair.mts
+
+# This generates a keypair for SIGNER_PUBLIC_KEY and SIGNER_PRIVATE_KEY
+# Use for:
+# - Setting up new environments (.env, .env.test)
+# - Regenerating test keys if compromised
+# - Understanding the key format (hex coordinates + bigint)
+#
+# IMPORTANT: Never commit production private keys to version control!
+# Test keys in .env.test are safe to commit (test-only environment)
+```
+
 ### Testing & Code Quality
 ```bash
 npm run test:unit                # Run unit tests only (excludes integration)
@@ -60,6 +75,12 @@ npm run test:integration         # Run integration tests with test database (use
 npm run test:integration:local   # Run integration tests directly with vitest (local mode)
 npm run lint                     # Run ESLint
 npm run format                   # Format code with Prettier
+
+# Integration test setup (first time):
+# 1. Ensure .env.test exists with test credentials and SIGNER keys
+# 2. scripts/test-integration.sh sources .env.test automatically
+# 3. Tests use SIGNER_PRIVATE_KEY from .env.test to create valid signatures
+# 4. Test environment uses its own keypair (separate from production)
 
 # Pre-commit hooks (Husky + lint-staged):
 # - Automatically runs ESLint with auto-fix
@@ -288,6 +309,7 @@ MINA_NETWORK=testnet|mainnet
 ZKAPP_ADDRESS=<deployed_zkapp_address>
 FEE_PAYER_PRIVATE_KEY=<private_key>  # MUST be the private key of the account that deployed the zkApp
 SIGNER_PUBLIC_KEY=<public_key_x>,<public_key_y>  # ECDSA public key for signature verification (hex format)
+                                                   # Generate with: npx tsx scripts/generate-signer-keypair.mts
 PORT=3000
 NODE_ENV=development|production|test
 CORS_ORIGIN=http://localhost:3001
