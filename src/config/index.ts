@@ -42,6 +42,9 @@ export interface Config {
   // Admin Authentication
   ADMIN_PASSWORD: string;
 
+  // Image Signing
+  signerPublicKey: string;
+
   // Archive Node Configuration
   archiveNodeEndpoint: string;
   minaNodeEndpoint: string;
@@ -121,6 +124,7 @@ function parseConfig(): Config {
     minioSecretKey: getRequired('MINIO_ROOT_PASSWORD'),
     minioBucket: getRequired('MINIO_BUCKET'),
     ADMIN_PASSWORD: getRequired('ADMIN_PASSWORD'),
+    signerPublicKey: getRequired('SIGNER_PUBLIC_KEY'),
     archiveNodeEndpoint: getRequired('ARCHIVE_NODE_ENDPOINT'),
     minaNodeEndpoint: getRequired('MINA_NODE_ENDPOINT'),
     monitoringEnabled: getRequired('MONITORING_ENABLED') === 'true',

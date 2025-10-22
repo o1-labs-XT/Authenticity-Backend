@@ -14,6 +14,7 @@ import { MinioStorageService } from '../services/storage/minio.service.js';
 import { Submission } from '../db/types/touchgrass.types.js';
 import { Errors } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
+import { Config } from '../config/index.js';
 import fs from 'fs';
 
 export interface SubmissionResponse {
@@ -37,6 +38,9 @@ export interface SubmissionResponse {
 }
 
 export class SubmissionsHandler {
+  private readonly signerPublicKeyX: string;
+  private readonly signerPublicKeyY: string;
+
   constructor(
     private readonly submissionsRepo: SubmissionsRepository,
     private readonly usersRepo: UsersRepository,
@@ -44,8 +48,17 @@ export class SubmissionsHandler {
     private readonly challengesRepo: ChallengesRepository,
     private readonly verificationService: ImageAuthenticityService,
     private readonly jobQueue: JobQueueService,
-    private readonly storageService: MinioStorageService
-  ) {}
+    private readonly storageService: MinioStorageService,
+    private readonly config: Config
+  ) {
+    // Parse the signer public key from config (expected format: "x,y" in hex)
+    const publicKeyParts = config.signerPublicKey.split(',');
+    if (publicKeyParts.length !== 2) {
+      throw new Error('SIGNER_PUBLIC_KEY must be in format "x,y" (hex strings)');
+    }
+    this.signerPublicKeyX = publicKeyParts[0].trim();
+    this.signerPublicKeyY = publicKeyParts[1].trim();
+  }
 
   private toResponse(submission: Submission): SubmissionResponse {
     return {
@@ -74,9 +87,7 @@ export class SubmissionsHandler {
     chainId: string | undefined,
     walletAddress: string | undefined,
     signatureR: string | undefined,
-    signatureS: string | undefined,
-    publicKeyX: string | undefined,
-    publicKeyY: string | undefined
+    signatureS: string | undefined
   ): { imageBuffer: Buffer; signatureData: ECDSASignatureData } {
     if (!file) {
       throw Errors.badRequest('No image file provided', 'image');
@@ -105,12 +116,12 @@ export class SubmissionsHandler {
       throw Errors.badRequest('Image buffer is empty', 'image');
     }
 
-    // Parse and validate ECDSA signature components
+    // Parse and validate ECDSA signature components with signer public key from config
     const signatureData = this.verificationService.parseSignatureData(
       signatureR,
       signatureS,
-      publicKeyX,
-      publicKeyY
+      this.signerPublicKeyX,
+      this.signerPublicKeyY
     );
 
     if ('error' in signatureData) {
@@ -131,8 +142,7 @@ export class SubmissionsHandler {
       logger.debug('Processing submission request');
 
       const file = req.file;
-      const { chainId, walletAddress, signatureR, signatureS, publicKeyX, publicKeyY, tagline } =
-        req.body;
+      const { chainId, walletAddress, signatureR, signatureS, tagline } = req.body;
 
       // Validate request and get image buffer and signature data
       const { imageBuffer, signatureData } = this.validateSubmissionRequest(
@@ -140,9 +150,7 @@ export class SubmissionsHandler {
         chainId,
         walletAddress,
         signatureR,
-        signatureS,
-        publicKeyX,
-        publicKeyY
+        signatureS
       );
 
       // Compute SHA256 hash of image
@@ -190,19 +198,13 @@ export class SubmissionsHandler {
       logger.debug({ storageKey, sha256Hash }, 'Image uploaded to MinIO');
 
       // Create submission (with transaction for chain/challenge updates)
-      // Store signature AND public key together for proof generation
+      // Store only signature r,s (public key is in env var)
       let submission = await this.submissionsRepo.create({
         sha256Hash,
         walletAddress,
-        // todo: break into separate fields
         signature: JSON.stringify({
           r: signatureData.signatureR,
           s: signatureData.signatureS,
-          // todo: move to env var
-          publicKey: {
-            x: signatureData.publicKeyX,
-            y: signatureData.publicKeyY,
-          },
         }),
         challengeId: challenge.id,
         chainId: chainId!,
@@ -210,30 +212,7 @@ export class SubmissionsHandler {
         tagline,
       });
 
-      // Enqueue proof generation job immediately
-      // todo: put public key in an env var and enqueue in admin approval
-      const jobId = await this.jobQueue.enqueueProofGeneration({
-        sha256Hash,
-        signature: JSON.stringify({
-          r: signatureData.signatureR,
-          s: signatureData.signatureS,
-        }),
-        publicKey: JSON.stringify({
-          x: signatureData.publicKeyX,
-          y: signatureData.publicKeyY,
-        }),
-        storageKey,
-        tokenOwnerAddress: walletAddress,
-        // todo: remove
-        tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
-        uploadedAt: new Date(),
-        correlationId: (req as Request & { correlationId: string }).correlationId,
-      });
-
-      logger.info(
-        { submissionId: submission.id, sha256Hash, jobId },
-        'Submission created and proof generation job enqueued'
-      );
+      logger.info({ submissionId: submission.id, sha256Hash }, 'Submission created');
 
       res.status(201).json(this.toResponse(submission));
     } catch (error) {
@@ -317,31 +296,23 @@ export class SubmissionsHandler {
           : failureReason || 'Image does not satisfy challenge criteria',
       };
 
-      // NOTE: Proof generation job is enqueued immediately in createSubmission()
-      // todo: move public key to env var and enqueue here
-      // so we don't need to enqueue it here during admin approval
-      // if (challengeVerified) {
-      //   // Extract public key from wallet address (it's stored as base58)
-      //   // TODO: this is the wrong key
-      //   const publicKey = PublicKey.fromBase58(submission.wallet_address);
-      //   const publicKeyGroup = publicKey.toGroup();
-      //   const publicKeyJson = JSON.stringify({
-      //     x: publicKeyGroup.x.toString(),
-      //     y: publicKeyGroup.y.toString(),
-      //   });
-      //
-      //   const jobId = await this.jobQueue.enqueueProofGeneration({
-      //     sha256Hash: submission.sha256_hash,
-      //     signature: submission.signature,
-      //     publicKey: publicKeyJson,
-      //     storageKey: submission.storage_key,
-      //     tokenOwnerAddress: submission.wallet_address,
-      //     tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
-      //     uploadedAt: new Date(submission.created_at),
-      //     correlationId: (req as Request & { correlationId: string }).correlationId,
-      //   });
-      //   logger.info({ jobId, submissionId: id }, 'Proof generation job enqueued after approval');
-      // }
+      // Enqueue proof generation job if approved
+      if (challengeVerified) {
+        const jobId = await this.jobQueue.enqueueProofGeneration({
+          sha256Hash: submission.sha256_hash,
+          signature: submission.signature,
+          publicKey: JSON.stringify({
+            x: this.signerPublicKeyX,
+            y: this.signerPublicKeyY,
+          }),
+          storageKey: submission.storage_key,
+          tokenOwnerAddress: submission.wallet_address,
+          tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
+          uploadedAt: new Date(submission.created_at),
+          correlationId: (req as Request & { correlationId: string }).correlationId,
+        });
+        logger.info({ jobId, submissionId: id }, 'Proof generation job enqueued after approval');
+      }
 
       const updated = await this.submissionsRepo.update(id, updates);
       if (!updated) {

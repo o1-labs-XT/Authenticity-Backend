@@ -105,12 +105,13 @@ TouchGrass MVP: A social photo challenge platform with zero-knowledge proof veri
 The system includes both a backend API and an admin dashboard (Next.js app) for managing challenges, users, job queues, and submissions.
 
 ### Core Flow
-1. **Upload**: Client uploads image with cryptographic signature
-2. **Queue**: Upload handler enqueues proof generation job in pg-boss
-3. **Process**: Worker service processes jobs asynchronously
-4. **Prove**: Worker generates zero-knowledge proofs using o1js
-5. **Publish**: Worker publishes proofs to Mina blockchain
-6. **Verify**: Anyone can verify authenticity via token owner address
+1. **Upload**: Client uploads image with cryptographic signature (signed with SIGNER_PUBLIC_KEY)
+2. **Review**: Admin reviews and approves/rejects submission via dashboard
+3. **Queue**: Admin approval enqueues proof generation job in pg-boss
+4. **Process**: Worker service processes jobs asynchronously
+5. **Prove**: Worker generates zero-knowledge proofs using o1js
+6. **Publish**: Worker publishes proofs to Mina blockchain
+7. **Verify**: Anyone can verify authenticity via token owner address
 
 ### Service Architecture
 
@@ -148,11 +149,13 @@ src/
 │   ├── database.ts      # Database connection manager
 │   └── types.ts         # Database type definitions
 ├── handlers/            # Request handlers with dependency injection
-│   ├── upload.handler.ts    # Complex validation, orchestration, error recovery
-│   ├── status.handler.ts    # Simple status queries
-│   ├── tokenOwner.handler.ts
-│   ├── admin.handler.ts     # Job queue management
-│   └── challenges.handler.ts # TouchGrass challenge endpoints
+│   ├── submissions.handler.ts   # Complex validation, orchestration, error recovery
+│   ├── status.handler.ts        # Simple status queries (legacy)
+│   ├── tokenOwner.handler.ts    # Token owner lookup (legacy)
+│   ├── admin.handler.ts         # Job queue management (legacy)
+│   ├── challenges.handler.ts    # TouchGrass challenge endpoints
+│   ├── chains.handler.ts        # Chain management endpoints
+│   └── users.handler.ts         # User management endpoints
 ├── services/
 │   ├── blockchain/
 │   │   ├── archiveNode.service.ts   # Mina archive node GraphQL queries
@@ -193,11 +196,13 @@ test/                    # Unit tests with Vitest
 ## Key Components
 
 ### Handlers
-- **UploadHandler**: Validates uploads, creates records, enqueues jobs, handles comprehensive error recovery
-- **StatusHandler**: Returns proof generation/publishing status
-- **TokenOwnerHandler**: Returns token owner for verified images
-- **AdminHandler**: Job queue management (stats, failures, retries)
+- **SubmissionsHandler**: Validates uploads, creates records, handles admin review (enqueues jobs on approval), comprehensive error recovery
+- **StatusHandler**: Returns proof generation/publishing status (legacy)
+- **TokenOwnerHandler**: Returns token owner for verified images (legacy)
+- **AdminHandler**: Job queue management (stats, failures, retries) (legacy)
 - **ChallengesHandler**: TouchGrass challenge endpoints (current challenge, challenge metadata)
+- **ChainsHandler**: Chain management endpoints
+- **UsersHandler**: User management endpoints
 
 ### Services
 - **ImageAuthenticityService**: SHA256 hashing, signature verification using o1js and authenticity-zkapp
@@ -230,29 +235,48 @@ test/                    # Unit tests with Vitest
 ## API Endpoints
 
 ### Public Endpoints
-- `POST /api/upload` - Upload image for proof generation
-  - Multipart form: `image` file, `signature`, `publicKey`
-  - Returns: `{ sha256Hash, tokenOwnerAddress, status }`
-  - Async proof generation via job queue
+- `POST /api/submissions` - Submit image for challenge
+  - Multipart form: `image` file, `chainId`, `walletAddress`, `signatureR`, `signatureS`, optional `tagline`
+  - Signature must be signed with SIGNER_PUBLIC_KEY (from env)
+  - Returns: Submission object with `status: 'awaiting_review'`
+  - Proof generation enqueued after admin approval
 
-- `GET /api/status/:sha256Hash` - Check proof status
-  - Returns: `{ status, transactionId?, tokenOwner? }`
-  - Status: `pending` | `processing` | `verified` | `failed`
+- `GET /api/submissions/:id` - Get submission by ID
+  - Returns: Submission object with status and metadata
 
-- `GET /api/token-owner/:sha256Hash` - Get token owner
-  - Returns: `{ tokenOwner }` if verified
+- `GET /api/submissions` - List submissions
+  - Query params: `walletAddress`, `chainId`, `challengeId`, `status`
+  - Returns: Array of submissions
+
+- `GET /api/submissions/:id/image` - Get submission image
+  - Returns: Image file
 
 - `GET /api/challenges/current` - Get current active challenge
   - Returns: TouchGrass challenge metadata
 
+- `GET /api/challenges/:id` - Get challenge by ID
+
+- `GET /api/chains` - List chains
+  - Query params: `challengeId`
+
+- `GET /api/users/:walletAddress` - Get user
+
+- `POST /api/users` - Create user
+
 - `GET /health` - Health check
 - `GET /api/version` - API version
 
-### Admin Endpoints (dev mode or with ADMIN_API_KEY)
-- `GET /api/admin/jobs/stats` - Queue statistics
-- `GET /api/admin/jobs/failed?limit=10&offset=0` - Failed jobs with pagination
-- `GET /api/admin/jobs/:jobId` - Job details
-- `POST /api/admin/jobs/:jobId/retry` - Retry failed job
+### Admin Endpoints (require authentication)
+- `PATCH /api/submissions/:id` - Review submission (approve/reject)
+  - Body: `{ challengeVerified: boolean, failureReason?: string }`
+  - Enqueues proof generation on approval
+
+- `DELETE /api/submissions/:id` - Delete submission
+
+- `GET /api/admin/jobs/stats` - Queue statistics (legacy)
+- `GET /api/admin/jobs/failed` - Failed jobs (legacy)
+- `GET /api/admin/jobs/:jobId` - Job details (legacy)
+- `POST /api/admin/jobs/:jobId/retry` - Retry failed job (legacy)
 
 ## Environment Configuration
 
@@ -262,6 +286,7 @@ DATABASE_URL=postgresql://user:pass@host:5432/db
 MINA_NETWORK=testnet|mainnet
 ZKAPP_ADDRESS=<deployed_zkapp_address>
 FEE_PAYER_PRIVATE_KEY=<private_key>
+SIGNER_PUBLIC_KEY=<public_key_x>,<public_key_y>  # ECDSA public key for signature verification (hex format)
 PORT=3000
 NODE_ENV=development|production|test
 CORS_ORIGIN=http://localhost:3001
@@ -272,6 +297,9 @@ MINIO_ENDPOINT=http://localhost:9000
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=minioadmin
 MINIO_BUCKET=authenticity
+
+# Admin Authentication
+ADMIN_PASSWORD=<password>
 ```
 
 ### Optional Variables
@@ -400,7 +428,7 @@ services:
 ## Local Development Setup
 
 1. **Start infrastructure**: `docker-compose up -d`
-2. **Configure environment**: `cp .env.example .env`
+2. **Configure environment**: `cp .env.example .env` and configure SIGNER_PUBLIC_KEY
 3. **Setup MinIO bucket** (first time only):
    ```bash
    docker-compose exec minio mc alias set local http://minio:9000 minioadmin minioadmin

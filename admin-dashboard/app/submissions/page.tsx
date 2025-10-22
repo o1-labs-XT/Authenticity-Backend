@@ -325,8 +325,6 @@ function SubmissionForm({
     walletAddress: '',
     signatureR: '',
     signatureS: '',
-    publicKeyX: '',
-    publicKeyY: '',
     tagline: '',
   });
   const [image, setImage] = useState<File | null>(null);
@@ -375,8 +373,6 @@ function SubmissionForm({
         walletAddress: result.walletAddress,
         signatureR: result.signatureR,
         signatureS: result.signatureS,
-        publicKeyX: result.publicKeyX,
-        publicKeyY: result.publicKeyY,
       });
     } catch (error) {
       setError((error as Error).message);
@@ -393,7 +389,7 @@ function SubmissionForm({
       return;
     }
 
-    if (!formData.walletAddress || !formData.signatureR || !formData.signatureS || !formData.publicKeyX || !formData.publicKeyY) {
+    if (!formData.walletAddress || !formData.signatureR || !formData.signatureS) {
       setError('Please generate credentials first');
       return;
     }
@@ -405,8 +401,6 @@ function SubmissionForm({
     data.append('walletAddress', formData.walletAddress);
     data.append('signatureR', formData.signatureR);
     data.append('signatureS', formData.signatureS);
-    data.append('publicKeyX', formData.publicKeyX);
-    data.append('publicKeyY', formData.publicKeyY);
     if (formData.tagline) {
       data.append('tagline', formData.tagline);
     }
@@ -497,7 +491,7 @@ function SubmissionForm({
         />
         {formData.signatureR && (
           <p className="mt-1 text-xs text-gray-500">
-            ECDSA signature components (R, S) and public key (X, Y) generated
+            ECDSA signature components (R, S) generated
           </p>
         )}
       </div>

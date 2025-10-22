@@ -19,8 +19,6 @@ interface SubmissionTestData {
   imagePath: string;
   signatureR: string;
   signatureS: string;
-  publicKeyX: string;
-  publicKeyY: string;
   ecdsaKeyPair: any; // Store the full keypair for potential reuse
   sha256Hash: string;
   walletAddress: string;
@@ -64,8 +62,6 @@ function createSubmissionTestData(): SubmissionTestData {
     imagePath,
     signatureR,
     signatureS,
-    publicKeyX: ecdsaKeyPair.publicKeyXHex,
-    publicKeyY: ecdsaKeyPair.publicKeyYHex,
     ecdsaKeyPair,
     sha256Hash,
     walletAddress,
@@ -133,8 +129,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .field('tagline', 'My first submission!')
       .attach('image', testData.imagePath);
 
@@ -176,8 +170,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .field('tagline', 'Existing user submission')
       .attach('image', testData.imagePath);
 
@@ -196,9 +188,7 @@ describe('Submissions API Integration', () => {
       .field('chainId', chainId)
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
-      .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY);
+      .field('signatureS', testData.signatureS);
 
     expect(res1.status).toBe(400);
     expect(res1.body.error.field).toBe('image');
@@ -214,8 +204,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', emptyImagePath);
 
     expect(res2.status).toBe(400);
@@ -229,8 +217,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(400);
@@ -245,8 +231,6 @@ describe('Submissions API Integration', () => {
       .field('chainId', chainId)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(400);
@@ -276,8 +260,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', 'invalid-key')
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(400);
@@ -294,8 +276,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', 'invalid-signature-component')
       .field('signatureS', 'invalid-signature-component')
-      .field('publicKeyX', 'invalid-key-component')
-      .field('publicKeyY', 'invalid-key-component')
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(400);
@@ -315,8 +295,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData1.walletAddress)
       .field('signatureR', invalidSignatureR) // Modified signature
       .field('signatureS', testData1.signatureS)
-      .field('publicKeyX', testData1.publicKeyX)
-      .field('publicKeyY', testData1.publicKeyY)
       .attach('image', testData1.imagePath);
 
     expect(res1.status).toBe(400);
@@ -329,8 +307,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData1.walletAddress)
       .field('signatureR', testData2.signatureR) // Signature from testData2
       .field('signatureS', testData2.signatureS) // Signature from testData2
-      .field('publicKeyX', testData1.publicKeyX) // PublicKey from testData1
-      .field('publicKeyY', testData1.publicKeyY) // PublicKey from testData1
       .attach('image', testData1.imagePath);
 
     expect(res2.status).toBe(400);
@@ -347,8 +323,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(404);
@@ -376,8 +350,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(400);
@@ -405,8 +377,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(400);
@@ -424,8 +394,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res1.status).toBe(201);
@@ -438,8 +406,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res2.status).toBe(409);
@@ -458,8 +424,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData1.walletAddress)
       .field('signatureR', testData1.signatureR)
       .field('signatureS', testData1.signatureS)
-      .field('publicKeyX', testData1.publicKeyX)
-      .field('publicKeyY', testData1.publicKeyY)
       .attach('image', testData1.imagePath);
 
     expect(res1.status).toBe(201);
@@ -478,8 +442,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData1.walletAddress)
       .field('signatureR', signatureData2.r.toString(16).padStart(64, '0'))
       .field('signatureS', signatureData2.s.toString(16).padStart(64, '0'))
-      .field('publicKeyX', testData1.publicKeyX)
-      .field('publicKeyY', testData1.publicKeyY)
       .attach('image', testData2.imagePath);
 
     expect(res2.status).toBe(409);
@@ -513,8 +475,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData1.walletAddress)
       .field('signatureR', testData1.signatureR)
       .field('signatureS', testData1.signatureS)
-      .field('publicKeyX', testData1.publicKeyX)
-      .field('publicKeyY', testData1.publicKeyY)
       .attach('image', testData1.imagePath);
 
     expect(res1.status).toBe(201);
@@ -532,8 +492,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData2.walletAddress)
       .field('signatureR', testData2.signatureR)
       .field('signatureS', testData2.signatureS)
-      .field('publicKeyX', testData2.publicKeyX)
-      .field('publicKeyY', testData2.publicKeyY)
       .attach('image', testData2.imagePath);
 
     expect(res2.status).toBe(201);
@@ -556,8 +514,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .field('tagline', 'Test GET')
       .attach('image', testData.imagePath);
 
@@ -589,8 +545,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(createRes.status).toBe(201);
@@ -631,8 +585,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData1.walletAddress)
       .field('signatureR', testData1.signatureR)
       .field('signatureS', testData1.signatureS)
-      .field('publicKeyX', testData1.publicKeyX)
-      .field('publicKeyY', testData1.publicKeyY)
       .attach('image', testData1.imagePath);
 
     expect(res1.status).toBe(201);
@@ -644,8 +596,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData2.walletAddress)
       .field('signatureR', testData2.signatureR)
       .field('signatureS', testData2.signatureS)
-      .field('publicKeyX', testData2.publicKeyX)
-      .field('publicKeyY', testData2.publicKeyY)
       .attach('image', testData2.imagePath);
 
     expect(res2.status).toBe(201);
@@ -685,8 +635,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData1.walletAddress)
       .field('signatureR', testData1.signatureR)
       .field('signatureS', testData1.signatureS)
-      .field('publicKeyX', testData1.publicKeyX)
-      .field('publicKeyY', testData1.publicKeyY)
       .attach('image', testData1.imagePath);
 
     expect(res1.status).toBe(201);
@@ -698,8 +646,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData2.walletAddress)
       .field('signatureR', testData2.signatureR)
       .field('signatureS', testData2.signatureS)
-      .field('publicKeyX', testData2.publicKeyX)
-      .field('publicKeyY', testData2.publicKeyY)
       .attach('image', testData2.imagePath);
 
     expect(res2.status).toBe(201);
@@ -725,8 +671,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(createRes.status).toBe(201);
@@ -754,8 +698,6 @@ describe('Submissions API Integration', () => {
   //     .field('walletAddress', testData.walletAddress)
   //     .field('signatureR', testData.signatureR)
   //     .field('signatureS', testData.signatureS)
-  //     .field('publicKeyX', testData.publicKeyX)
-  //     .field('publicKeyY', testData.publicKeyY)
   //     .attach('image', testData.imagePath);
 
   //   expect(createRes.status).toBe(201);
@@ -792,8 +734,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(201);
@@ -831,8 +771,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(res.status).toBe(201);
@@ -856,8 +794,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(createRes.status).toBe(201);
@@ -887,8 +823,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(createRes.status).toBe(201);
@@ -921,8 +855,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(createRes.status).toBe(201);
@@ -952,8 +884,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(createRes.status).toBe(201);
@@ -981,8 +911,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(createRes.status).toBe(201);
@@ -1017,8 +945,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(createRes.status).toBe(201);
@@ -1056,8 +982,6 @@ describe('Submissions API Integration', () => {
       .field('walletAddress', testData.walletAddress)
       .field('signatureR', testData.signatureR)
       .field('signatureS', testData.signatureS)
-      .field('publicKeyX', testData.publicKeyX)
-      .field('publicKeyY', testData.publicKeyY)
       .attach('image', testData.imagePath);
 
     expect(createRes.status).toBe(201);
