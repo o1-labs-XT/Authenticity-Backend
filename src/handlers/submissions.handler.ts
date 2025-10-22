@@ -191,12 +191,17 @@ export class SubmissionsHandler {
       logger.debug({ storageKey, sha256Hash }, 'Image uploaded to MinIO');
 
       // Create submission (with transaction for chain/challenge updates)
+      // Store signature AND public key together for proof generation
       let submission = await this.submissionsRepo.create({
         sha256Hash,
         walletAddress,
         signature: JSON.stringify({
           r: signatureData.signatureR,
           s: signatureData.signatureS,
+          publicKey: {
+            x: signatureData.publicKeyX,
+            y: signatureData.publicKeyY,
+          },
         }),
         challengeId: challenge.id,
         chainId: chainId!,
@@ -204,10 +209,28 @@ export class SubmissionsHandler {
         tagline,
       });
 
-      // Note: Proof generation job will be enqueued after admin approval in reviewSubmission()
+      // Enqueue proof generation job immediately
+      // todo: put public key in an env var and enqueue in admin approval
+      const jobId = await this.jobQueue.enqueueProofGeneration({
+        sha256Hash,
+        signature: JSON.stringify({
+          r: signatureData.signatureR,
+          s: signatureData.signatureS,
+        }),
+        publicKey: JSON.stringify({
+          x: signatureData.publicKeyX,
+          y: signatureData.publicKeyY,
+        }),
+        storageKey,
+        tokenOwnerAddress: walletAddress,
+        tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
+        uploadedAt: new Date(),
+        correlationId: (req as Request & { correlationId: string }).correlationId,
+      });
+
       logger.info(
-        { submissionId: submission.id, sha256Hash },
-        'Submission created, awaiting admin review'
+        { submissionId: submission.id, sha256Hash, jobId },
+        'Submission created and proof generation job enqueued'
       );
 
       res.status(201).json(this.toResponse(submission));
@@ -292,29 +315,31 @@ export class SubmissionsHandler {
           : failureReason || 'Image does not satisfy challenge criteria',
       };
 
-      // Enqueue proof generation job if approved
-      if (challengeVerified) {
-        // Extract public key from wallet address (it's stored as base58)
-        // TODO: this is the wrong key
-        const publicKey = PublicKey.fromBase58(submission.wallet_address);
-        const publicKeyGroup = publicKey.toGroup();
-        const publicKeyJson = JSON.stringify({
-          x: publicKeyGroup.x.toString(),
-          y: publicKeyGroup.y.toString(),
-        });
-
-        const jobId = await this.jobQueue.enqueueProofGeneration({
-          sha256Hash: submission.sha256_hash,
-          signature: submission.signature,
-          publicKey: publicKeyJson,
-          storageKey: submission.storage_key,
-          tokenOwnerAddress: submission.wallet_address,
-          tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
-          uploadedAt: new Date(submission.created_at),
-          correlationId: (req as Request & { correlationId: string }).correlationId,
-        });
-        logger.info({ jobId, submissionId: id }, 'Proof generation job enqueued after approval');
-      }
+      // NOTE: Proof generation job is enqueued immediately in createSubmission()
+      // todo: move public key to env var and enqueue here
+      // so we don't need to enqueue it here during admin approval
+      // if (challengeVerified) {
+      //   // Extract public key from wallet address (it's stored as base58)
+      //   // TODO: this is the wrong key
+      //   const publicKey = PublicKey.fromBase58(submission.wallet_address);
+      //   const publicKeyGroup = publicKey.toGroup();
+      //   const publicKeyJson = JSON.stringify({
+      //     x: publicKeyGroup.x.toString(),
+      //     y: publicKeyGroup.y.toString(),
+      //   });
+      //
+      //   const jobId = await this.jobQueue.enqueueProofGeneration({
+      //     sha256Hash: submission.sha256_hash,
+      //     signature: submission.signature,
+      //     publicKey: publicKeyJson,
+      //     storageKey: submission.storage_key,
+      //     tokenOwnerAddress: submission.wallet_address,
+      //     tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
+      //     uploadedAt: new Date(submission.created_at),
+      //     correlationId: (req as Request & { correlationId: string }).correlationId,
+      //   });
+      //   logger.info({ jobId, submissionId: id }, 'Proof generation job enqueued after approval');
+      // }
 
       const updated = await this.submissionsRepo.update(id, updates);
       if (!updated) {
