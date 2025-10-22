@@ -301,10 +301,6 @@ export class SubmissionsHandler {
         const jobId = await this.jobQueue.enqueueProofGeneration({
           sha256Hash: submission.sha256_hash,
           signature: submission.signature,
-          publicKey: JSON.stringify({
-            x: this.signerPublicKeyX,
-            y: this.signerPublicKeyY,
-          }),
           storageKey: submission.storage_key,
           tokenOwnerAddress: submission.wallet_address,
           tokenOwnerPrivateKey: PrivateKey.random().toBase58(),

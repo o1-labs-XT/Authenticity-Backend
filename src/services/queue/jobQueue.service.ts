@@ -4,7 +4,6 @@ import { logger } from '../../utils/logger.js';
 export interface ProofGenerationJobData {
   sha256Hash: string;
   signature: string;
-  publicKey: string;
   storageKey: string; // minio storage key
   tokenOwnerAddress: string;
   tokenOwnerPrivateKey: string;
