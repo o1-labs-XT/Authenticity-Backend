@@ -50,3 +50,11 @@ export interface Submission {
   created_at: string;
   updated_at: string;
 }
+
+export interface Like {
+  id: string;
+  submission_id: string;
+  wallet_address: string;
+  created_at: string;
+  updated_at: string;
+}
