@@ -57,6 +57,14 @@ export interface AuthenticityRecord {
   verifiedAt?: string;
 }
 
+export interface Like {
+  id: string;
+  submissionId: string;
+  walletAddress: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface ApiError {
   message: string;
   error?: string;

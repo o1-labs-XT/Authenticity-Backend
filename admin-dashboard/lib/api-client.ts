@@ -1,4 +1,4 @@
-import type { Challenge, User, Chain, Submission, AuthenticityRecord } from './types';
+import type { Challenge, User, Chain, Submission, AuthenticityRecord, Like } from './types';
 
 /**
  * API client wraps backend API calls with proxy routing.
@@ -112,6 +112,24 @@ class ApiClient {
         body: JSON.stringify(data),
       }),
     delete: (id: string) => this.request<void>(`submissions/${id}`, { method: 'DELETE' }),
+  };
+
+  // Likes
+  likes = {
+    list: (submissionId: string) => this.request<Like[]>(`submissions/${submissionId}/likes`),
+    getCount: (submissionId: string) =>
+      this.request<{ submissionId: string; count: number }>(
+        `submissions/${submissionId}/likes/count`
+      ),
+    create: (submissionId: string, walletAddress: string) =>
+      this.request<Like>(`submissions/${submissionId}/likes`, {
+        method: 'POST',
+        body: JSON.stringify({ walletAddress }),
+      }),
+    delete: (submissionId: string, walletAddress: string) =>
+      this.request<void>(`submissions/${submissionId}/likes/${walletAddress}`, {
+        method: 'DELETE',
+      }),
   };
 }
 

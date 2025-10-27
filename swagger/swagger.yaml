@@ -14,6 +14,8 @@ servers:
     description: Development server
 
 tags:
+  - name: System
+    description: System health and information
   - name: Users
     description: User management
   - name: Challenges
@@ -22,8 +24,62 @@ tags:
     description: Photo chains
   - name: Submissions
     description: Photo submissions
+  - name: Likes
+    description: Submission likes
 
 paths:
+  # System endpoints
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      description: Check if the API is running and healthy
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                    description: Process uptime in seconds
+                    example: 12345.67
+                  environment:
+                    type: string
+                    example: "production"
+
+  /api/version:
+    get:
+      tags: [System]
+      summary: API version
+      description: Get API version and configuration information
+      responses:
+        '200':
+          description: API version information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  api:
+                    type: string
+                    example: "Provenance Backend API"
+                  zkApp:
+                    type: string
+                    description: zkApp address or 'not configured'
+                    example: "B62qrPN5Y5yq8kGE3FbVKbGTdTAJNdtNtB5sNVpxyRwWGcDEhQMqbgy"
+
   # Users endpoints
   /users:
     post:
@@ -495,6 +551,157 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  # Likes endpoints
+  /submissions/{submissionId}/likes:
+    post:
+      tags: [Likes]
+      summary: Like a submission
+      description: Create a like for a submission. User must have at least one admin-approved submission to like other submissions.
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Submission ID to like
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [walletAddress]
+              properties:
+                walletAddress:
+                  type: string
+                  description: Wallet address of the user liking the submission
+                  example: "B62qrPN5Y5yq8kGE3FbVKbGTdTAJNdtNtB5sNVpxyRwWGcDEhQMqbgy"
+      responses:
+        '201':
+          description: Like created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Like'
+        '400':
+          description: Invalid wallet address format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User must have an admin-approved submission before liking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Submission or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Like already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags: [Likes]
+      summary: Get all likes for a submission
+      description: Retrieve all likes for a specific submission
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Submission ID
+      responses:
+        '200':
+          description: List of likes (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Like'
+        '404':
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /submissions/{submissionId}/likes/count:
+    get:
+      tags: [Likes]
+      summary: Get like count for a submission
+      description: Get the total number of likes for a submission
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Submission ID
+      responses:
+        '200':
+          description: Like count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LikeCount'
+        '404':
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /submissions/{submissionId}/likes/{walletAddress}:
+    delete:
+      tags: [Likes]
+      summary: Unlike a submission
+      description: Remove a like from a submission
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Submission ID
+        - name: walletAddress
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Wallet address of the user who liked the submission
+          example: "B62qrPN5Y5yq8kGE3FbVKbGTdTAJNdtNtB5sNVpxyRwWGcDEhQMqbgy"
+      responses:
+        '200':
+          description: Like deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '404':
+          description: Like not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   schemas:
     User:
@@ -637,6 +844,47 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    Like:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique like ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        submissionId:
+          type: string
+          format: uuid
+          description: ID of the liked submission
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        walletAddress:
+          type: string
+          description: Wallet address of the user who liked the submission
+          example: "B62qrPN5Y5yq8kGE3FbVKbGTdTAJNdtNtB5sNVpxyRwWGcDEhQMqbgy"
+        createdAt:
+          type: string
+          format: date-time
+          description: When the like was created
+          example: "2024-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the like was last updated
+          example: "2024-01-01T00:00:00Z"
+
+    LikeCount:
+      type: object
+      properties:
+        submissionId:
+          type: string
+          format: uuid
+          description: ID of the submission
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        count:
+          type: integer
+          description: Number of likes for the submission
+          example: 42
 
     Error:
       type: object
