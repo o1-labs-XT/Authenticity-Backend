@@ -131,11 +131,7 @@ export class SubmissionsRepository {
     return deleted > 0;
   }
 
-  async findBySha256Hash(sha256Hash: string): Promise<Submission | null> {
-    const result = await this.db.getKnex()('submissions').where('sha256_hash', sha256Hash).first();
-    return result || null;
-  }
-
+  // todo: this is a duplicate, there should only be one update method
   async updateBySha256Hash(
     sha256Hash: string,
     updates: Partial<Submission>
@@ -152,30 +148,7 @@ export class SubmissionsRepository {
     return updated || null;
   }
 
-  async getStatusCounts(): Promise<Record<string, number>> {
-    const results = await this.db
-      .getKnex()('submissions')
-      .select('status')
-      .count('* as count')
-      .groupBy('status');
-
-    const counts: Record<string, number> = {};
-    for (const result of results) {
-      counts[result.status] = parseInt(result.count as string);
-    }
-
-    return counts;
-  }
-
-  async getFailedRecords(limit: number, offset: number): Promise<Submission[]> {
-    return this.db
-      .getKnex()('submissions')
-      .where('status', 'rejected')
-      .orderBy('failed_at', 'desc')
-      .limit(limit)
-      .offset(offset);
-  }
-
+  // todo: could we combine this with findall?
   async getRecentTransactionsForMonitoring(lookbackBlocks: number): Promise<TransactionInfo[]> {
     const results = await this.db
       .getKnex()('submissions')

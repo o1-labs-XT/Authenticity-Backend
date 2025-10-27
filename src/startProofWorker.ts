@@ -1,6 +1,5 @@
 import { config } from './config/index.js';
 import { DatabaseConnection } from './db/database.js';
-import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { SubmissionsRepository } from './db/repositories/submissions.repository.js';
 import { ImageAuthenticityService } from './services/image/verification.service.js';
 import { MinioStorageService } from './services/storage/minio.service.js';
@@ -24,7 +23,6 @@ async function startWorker() {
       connectionString: config.databaseUrl,
     });
     await dbConnection.initialize();
-    const repository = new AuthenticityRepository(dbConnection.getAdapter());
     const submissionsRepository = new SubmissionsRepository(dbConnection.getAdapter());
 
     // Initialize pg-boss
@@ -46,7 +44,6 @@ async function startWorker() {
       config.zkappAddress,
       config.feePayerPrivateKey,
       config.minaNetwork,
-      repository,
       submissionsRepository,
       minaNodeService
     );
@@ -54,7 +51,6 @@ async function startWorker() {
     // Start worker
     const worker = new ProofGenerationWorker(
       boss,
-      repository,
       submissionsRepository,
       verificationService,
       proofGenerationService,

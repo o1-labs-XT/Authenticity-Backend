@@ -1,6 +1,12 @@
 import { fetchLastBlock } from 'o1js';
 import { logger } from '../../utils/logger.js';
 
+/**
+ * Queries Mina nodes using o1js to get the current blockchain height.
+ * Used by the blockchain monitoring worker to determine how many blocks have passed
+ * since a transaction was submitted, enabling confirmation and abandonment detection.
+ */
+
 export class MinaNodeService {
   constructor(private minaNodeEndpoint: string) {}
 

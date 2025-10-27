@@ -1,12 +1,4 @@
-import type {
-  Challenge,
-  User,
-  Chain,
-  Submission,
-  AuthenticityRecord,
-  Job,
-  JobStats,
-} from './types';
+import type { Challenge, User, Chain, Submission, AuthenticityRecord } from './types';
 
 /**
  * API client wraps backend API calls with proxy routing.
@@ -82,15 +74,6 @@ class ApiClient {
     getStatus: (sha256Hash: string) => this.request<AuthenticityRecord>(`status/${sha256Hash}`),
     getTokenOwner: (sha256Hash: string) =>
       this.request<{ tokenOwner: string }>(`token-owner/${sha256Hash}`),
-  };
-
-  // Jobs
-  jobs = {
-    stats: () => this.request<JobStats>('admin/jobs/stats'),
-    failed: (limit = 10, offset = 0) =>
-      this.request<{ jobs: Job[] }>(`admin/jobs/failed?limit=${limit}&offset=${offset}`),
-    details: (jobId: string) => this.request<Job>(`admin/jobs/${jobId}`),
-    retry: (jobId: string) => this.request<void>(`admin/jobs/${jobId}/retry`, { method: 'POST' }),
   };
 
   // Submissions

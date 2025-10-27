@@ -3,12 +3,11 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
-import type { Challenge, JobStats } from '@/lib/types';
+import type { Challenge } from '@/lib/types';
 import Card from '@/components/Card';
 
 export default function Dashboard() {
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
-  const [jobStats, setJobStats] = useState<JobStats | null>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -16,18 +15,12 @@ export default function Dashboard() {
 
   const loadDashboard = async () => {
     try {
-      const [challenges, jobs] = await Promise.all([
-        api.challenges.getActive(),
-        api.jobs.stats()
-      ]);
+      const challenges = await api.challenges.getActive();
       setActiveChallenges(challenges);
-      setJobStats(jobs);
     } catch (error) {
       console.error('Failed to load dashboard:', error);
     }
   };
-
-  const queueStats = jobStats?.queue ?? { created: 0, active: 0, completed: 0, failed: 0 };
 
   return (
     <div>
@@ -36,8 +29,6 @@ export default function Dashboard() {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <StatCard title="Active Challenges" value={activeChallenges.length} />
-        <StatCard title="Jobs in Queue" value={queueStats.active} color="blue" />
-        <StatCard title="Failed Jobs" value={queueStats.failed} color="red" />
       </div>
 
       {/* Active Challenges */}
@@ -69,12 +60,11 @@ export default function Dashboard() {
 
       {/* Quick Actions */}
       <Card title="Quick Actions">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {[
             { href: '/challenges', label: 'Manage Challenges', color: 'blue' },
             { href: '/users', label: 'Manage Users', color: 'green' },
             { href: '/chains', label: 'View Chains', color: 'purple' },
-            { href: '/jobs', label: 'View Jobs', color: 'yellow' },
           ].map((action) => (
             <Link
               key={action.href}

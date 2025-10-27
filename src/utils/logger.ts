@@ -1,8 +1,6 @@
 import pino from 'pino';
 import { AsyncLocalStorage } from 'async_hooks';
-
-const SERVICE_NAME =
-  process.env.SERVICE_NAME || (process.argv[1]?.includes('worker') ? 'worker' : 'api');
+import { config } from '../config/index.js';
 
 const contextStorage = new AsyncLocalStorage<Record<string, unknown>>();
 
@@ -11,7 +9,7 @@ const transports = pino.transport({
     {
       target: 'pino/file',
       options: {
-        destination: `./logs/${SERVICE_NAME}.log`,
+        destination: `./logs/${config.serviceName}.log`,
         mkdir: true,
       },
     },
@@ -30,8 +28,8 @@ const transports = pino.transport({
 
 export const logger = pino(
   {
-    level: process.env.LOG_LEVEL || 'debug',
-    base: { service: SERVICE_NAME },
+    level: config.logLevel,
+    base: { service: config.serviceName },
     mixin: () => contextStorage.getStore() || {},
     timestamp: pino.stdTimeFunctions.unixTime,
   },

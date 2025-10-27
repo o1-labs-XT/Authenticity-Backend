@@ -1,7 +1,6 @@
 import { config } from './config/index.js';
 import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
-import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { ChallengesRepository } from './db/repositories/challenges.repository.js';
 import { ChainsRepository } from './db/repositories/chains.repository.js';
 import { UsersRepository } from './db/repositories/users.repository.js';
@@ -9,10 +8,6 @@ import { SubmissionsRepository } from './db/repositories/submissions.repository.
 import { ImageAuthenticityService } from './services/image/verification.service.js';
 import { MinioStorageService } from './services/storage/minio.service.js';
 import { JobQueueService } from './services/queue/jobQueue.service.js';
-import { UploadHandler } from './handlers/upload.handler.js';
-import { StatusHandler } from './handlers/status.handler.js';
-import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
-import { AdminHandler } from './handlers/admin.handler.js';
 import { ChallengesHandler } from './handlers/challenges.handler.js';
 import { ChainsHandler } from './handlers/chains.handler.js';
 import { UsersHandler } from './handlers/users.handler.js';
@@ -29,7 +24,6 @@ async function main() {
       connectionString: config.databaseUrl,
     });
     await dbConnection.initialize();
-    const repository = new AuthenticityRepository(dbConnection.getAdapter());
     const challengesRepository = new ChallengesRepository(dbConnection.getAdapter());
     const chainsRepository = new ChainsRepository(dbConnection.getAdapter());
     const usersRepository = new UsersRepository(dbConnection.getAdapter());
@@ -43,15 +37,6 @@ async function main() {
     await jobQueue.start();
 
     // Initialize handlers
-    const uploadHandler = new UploadHandler(
-      verificationService,
-      repository,
-      jobQueue,
-      storageService
-    );
-    const statusHandler = new StatusHandler(submissionsRepository);
-    const tokenOwnerHandler = new TokenOwnerHandler(submissionsRepository);
-    const adminHandler = new AdminHandler(jobQueue, submissionsRepository);
     const challengesHandler = new ChallengesHandler(challengesRepository);
     const chainsHandler = new ChainsHandler(chainsRepository);
     const usersHandler = new UsersHandler(usersRepository);
@@ -62,15 +47,12 @@ async function main() {
       challengesRepository,
       verificationService,
       jobQueue,
-      storageService
+      storageService,
+      config
     );
 
     // Create and start server
     const app = createServer({
-      uploadHandler,
-      statusHandler,
-      tokenOwnerHandler,
-      adminHandler,
       challengesHandler,
       chainsHandler,
       usersHandler,

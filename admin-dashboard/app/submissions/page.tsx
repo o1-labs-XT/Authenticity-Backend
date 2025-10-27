@@ -323,7 +323,8 @@ function SubmissionForm({
   const [formData, setFormData] = useState({
     chainId: '',
     walletAddress: '',
-    signature: '',
+    signatureR: '',
+    signatureS: '',
     tagline: '',
   });
   const [image, setImage] = useState<File | null>(null);
@@ -370,7 +371,8 @@ function SubmissionForm({
       setFormData({
         ...formData,
         walletAddress: result.walletAddress,
-        signature: result.signature,
+        signatureR: result.signatureR,
+        signatureS: result.signatureS,
       });
     } catch (error) {
       setError((error as Error).message);
@@ -387,7 +389,7 @@ function SubmissionForm({
       return;
     }
 
-    if (!formData.walletAddress || !formData.signature) {
+    if (!formData.walletAddress || !formData.signatureR || !formData.signatureS) {
       setError('Please generate credentials first');
       return;
     }
@@ -397,7 +399,8 @@ function SubmissionForm({
     data.append('image', image);
     data.append('chainId', formData.chainId);
     data.append('walletAddress', formData.walletAddress);
-    data.append('signature', formData.signature);
+    data.append('signatureR', formData.signatureR);
+    data.append('signatureS', formData.signatureS);
     if (formData.tagline) {
       data.append('tagline', formData.tagline);
     }
@@ -476,7 +479,7 @@ function SubmissionForm({
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Signature *
+          ECDSA Signature *
         </label>
         <input
           type="text"
@@ -484,8 +487,13 @@ function SubmissionForm({
           required
           readOnly
           className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 font-mono text-sm"
-          value={formData.signature}
+          value={formData.signatureR ? '✓ Credentials generated' : ''}
         />
+        {formData.signatureR && (
+          <p className="mt-1 text-xs text-gray-500">
+            ECDSA signature components (R, S) generated
+          </p>
+        )}
       </div>
 
       <div>
@@ -512,7 +520,7 @@ function SubmissionForm({
         </button>
         <button
           type="submit"
-          disabled={loading || !formData.walletAddress || !formData.signature}
+          disabled={loading || !formData.walletAddress || !formData.signatureR}
           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? 'Creating...' : 'Create Submission'}

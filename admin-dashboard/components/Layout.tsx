@@ -12,7 +12,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: '/users', label: 'Users' },
     { href: '/chains', label: 'Chains' },
     { href: '/submissions', label: 'Submissions' },
-    { href: '/jobs', label: 'Jobs Queue' },
   ];
 
   const handleLogout = () => {

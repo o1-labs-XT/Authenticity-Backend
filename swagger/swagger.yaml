@@ -22,12 +22,6 @@ tags:
     description: Photo chains
   - name: Submissions
     description: Photo submissions
-  - name: Upload
-    description: Image upload and proof generation
-  - name: Status
-    description: Proof status checking
-  - name: Admin
-    description: Admin operations
 
 paths:
   # Users endpoints
@@ -279,7 +273,7 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [image, chainId, walletAddress, signature]
+              required: [image, chainId, walletAddress, signatureR, signatureS]
               properties:
                 image:
                   type: string
@@ -292,9 +286,12 @@ paths:
                 walletAddress:
                   type: string
                   description: User's wallet address (public key in base58)
-                signature:
+                signatureR:
                   type: string
-                  description: Cryptographic signature of image hash in base58
+                  description: R component of ECDSA signature (hex string)
+                signatureS:
+                  type: string
+                  description: S component of ECDSA signature (hex string)
                 tagline:
                   type: string
                   maxLength: 200
@@ -498,210 +495,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  # Upload endpoints (existing)
-  /upload:
-    post:
-      tags: [Upload]
-      summary: Upload image for proof generation
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [image, signature, publicKey]
-              properties:
-                image:
-                  type: string
-                  format: binary
-                  description: Image file to upload
-                signature:
-                  type: string
-                  description: Cryptographic signature in base58
-                publicKey:
-                  type: string
-                  description: Signer's public key in base58
-      responses:
-        '200':
-          description: Upload successful, proof generation queued
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  tokenOwnerAddress:
-                    type: string
-                    description: Random address for token ownership
-                  sha256Hash:
-                    type: string
-                    description: SHA-256 hash of the uploaded image
-                  status:
-                    type: string
-                    enum: [pending]
-        '400':
-          description: Invalid request
-        '413':
-          description: File too large
-        '415':
-          description: Unsupported media type
-
-  # Status endpoints (existing)
-  /status/{sha256Hash}:
-    get:
-      tags: [Status]
-      summary: Check proof generation status
-      parameters:
-        - name: sha256Hash
-          in: path
-          required: true
-          schema:
-            type: string
-            description: SHA-256 hash of the image
-      responses:
-        '200':
-          description: Status information
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    enum: [pending, verified]
-                  tokenOwnerAddress:
-                    type: string
-                    description: Token owner address
-                  transactionId:
-                    type: string
-                    nullable: true
-                    description: Mina blockchain transaction ID (when verified)
-        '404':
-          description: Hash not found
-
-  /token-owner/{sha256Hash}:
-    get:
-      tags: [Status]
-      summary: Get token owner for verified image
-      parameters:
-        - name: sha256Hash
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Token owner information
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  tokenOwnerAddress:
-                    type: string
-                    nullable: true
-                  status:
-                    type: string
-                    enum: [pending, verified]
-                    nullable: true
-                  found:
-                    type: boolean
-        '404':
-          description: Image not verified or not found
-
-  # Admin endpoints (existing)
-  /admin/jobs/stats:
-    get:
-      tags: [Admin]
-      summary: Get job queue statistics
-      security:
-        - ApiKey: []
-      responses:
-        '200':
-          description: Queue statistics
-          content:
-            application/json:
-              schema:
-                type: object
-
-  /admin/jobs/failed:
-    get:
-      tags: [Admin]
-      summary: Get failed jobs
-      security:
-        - ApiKey: []
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 10
-        - name: offset
-          in: query
-          schema:
-            type: integer
-            default: 0
-      responses:
-        '200':
-          description: List of failed jobs
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  jobs:
-                    type: array
-                    items:
-                      type: object
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
-
-  /admin/jobs/{jobId}:
-    get:
-      tags: [Admin]
-      summary: Get job details
-      security:
-        - ApiKey: []
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Job details
-        '404':
-          description: Job not found
-
-  /admin/jobs/{jobId}/retry:
-    post:
-      tags: [Admin]
-      summary: Retry failed job
-      security:
-        - ApiKey: []
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Job retry initiated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  jobId:
-                    type: string
-        '404':
-          description: Job not found
-
 components:
   schemas:
     User:
@@ -795,7 +588,7 @@ components:
           description: User's wallet address (public key in base58)
         signature:
           type: string
-          description: Cryptographic signature in base58
+          description: JSON string containing ECDSA signature components ({"r":"...","s":"..."})
         challengeId:
           type: string
           format: uuid

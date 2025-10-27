@@ -11,6 +11,7 @@ import { Cache } from 'o1js';
 import { VerificationInputs, ECDSASignatureData } from '../image/verification.service.js';
 import { logger } from '../../utils/logger.js';
 import { PerformanceTracker } from '../../utils/performance.js';
+import { config } from '../../config/index.js';
 
 export class ProofGenerationService {
   constructor() {
@@ -34,8 +35,7 @@ export class ProofGenerationService {
     logger.debug({ sha256Hash }, 'Generating proof for image');
 
     // Use cached compilation if available
-    const cacheDir = process.env.CIRCUIT_CACHE_PATH || './cache';
-    const cache = Cache.FileSystem(cacheDir);
+    const cache = Cache.FileSystem(config.circuitCachePath);
     const compileTracker = new PerformanceTracker('proof.compile');
     await AuthenticityProgram.compile({ cache });
     compileTracker.end('success');

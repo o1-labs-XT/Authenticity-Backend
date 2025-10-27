@@ -24,7 +24,14 @@ export interface Config {
   uploadMaxSize: number; // in bytes
 
   // Optional configurations
-  circuitCachePath?: string;
+  circuitCachePath: string;
+
+  // Logging
+  logLevel: string;
+  serviceName: string;
+
+  // Deployment
+  railwayPublicDomain?: string;
 
   // MinIO Storage
   minioEndpoint: string;
@@ -35,10 +42,17 @@ export interface Config {
   // Admin Authentication
   ADMIN_PASSWORD: string;
 
+  // Image Signing
+  signerPublicKey: string;
+
   // Archive Node Configuration
   archiveNodeEndpoint: string;
   minaNodeEndpoint: string;
   monitoringEnabled: boolean;
+
+  // Worker Configuration
+  workerRetryLimit: number;
+  workerTempDir: string;
 }
 
 /**
@@ -101,16 +115,21 @@ function parseConfig(): Config {
     corsOrigin: getRequired('CORS_ORIGIN'),
     uploadMaxSize: getRequiredNumber('UPLOAD_MAX_SIZE'),
     circuitCachePath: process.env.CIRCUIT_CACHE_PATH || './cache',
+    logLevel: process.env.LOG_LEVEL || 'debug',
+    serviceName:
+      process.env.SERVICE_NAME || (process.argv[1]?.includes('worker') ? 'worker' : 'api'),
+    railwayPublicDomain: process.env.RAILWAY_PUBLIC_DOMAIN,
     minioEndpoint: getRequired('MINIO_ENDPOINT'),
     minioAccessKey: getRequired('MINIO_ROOT_USER'),
     minioSecretKey: getRequired('MINIO_ROOT_PASSWORD'),
     minioBucket: getRequired('MINIO_BUCKET'),
     ADMIN_PASSWORD: getRequired('ADMIN_PASSWORD'),
-    archiveNodeEndpoint:
-      process.env.ARCHIVE_NODE_ENDPOINT || 'https://api.minascan.io/archive/devnet/v1/graphql',
-    minaNodeEndpoint:
-      process.env.MINA_NODE_ENDPOINT || 'https://api.minascan.io/node/devnet/v1/graphql',
-    monitoringEnabled: process.env.MONITORING_ENABLED !== 'false', // Default to true
+    signerPublicKey: getRequired('SIGNER_PUBLIC_KEY'),
+    archiveNodeEndpoint: getRequired('ARCHIVE_NODE_ENDPOINT'),
+    minaNodeEndpoint: getRequired('MINA_NODE_ENDPOINT'),
+    monitoringEnabled: getRequired('MONITORING_ENABLED') === 'true',
+    workerRetryLimit: parseInt(process.env.WORKER_RETRY_LIMIT || '3', 10),
+    workerTempDir: process.env.WORKER_TEMP_DIR || '/tmp',
   };
 
   // Throw if any errors
