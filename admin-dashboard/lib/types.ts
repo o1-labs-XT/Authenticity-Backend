@@ -38,6 +38,7 @@ export interface Submission {
   storageKey: string;
   tagline?: string;
   chainPosition: number;
+  likeCount: number;
   status: string;
   transactionId?: string;
   failureReason?: string;

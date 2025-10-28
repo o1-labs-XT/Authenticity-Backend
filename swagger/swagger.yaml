@@ -814,6 +814,10 @@ components:
           type: integer
           description: Position in the chain (1-indexed)
           example: 5
+        likeCount:
+          type: integer
+          description: Number of likes for this submission
+          example: 42
         status:
           type: string
           enum: [awaiting_review, rejected, processing, complete]

@@ -71,6 +71,31 @@ export class LikesRepository {
     return parseInt(result?.count as string) || 0;
   }
 
+  async countBySubmissions(submissionIds: string[]): Promise<Map<string, number>> {
+    if (submissionIds.length === 0) {
+      return new Map();
+    }
+
+    const results = await this.db
+      .getKnex()('likes')
+      .whereIn('submission_id', submissionIds)
+      .groupBy('submission_id')
+      .select('submission_id')
+      .count('* as count');
+
+    const countsMap = new Map<string, number>();
+
+    // Initialize all submission IDs with 0
+    submissionIds.forEach((id) => countsMap.set(id, 0));
+
+    // Update with actual counts
+    results.forEach((row: any) => {
+      countsMap.set(row.submission_id, parseInt(row.count as string) || 0);
+    });
+
+    return countsMap;
+  }
+
   async delete(submissionId: string, walletAddress: string): Promise<boolean> {
     const deleted = await this.db
       .getKnex()('likes')

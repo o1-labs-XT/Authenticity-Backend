@@ -121,6 +121,16 @@ export default function SubmissionsPage() {
       render: (s: Submission) => <span>#{s.chainPosition}</span>
     },
     {
+      key: 'likeCount' as keyof Submission,
+      label: 'Likes',
+      render: (s: Submission) => (
+        <span className="flex items-center gap-1">
+          <span className="text-red-500">❤</span>
+          <span className="font-medium">{s.likeCount}</span>
+        </span>
+      )
+    },
+    {
       key: 'challengeVerified' as keyof Submission,
       label: 'Verified',
       render: (s: Submission) => (
@@ -279,6 +289,13 @@ function DetailsModal({
                   <span className="font-mono text-xs">{submission.status}</span>
                 </div>
                 <div>
+                  <span className="font-semibold">Likes:</span>{' '}
+                  <span className="flex items-center gap-1 inline-flex">
+                    <span className="text-red-500">❤</span>
+                    <span className="font-medium text-base">{submission.likeCount}</span>
+                  </span>
+                </div>
+                <div>
                   <span className="font-semibold">Verified:</span>{' '}
                   <span className={submission.challengeVerified ? 'text-green-600' : 'text-gray-400'}>
                     {submission.challengeVerified ? '✓ Approved' : '✗ Not verified'}
@@ -361,6 +378,13 @@ function ReviewModal({
                 </div>
                 <div>
                   <span className="font-semibold">Chain Position:</span> #{submission.chainPosition}
+                </div>
+                <div>
+                  <span className="font-semibold">Likes:</span>{' '}
+                  <span className="flex items-center gap-1 inline-flex">
+                    <span className="text-red-500">❤</span>
+                    <span className="font-medium text-base">{submission.likeCount}</span>
+                  </span>
                 </div>
                 <div>
                   <span className="font-semibold">Tagline:</span> {submission.tagline || '-'}
