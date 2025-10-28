@@ -53,6 +53,7 @@ export interface Config {
   // Worker Configuration
   workerRetryLimit: number;
   workerTempDir: string;
+  workerMaxJobsBeforeRestart: number;
 }
 
 /**
@@ -130,6 +131,7 @@ function parseConfig(): Config {
     monitoringEnabled: getRequired('MONITORING_ENABLED') === 'true',
     workerRetryLimit: parseInt(process.env.WORKER_RETRY_LIMIT || '3', 10),
     workerTempDir: process.env.WORKER_TEMP_DIR || '/tmp',
+    workerMaxJobsBeforeRestart: parseInt(process.env.WORKER_MAX_JOBS_BEFORE_RESTART || '10', 10),
   };
 
   // Throw if any errors

@@ -16,6 +16,9 @@ import { Errors } from '../utils/errors.js';
 import { config } from '../config/index.js';
 
 export class ProofGenerationWorker {
+  private processedJobCount = 0;
+  private readonly MAX_JOBS_BEFORE_RESTART = config.workerMaxJobsBeforeRestart;
+
   constructor(
     private boss: PgBoss,
     private submissionsRepository: SubmissionsRepository,
@@ -145,6 +148,29 @@ export class ProofGenerationWorker {
 
                 jobTracker.end('success', { transactionId });
                 logger.info({ transactionId }, 'Proof generation completed successfully');
+
+                // Increment job counter and check for restart
+                this.processedJobCount++;
+                logger.info(
+                  {
+                    processedJobCount: this.processedJobCount,
+                    maxJobs: this.MAX_JOBS_BEFORE_RESTART,
+                  },
+                  'Job completed, checking restart threshold'
+                );
+
+                if (this.processedJobCount >= this.MAX_JOBS_BEFORE_RESTART) {
+                  logger.info(
+                    { processedJobCount: this.processedJobCount },
+                    'Reached max jobs threshold, initiating graceful restart'
+                  );
+
+                  // Schedule graceful shutdown after a brief delay to complete current job
+                  setTimeout(() => {
+                    logger.info('Sending SIGTERM for graceful restart');
+                    process.kill(process.pid, 'SIGTERM');
+                  }, 1000);
+                }
               } catch (error) {
                 const isLastRetry = retryCount >= config.workerRetryLimit - 1;
 
