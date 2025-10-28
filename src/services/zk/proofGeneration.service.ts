@@ -3,11 +3,15 @@ import {
   AuthenticityInputs,
   AuthenticityProof,
   FinalRoundInputs,
+  Secp256r1,
+  Ecdsa,
+  Bytes32,
 } from 'authenticity-zkapp';
-import { PublicKey, Signature, Cache } from 'o1js';
-import { VerificationInputs } from '../image/verification.service.js';
+import { Cache } from 'o1js';
+import { VerificationInputs, ECDSASignatureData } from '../image/verification.service.js';
 import { logger } from '../../utils/logger.js';
 import { PerformanceTracker } from '../../utils/performance.js';
+import { config } from '../../config/index.js';
 
 export class ProofGenerationService {
   constructor() {
@@ -20,8 +24,8 @@ export class ProofGenerationService {
    */
   async generateProof(
     sha256Hash: string,
-    publicKey: string,
-    signature: string,
+    signatureData: ECDSASignatureData,
+    commitment: Bytes32,
     verificationInputs: VerificationInputs,
     _imagePath?: string
   ): Promise<{
@@ -31,20 +35,27 @@ export class ProofGenerationService {
     logger.debug({ sha256Hash }, 'Generating proof for image');
 
     // Use cached compilation if available
-    const cacheDir = process.env.CIRCUIT_CACHE_PATH || './cache';
-    const cache = Cache.FileSystem(cacheDir);
+    const cache = Cache.FileSystem(config.circuitCachePath);
     const compileTracker = new PerformanceTracker('proof.compile');
     await AuthenticityProgram.compile({ cache });
     compileTracker.end('success');
 
-    const pubKey = PublicKey.fromBase58(publicKey);
-    const sig = Signature.fromBase58(signature);
+    // Create ECDSA signature and public key from the signature data
+    const signature = new Ecdsa({
+      r: BigInt('0x' + signatureData.signatureR),
+      s: BigInt('0x' + signatureData.signatureS),
+    });
+
+    const publicKey = new Secp256r1({
+      x: BigInt('0x' + signatureData.publicKeyX),
+      y: BigInt('0x' + signatureData.publicKeyY),
+    });
 
     // Create public inputs for the proof
     const publicInputs = new AuthenticityInputs({
-      commitment: verificationInputs.expectedHash, // SHA256 of the image
-      signature: sig,
-      publicKey: pubKey,
+      commitment: commitment, // SHA256 of the image as Bytes32
+      signature: signature,
+      publicKey: publicKey,
     });
 
     // Create private inputs (SHA256 state from round 62)

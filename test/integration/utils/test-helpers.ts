@@ -76,3 +76,14 @@ export const getChainLength = async (chainId: string): Promise<number> => {
   }
   return res.body.length || 0;
 };
+
+/**
+ * Get like count for a submission
+ */
+export const getLikeCount = async (submissionId: string): Promise<number> => {
+  const res = await request(API_URL).get(`/api/submissions/${submissionId}/likes/count`);
+  if (res.status !== 200) {
+    throw new Error(`Failed to get like count: ${res.status}`);
+  }
+  return res.body.count;
+};

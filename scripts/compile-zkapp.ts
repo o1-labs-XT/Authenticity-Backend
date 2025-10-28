@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { AuthenticityProgram, AuthenticityZkApp } from 'authenticity-zkapp';
-import { Cache } from 'o1js';
+import { AuthenticityProgram, AuthenticityZkApp, BatchReducerUtils } from 'authenticity-zkapp';
+import { Cache, PublicKey } from 'o1js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
+dotenv.config();
 
 const CACHE_DIR = process.env.CIRCUIT_CACHE_PATH || './cache';
 
@@ -35,6 +35,13 @@ async function compileZkApp(): Promise<void> {
 
     // Create cache instance and compile
     const cache = Cache.FileSystem(cachePath);
+    console.log('Compiling BatchReducer...');
+    if (!process.env.ZKAPP_ADDRESS) {
+      throw new Error('ZKAPP_ADDRESS environment variable not set');
+    }
+    const zkAppAddress = PublicKey.fromBase58(process.env.ZKAPP_ADDRESS);
+    BatchReducerUtils.setContractInstance(new AuthenticityZkApp(zkAppAddress));
+    await BatchReducerUtils.compile();
     console.log('Compiling AuthenticityProgram...');
     await AuthenticityProgram.compile({ cache });
     console.log('Compiling AuthenticityZkApp...');

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api-client';
-import type { Submission, Chain } from '@/lib/types';
+import type { Submission, Chain, Like } from '@/lib/types';
 import Card from '@/components/Card';
 import DataTable, { Column } from '@/components/DataTable';
 
@@ -12,6 +12,7 @@ export default function SubmissionsPage() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [reviewingSubmission, setReviewingSubmission] = useState<Submission | null>(null);
+  const [viewingSubmission, setViewingSubmission] = useState<Submission | null>(null);
 
   const loadSubmissions = useCallback(async () => {
     try {
@@ -120,6 +121,16 @@ export default function SubmissionsPage() {
       render: (s: Submission) => <span>#{s.chainPosition}</span>
     },
     {
+      key: 'likeCount' as keyof Submission,
+      label: 'Likes',
+      render: (s: Submission) => (
+        <span className="flex items-center gap-1">
+          <span className="text-red-500">❤</span>
+          <span className="font-medium">{s.likeCount}</span>
+        </span>
+      )
+    },
+    {
       key: 'challengeVerified' as keyof Submission,
       label: 'Verified',
       render: (s: Submission) => (
@@ -146,6 +157,12 @@ export default function SubmissionsPage() {
               Review
             </button>
           )}
+          <button
+            onClick={() => setViewingSubmission(s)}
+            className="text-green-600 hover:text-green-900 font-medium"
+          >
+            View Details
+          </button>
           <button
             onClick={() => handleDelete(s.id)}
             className="text-red-600 hover:text-red-900"
@@ -222,6 +239,104 @@ export default function SubmissionsPage() {
           onClose={() => setReviewingSubmission(null)}
         />
       )}
+
+      {viewingSubmission && (
+        <DetailsModal
+          submission={viewingSubmission}
+          onClose={() => setViewingSubmission(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Details Modal Component - For viewing any submission and managing likes
+function DetailsModal({
+  submission,
+  onClose,
+}: {
+  submission: Submission;
+  onClose: () => void;
+}) {
+  const imageUrl = api.submissions.getImageUrl(submission.id);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto m-4">
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Submission Details</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-semibold">Wallet:</span>{' '}
+                  <span className="font-mono text-xs">{submission.walletAddress}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">Chain Position:</span> #{submission.chainPosition}
+                </div>
+                <div>
+                  <span className="font-semibold">Status:</span>{' '}
+                  <span className="font-mono text-xs">{submission.status}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">Likes:</span>{' '}
+                  <span className="flex items-center gap-1 inline-flex">
+                    <span className="text-red-500">❤</span>
+                    <span className="font-medium text-base">{submission.likeCount}</span>
+                  </span>
+                </div>
+                <div>
+                  <span className="font-semibold">Verified:</span>{' '}
+                  <span className={submission.challengeVerified ? 'text-green-600' : 'text-gray-400'}>
+                    {submission.challengeVerified ? '✓ Approved' : '✗ Not verified'}
+                  </span>
+                </div>
+                <div className="col-span-2">
+                  <span className="font-semibold">Tagline:</span> {submission.tagline || '-'}
+                </div>
+                <div>
+                  <span className="font-semibold">Created:</span>{' '}
+                  {new Date(submission.createdAt).toLocaleString()}
+                </div>
+                <div>
+                  <span className="font-semibold">Updated:</span>{' '}
+                  {new Date(submission.updatedAt).toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-2">Submitted Image:</h3>
+              <img
+                src={imageUrl}
+                alt="Submission"
+                className="w-full rounded border border-gray-300"
+              />
+            </div>
+
+            <LikesTestingPanel submissionId={submission.id} />
+
+            <div className="flex justify-end gap-4 pt-4 border-t">
+              <button
+                onClick={onClose}
+                className="px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -263,6 +378,13 @@ function ReviewModal({
                 </div>
                 <div>
                   <span className="font-semibold">Chain Position:</span> #{submission.chainPosition}
+                </div>
+                <div>
+                  <span className="font-semibold">Likes:</span>{' '}
+                  <span className="flex items-center gap-1 inline-flex">
+                    <span className="text-red-500">❤</span>
+                    <span className="font-medium text-base">{submission.likeCount}</span>
+                  </span>
                 </div>
                 <div>
                   <span className="font-semibold">Tagline:</span> {submission.tagline || '-'}
@@ -310,6 +432,120 @@ function ReviewModal({
   );
 }
 
+// Likes Testing Panel Component
+function LikesTestingPanel({ submissionId }: { submissionId: string }) {
+  const [likes, setLikes] = useState<Like[]>([]);
+  const [eligibleLikers, setEligibleLikers] = useState<string[]>([]);
+  const [selectedLiker, setSelectedLiker] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  const loadLikes = useCallback(async () => {
+    try {
+      const data = await api.likes.list(submissionId);
+      setLikes(data);
+    } catch (error) {
+      console.error('Failed to load likes:', error);
+    }
+  }, [submissionId]);
+
+  const loadEligibleLikers = useCallback(async () => {
+    try {
+      // Get all approved submissions and extract unique wallet addresses
+      const approvedSubmissions = await api.submissions.list();
+      const uniqueWallets = new Set(
+        approvedSubmissions
+          .filter(s => s.challengeVerified)
+          .map(s => s.walletAddress)
+      );
+      const likers = Array.from(uniqueWallets);
+      setEligibleLikers(likers);
+    } catch (error) {
+      console.error('Failed to load eligible likers:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLikes();
+    loadEligibleLikers();
+  }, [loadLikes, loadEligibleLikers]);
+
+  const handleAddLike = async () => {
+    if (!selectedLiker) {
+      alert('Please select a user');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.likes.create(submissionId, selectedLiker);
+      setSelectedLiker('');
+      await loadLikes();
+    } catch (error: any) {
+      alert(error?.message || 'Failed to add like');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveLike = async (walletAddress: string) => {
+    setLoading(true);
+    try {
+      await api.likes.delete(submissionId, walletAddress);
+      await loadLikes();
+    } catch (error: any) {
+      alert(error?.message || 'Failed to remove like');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="border-t pt-4">
+      <h3 className="font-semibold mb-3">Likes Testing ({likes.length})</h3>
+
+      {likes.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {likes.map((like) => (
+            <div key={like.id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+              <span className="font-mono text-xs">{like.walletAddress.slice(0, 12)}...{like.walletAddress.slice(-8)}</span>
+              <button
+                onClick={() => handleRemoveLike(like.walletAddress)}
+                disabled={loading}
+                className="text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <select
+          value={selectedLiker}
+          onChange={(e) => setSelectedLiker(e.target.value)}
+          disabled={loading}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm disabled:opacity-50"
+        >
+          <option value="">Select user with approved submission...</option>
+          {eligibleLikers.map((wallet) => (
+            <option key={wallet} value={wallet}>
+              {wallet.slice(0, 12)}...{wallet.slice(-8)}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={handleAddLike}
+          disabled={!selectedLiker || loading}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+        >
+          {loading ? 'Adding...' : 'Add Like'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Submission form component
 function SubmissionForm({
   onSubmit,
@@ -323,7 +559,8 @@ function SubmissionForm({
   const [formData, setFormData] = useState({
     chainId: '',
     walletAddress: '',
-    signature: '',
+    signatureR: '',
+    signatureS: '',
     tagline: '',
   });
   const [image, setImage] = useState<File | null>(null);
@@ -370,7 +607,8 @@ function SubmissionForm({
       setFormData({
         ...formData,
         walletAddress: result.walletAddress,
-        signature: result.signature,
+        signatureR: result.signatureR,
+        signatureS: result.signatureS,
       });
     } catch (error) {
       setError((error as Error).message);
@@ -387,7 +625,7 @@ function SubmissionForm({
       return;
     }
 
-    if (!formData.walletAddress || !formData.signature) {
+    if (!formData.walletAddress || !formData.signatureR || !formData.signatureS) {
       setError('Please generate credentials first');
       return;
     }
@@ -397,7 +635,8 @@ function SubmissionForm({
     data.append('image', image);
     data.append('chainId', formData.chainId);
     data.append('walletAddress', formData.walletAddress);
-    data.append('signature', formData.signature);
+    data.append('signatureR', formData.signatureR);
+    data.append('signatureS', formData.signatureS);
     if (formData.tagline) {
       data.append('tagline', formData.tagline);
     }
@@ -476,7 +715,7 @@ function SubmissionForm({
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Signature *
+          ECDSA Signature *
         </label>
         <input
           type="text"
@@ -484,8 +723,13 @@ function SubmissionForm({
           required
           readOnly
           className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 font-mono text-sm"
-          value={formData.signature}
+          value={formData.signatureR ? '✓ Credentials generated' : ''}
         />
+        {formData.signatureR && (
+          <p className="mt-1 text-xs text-gray-500">
+            ECDSA signature components (R, S) generated
+          </p>
+        )}
       </div>
 
       <div>
@@ -512,7 +756,7 @@ function SubmissionForm({
         </button>
         <button
           type="submit"
-          disabled={loading || !formData.walletAddress || !formData.signature}
+          disabled={loading || !formData.walletAddress || !formData.signatureR}
           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? 'Creating...' : 'Create Submission'}

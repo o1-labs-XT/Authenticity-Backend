@@ -9,24 +9,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Prerequisites: Start infrastructure services
 docker-compose up -d  # Starts PostgreSQL, pgweb, MinIO, Grafana, Loki, Promtail
 
+# Requirements: Node.js >=20.0.0, npm >=10.0.0
+
 # Access tools
 # pgweb: http://localhost:8081 (database UI, no login required)
 # MinIO: http://localhost:9001 (admin/minioadmin)
 # Grafana: http://localhost:3001 (admin/admin)
 
 # Run services (in separate terminals):
-npm run dev:api       # Start API server with hot reload (port 3000)
-npm run dev:worker    # Start worker service with hot reload
+npm run dev:api         # Start API server with hot reload (port 3000)
+npm run dev:worker      # Start proof generation worker with hot reload  
+npm run dev:monitoring  # Start blockchain monitoring worker with hot reload
 
 # Production commands:
-npm run build         # Build TypeScript to dist/
-npm run start         # Run migrations, compile zkApp, start API
-npm run start:api     # Run migrations and start API server
-npm run start:worker  # Compile zkApp and start worker service
+npm run build           # Build TypeScript to dist/
+npm run start           # Run migrations, compile zkApp, start API
+npm run start:api       # Run migrations and start API server
+npm run start:worker    # Compile zkApp and start proof generation worker
+npm run start:monitoring # Start blockchain monitoring worker
 
 # MinIO bucket setup (first time only):
 docker-compose exec minio mc alias set local http://minio:9000 minioadmin minioadmin
 docker-compose exec minio mc mb local/authenticity --ignore-existing
+# Alternative for local development:
+docker-compose exec minio mc mb /data/authenticity-local
 ```
 
 ### Database Management
@@ -47,12 +53,40 @@ docker-compose up -d    # Restart containers
 npm run db:migrate      # Rerun migrations
 ```
 
+### Security & Key Management
+```bash
+# Generate ECDSA keypair for image signature verification
+npx tsx scripts/generate-signer-keypair.mts
+
+# This generates a keypair for SIGNER_PUBLIC_KEY and SIGNER_PRIVATE_KEY
+# Use for:
+# - Setting up new environments (.env, .env.test)
+# - Regenerating test keys if compromised
+# - Understanding the key format (hex coordinates + bigint)
+#
+# IMPORTANT: Never commit production private keys to version control!
+# Test keys in .env.test are safe to commit (test-only environment)
+```
+
 ### Testing & Code Quality
 ```bash
-npm run test:unit        # Run unit tests only (excludes integration)
-npm run test:integration # Run integration tests with test database
-npm run lint            # Run ESLint
-npm run format          # Format code with Prettier
+npm run test:unit                # Run unit tests only (excludes integration)
+npm run test:integration         # Run integration tests with test database (uses scripts/test-integration.sh)
+npm run test:integration:local   # Run integration tests directly with vitest (local mode)
+npm run lint                     # Run ESLint
+npm run format                   # Format code with Prettier
+
+# Integration test setup (first time):
+# 1. Ensure .env.test exists with test credentials and SIGNER keys
+# 2. scripts/test-integration.sh sources .env.test automatically
+# 3. Tests use SIGNER_PRIVATE_KEY from .env.test to create valid signatures
+# 4. Test environment uses its own keypair (separate from production)
+
+# Pre-commit hooks (Husky + lint-staged):
+# - Automatically runs ESLint with auto-fix
+# - Runs Prettier formatting
+# - Builds TypeScript to check for compilation errors
+# - For admin-dashboard: runs TypeScript check and linting
 
 # Manual testing scripts
 IMAGE_PATH=./image.png API_URL=http://localhost:3000 tsx test-upload.mts
@@ -89,13 +123,16 @@ docker-compose up -d loki grafana promtail
 
 TouchGrass MVP: A social photo challenge platform with zero-knowledge proof verification on Mina Protocol. Users participate in daily challenges by submitting photos that are cryptographically verified for authenticity.
 
+The system includes both a backend API and an admin dashboard (Next.js app) for managing challenges, users, job queues, and submissions.
+
 ### Core Flow
-1. **Upload**: Client uploads image with cryptographic signature
-2. **Queue**: Upload handler enqueues proof generation job in pg-boss
-3. **Process**: Worker service processes jobs asynchronously
-4. **Prove**: Worker generates zero-knowledge proofs using o1js
-5. **Publish**: Worker publishes proofs to Mina blockchain
-6. **Verify**: Anyone can verify authenticity via token owner address
+1. **Upload**: Client uploads image with cryptographic signature (signed with SIGNER_PUBLIC_KEY)
+2. **Review**: Admin reviews and approves/rejects submission via dashboard
+3. **Queue**: Admin approval enqueues proof generation job in pg-boss
+4. **Process**: Worker service processes jobs asynchronously
+5. **Prove**: Worker generates zero-knowledge proofs using o1js
+6. **Publish**: Worker publishes proofs to Mina blockchain
+7. **Verify**: Anyone can verify authenticity via token owner address
 
 ### Service Architecture
 
@@ -133,12 +170,18 @@ src/
 │   ├── database.ts      # Database connection manager
 │   └── types.ts         # Database type definitions
 ├── handlers/            # Request handlers with dependency injection
-│   ├── upload.handler.ts    # Complex validation, orchestration, error recovery
-│   ├── status.handler.ts    # Simple status queries
-│   ├── tokenOwner.handler.ts
-│   ├── admin.handler.ts     # Job queue management
-│   └── challenges.handler.ts # TouchGrass challenge endpoints
+│   ├── submissions.handler.ts   # Complex validation, orchestration, error recovery
+│   ├── status.handler.ts        # Simple status queries (legacy)
+│   ├── tokenOwner.handler.ts    # Token owner lookup (legacy)
+│   ├── admin.handler.ts         # Job queue management (legacy)
+│   ├── challenges.handler.ts    # TouchGrass challenge endpoints
+│   ├── chains.handler.ts        # Chain management endpoints
+│   └── users.handler.ts         # User management endpoints
 ├── services/
+│   ├── blockchain/
+│   │   ├── archiveNode.service.ts   # Mina archive node GraphQL queries
+│   │   ├── minaNode.service.ts      # Mina node queries using o1js fetchLastBlock
+│   │   └── monitoring.service.ts    # Transaction status aggregation and logging
 │   ├── image/
 │   │   └── verification.service.ts  # SHA256 hashing, signature verification using o1js
 │   ├── queue/
@@ -152,9 +195,17 @@ src/
 │   ├── logger.ts        # Pino logger with correlation IDs
 │   └── performance.ts   # Performance tracking utilities
 ├── workers/
-│   └── proofGenerationWorker.ts    # Job processor with context propagation
-├── index.ts             # API server entry point with dependency wiring
-└── worker.ts            # Worker service entry point
+│   ├── proofGenerationWorker.ts    # Proof generation job processor
+│   └── blockchainMonitorWorker.ts  # Blockchain monitoring job processor
+├── index.ts                # API server entry point with dependency wiring
+├── startProofWorker.ts     # Proof generation worker service entry point
+└── startMonitoringWorker.ts # Blockchain monitoring worker service entry point
+
+admin-dashboard/         # Next.js admin interface
+├── app/                # App router pages (jobs, challenges, users, chains)
+├── components/         # Reusable UI components
+├── lib/               # API client and types
+└── middleware.ts      # Next.js middleware
 
 migrations/              # Knex database migrations
 test/                    # Unit tests with Vitest
@@ -166,11 +217,13 @@ test/                    # Unit tests with Vitest
 ## Key Components
 
 ### Handlers
-- **UploadHandler**: Validates uploads, creates records, enqueues jobs, handles comprehensive error recovery
-- **StatusHandler**: Returns proof generation/publishing status
-- **TokenOwnerHandler**: Returns token owner for verified images
-- **AdminHandler**: Job queue management (stats, failures, retries)
+- **SubmissionsHandler**: Validates uploads, creates records, handles admin review (enqueues jobs on approval), comprehensive error recovery
+- **StatusHandler**: Returns proof generation/publishing status (legacy)
+- **TokenOwnerHandler**: Returns token owner for verified images (legacy)
+- **AdminHandler**: Job queue management (stats, failures, retries) (legacy)
 - **ChallengesHandler**: TouchGrass challenge endpoints (current challenge, challenge metadata)
+- **ChainsHandler**: Chain management endpoints
+- **UsersHandler**: User management endpoints
 
 ### Services
 - **ImageAuthenticityService**: SHA256 hashing, signature verification using o1js and authenticity-zkapp
@@ -178,6 +231,9 @@ test/                    # Unit tests with Vitest
 - **ProofGenerationService**: Generates ZK proofs using o1js circuits
 - **ProofPublishingService**: Publishes proofs to Mina blockchain
 - **JobQueueService**: pg-boss wrapper with singleton keys to prevent duplicates
+- **ArchiveNodeService**: Queries Mina archive node for transaction status via GraphQL
+- **MinaNodeService**: Queries Mina node for block height using o1js fetchLastBlock
+- **BlockchainMonitoringService**: Aggregates and logs transaction status (pending/included/final/abandoned)
 
 ### Database
 - **PostgresAdapter**: Instance-based Knex wrapper (NOT static methods) with connection pooling
@@ -186,39 +242,63 @@ test/                    # Unit tests with Vitest
 - **Migrations**: Schema managed via Knex migrations
 - **Status values**: `pending`, `processing`, `verified`, `failed`
 
-### Worker
-- **ProofGenerationWorker**: Processes jobs from pg-boss queue with context propagation
-- Updates status throughout lifecycle
-- Handles retries (3 attempts with exponential backoff)
-- Downloads images from MinIO, generates proofs, publishes to blockchain
-- Cleans up temporary files and MinIO storage after processing
+### Workers
+- **ProofGenerationWorker**: Processes proof generation jobs from pg-boss queue with context propagation
+  - Updates status throughout lifecycle
+  - Handles retries (3 attempts with exponential backoff)
+  - Downloads images from MinIO, generates proofs, publishes to blockchain
+  - Cleans up temporary files and MinIO storage after processing
+- **BlockchainMonitorWorker**: Lightweight monitoring service for transaction status
+  - Queries Mina archive node every 5 minutes to track transaction status
+  - Logs transaction categorization (pending/included/final/abandoned)
+  - Independent deployment with minimal resource requirements
 
 ## API Endpoints
 
 ### Public Endpoints
-- `POST /api/upload` - Upload image for proof generation
-  - Multipart form: `image` file, `signature`, `publicKey`
-  - Returns: `{ sha256Hash, tokenOwnerAddress, status }`
-  - Async proof generation via job queue
+- `POST /api/submissions` - Submit image for challenge
+  - Multipart form: `image` file, `chainId`, `walletAddress`, `signatureR`, `signatureS`, optional `tagline`
+  - Signature must be signed with SIGNER_PUBLIC_KEY (from env)
+  - Returns: Submission object with `status: 'awaiting_review'`
+  - Proof generation enqueued after admin approval
 
-- `GET /api/status/:sha256Hash` - Check proof status
-  - Returns: `{ status, transactionId?, tokenOwner? }`
-  - Status: `pending` | `processing` | `verified` | `failed`
+- `GET /api/submissions/:id` - Get submission by ID
+  - Returns: Submission object with status and metadata
 
-- `GET /api/token-owner/:sha256Hash` - Get token owner
-  - Returns: `{ tokenOwner }` if verified
+- `GET /api/submissions` - List submissions
+  - Query params: `walletAddress`, `chainId`, `challengeId`, `status`
+  - Returns: Array of submissions
+
+- `GET /api/submissions/:id/image` - Get submission image
+  - Returns: Image file
 
 - `GET /api/challenges/current` - Get current active challenge
   - Returns: TouchGrass challenge metadata
 
+- `GET /api/challenges/:id` - Get challenge by ID
+
+- `GET /api/chains` - List chains
+  - Query params: `challengeId`
+
+- `GET /api/users/:walletAddress` - Get user
+
+- `POST /api/users` - Create user
+
 - `GET /health` - Health check
 - `GET /api/version` - API version
+- `GET /api-docs` - Swagger API documentation
 
-### Admin Endpoints (dev mode or with ADMIN_API_KEY)
-- `GET /api/admin/jobs/stats` - Queue statistics
-- `GET /api/admin/jobs/failed?limit=10&offset=0` - Failed jobs with pagination
-- `GET /api/admin/jobs/:jobId` - Job details
-- `POST /api/admin/jobs/:jobId/retry` - Retry failed job
+### Admin Endpoints (require authentication)
+- `PATCH /api/submissions/:id` - Review submission (approve/reject)
+  - Body: `{ challengeVerified: boolean, failureReason?: string }`
+  - Enqueues proof generation on approval
+
+- `DELETE /api/submissions/:id` - Delete submission
+
+- `GET /api/admin/jobs/stats` - Queue statistics (legacy)
+- `GET /api/admin/jobs/failed` - Failed jobs (legacy)
+- `GET /api/admin/jobs/:jobId` - Job details (legacy)
+- `POST /api/admin/jobs/:jobId/retry` - Retry failed job (legacy)
 
 ## Environment Configuration
 
@@ -227,7 +307,9 @@ test/                    # Unit tests with Vitest
 DATABASE_URL=postgresql://user:pass@host:5432/db
 MINA_NETWORK=testnet|mainnet
 ZKAPP_ADDRESS=<deployed_zkapp_address>
-FEE_PAYER_PRIVATE_KEY=<private_key>
+FEE_PAYER_PRIVATE_KEY=<private_key>  # MUST be the private key of the account that deployed the zkApp
+SIGNER_PUBLIC_KEY=<public_key_x>,<public_key_y>  # ECDSA public key for signature verification (hex format)
+                                                   # Generate with: npx tsx scripts/generate-signer-keypair.mts
 PORT=3000
 NODE_ENV=development|production|test
 CORS_ORIGIN=http://localhost:3001
@@ -238,6 +320,9 @@ MINIO_ENDPOINT=http://localhost:9000
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=minioadmin
 MINIO_BUCKET=authenticity
+
+# Admin Authentication
+ADMIN_PASSWORD=<password>
 ```
 
 ### Optional Variables
@@ -245,17 +330,27 @@ MINIO_BUCKET=authenticity
 CIRCUIT_CACHE_PATH=./cache  # zkApp compilation cache
 ADMIN_API_KEY=<api_key>     # Required for admin endpoints in production
 SSL_REQUIRED=false          # Enable SSL for PostgreSQL in production
+
+# On-Chain Monitoring Configuration
+ARCHIVE_NODE_ENDPOINT=https://api.minascan.io/node/berkeley/v1/graphql  # Default for testnet
+MINA_NODE_ENDPOINT=https://api.minascan.io/node/berkeley/v1/graphql     # Default for testnet
+MONITORING_ENABLED=true     # Enable blockchain transaction monitoring (default: true)
+
+# Worker Configuration
+WORKER_RETRY_LIMIT=3        # Number of retry attempts for failed proof generation jobs (default: 3)
+WORKER_TEMP_DIR=/tmp        # Temporary directory for downloaded images during processing (default: /tmp)
 ```
 
 ## Implementation Details
 
 ### Job Queue (pg-boss)
-- Queue name: `proof-generation`
+- Queue names: `proof-generation`, `blockchain-monitoring`
 - Singleton key prevents duplicate jobs for same hash
 - Retry policy: 3 attempts with exponential backoff
 - Job retention: 24 hours for auditing
 - Jobs carry correlation IDs for distributed tracing
 - Worker concurrency: Configurable via pg-boss
+- Monitoring job: Runs every 5 minutes to check transaction status on-chain
 
 ### Database Schema
 
@@ -317,12 +412,13 @@ updated_at              -- Last modified
 ## Deployment
 
 ### Railway Configuration
-- **API Service**: Lightweight (512MB RAM)
-- **Worker Service**: Heavy (2GB RAM for proof generation)
+- **API Service**: Lightweight (512MB RAM), 2 replicas
+- **Worker Service**: Heavy (2GB RAM for proof generation), 2 replicas
+- **Monitoring Service**: Lightweight (512MB RAM), 1 replica for blockchain monitoring
 - **MinIO Service**: S3-compatible storage for image files
 - **Health Checks**: 180s timeout, 3 restart attempts
 - **Auto-migrations**: Run at API startup
-- **Circuit Compilation**: At worker startup
+- **Circuit Compilation**: At proof generation worker startup
 - **Graceful Shutdown**: Signal handling for clean termination
 
 ### Railway CLI
@@ -359,7 +455,7 @@ services:
 ## Local Development Setup
 
 1. **Start infrastructure**: `docker-compose up -d`
-2. **Configure environment**: `cp .env.example .env`
+2. **Configure environment**: `cp .env.example .env` and configure SIGNER_PUBLIC_KEY
 3. **Setup MinIO bucket** (first time only):
    ```bash
    docker-compose exec minio mc alias set local http://minio:9000 minioadmin minioadmin
@@ -369,11 +465,29 @@ services:
 5. **Start services**:
    - Terminal 1: `npm run dev:api`
    - Terminal 2: `npm run dev:worker`
+   - Terminal 3: `npm run dev:monitoring` (optional, for blockchain monitoring)
 6. **Access tools**:
    - API: http://localhost:3000
+   - Swagger API docs: http://localhost:3000/api-docs
    - pgweb: http://localhost:8081
    - MinIO: http://localhost:9001
    - Grafana: http://localhost:3001
+
+### Admin Dashboard Development
+```bash
+# In admin-dashboard directory:
+cd admin-dashboard
+npm install
+
+# Configure environment (uses .env.local, not .env)
+cp .env.example .env.local
+
+npm run dev          # Start admin dashboard on port 3000 (default Next.js port)
+
+# Admin dashboard commands:
+npm run build        # Build for production
+npm run precommit    # TypeScript check and linting (used by main project pre-commit)
+```
 
 ## Common Issues & Solutions
 

@@ -24,7 +24,14 @@ export interface Config {
   uploadMaxSize: number; // in bytes
 
   // Optional configurations
-  circuitCachePath?: string;
+  circuitCachePath: string;
+
+  // Logging
+  logLevel: string;
+  serviceName: string;
+
+  // Deployment
+  railwayPublicDomain?: string;
 
   // MinIO Storage
   minioEndpoint: string;
@@ -34,6 +41,19 @@ export interface Config {
 
   // Admin Authentication
   ADMIN_PASSWORD: string;
+
+  // Image Signing
+  signerPublicKey: string;
+
+  // Archive Node Configuration
+  archiveNodeEndpoint: string;
+  minaNodeEndpoint: string;
+  monitoringEnabled: boolean;
+
+  // Worker Configuration
+  workerRetryLimit: number;
+  workerTempDir: string;
+  workerMaxJobsBeforeRestart: number;
 }
 
 /**
@@ -96,11 +116,22 @@ function parseConfig(): Config {
     corsOrigin: getRequired('CORS_ORIGIN'),
     uploadMaxSize: getRequiredNumber('UPLOAD_MAX_SIZE'),
     circuitCachePath: process.env.CIRCUIT_CACHE_PATH || './cache',
+    logLevel: process.env.LOG_LEVEL || 'debug',
+    serviceName:
+      process.env.SERVICE_NAME || (process.argv[1]?.includes('worker') ? 'worker' : 'api'),
+    railwayPublicDomain: process.env.RAILWAY_PUBLIC_DOMAIN,
     minioEndpoint: getRequired('MINIO_ENDPOINT'),
     minioAccessKey: getRequired('MINIO_ROOT_USER'),
     minioSecretKey: getRequired('MINIO_ROOT_PASSWORD'),
     minioBucket: getRequired('MINIO_BUCKET'),
     ADMIN_PASSWORD: getRequired('ADMIN_PASSWORD'),
+    signerPublicKey: getRequired('SIGNER_PUBLIC_KEY'),
+    archiveNodeEndpoint: getRequired('ARCHIVE_NODE_ENDPOINT'),
+    minaNodeEndpoint: getRequired('MINA_NODE_ENDPOINT'),
+    monitoringEnabled: getRequired('MONITORING_ENABLED') === 'true',
+    workerRetryLimit: parseInt(process.env.WORKER_RETRY_LIMIT || '3', 10),
+    workerTempDir: process.env.WORKER_TEMP_DIR || '/tmp',
+    workerMaxJobsBeforeRestart: parseInt(process.env.WORKER_MAX_JOBS_BEFORE_RESTART || '10', 10),
   };
 
   // Throw if any errors

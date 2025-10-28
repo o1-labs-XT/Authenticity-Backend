@@ -1,16 +1,21 @@
 import { Request, Response, NextFunction, Express } from 'express';
 import type {} from 'multer';
-import { PublicKey, Signature } from 'o1js';
+import { PrivateKey, PublicKey } from 'o1js';
 import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { UsersRepository } from '../db/repositories/users.repository.js';
 import { ChainsRepository } from '../db/repositories/chains.repository.js';
 import { ChallengesRepository } from '../db/repositories/challenges.repository.js';
-import { ImageAuthenticityService } from '../services/image/verification.service.js';
+import { LikesRepository } from '../db/repositories/likes.repository.js';
+import {
+  ImageAuthenticityService,
+  ECDSASignatureData,
+} from '../services/image/verification.service.js';
 import { JobQueueService } from '../services/queue/jobQueue.service.js';
 import { MinioStorageService } from '../services/storage/minio.service.js';
 import { Submission } from '../db/types/touchgrass.types.js';
 import { Errors } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
+import { Config } from '../config/index.js';
 import fs from 'fs';
 
 export interface SubmissionResponse {
@@ -23,8 +28,10 @@ export interface SubmissionResponse {
   storageKey: string;
   tagline?: string;
   chainPosition: number;
+  likeCount: number;
   status: string;
   transactionId?: string;
+  transactionSubmittedBlockHeight?: number;
   failureReason?: string;
   retryCount: number;
   challengeVerified: boolean;
@@ -33,17 +40,30 @@ export interface SubmissionResponse {
 }
 
 export class SubmissionsHandler {
+  private readonly signerPublicKeyX: string;
+  private readonly signerPublicKeyY: string;
+
   constructor(
     private readonly submissionsRepo: SubmissionsRepository,
     private readonly usersRepo: UsersRepository,
     private readonly chainsRepo: ChainsRepository,
     private readonly challengesRepo: ChallengesRepository,
+    private readonly likesRepo: LikesRepository,
     private readonly verificationService: ImageAuthenticityService,
     private readonly jobQueue: JobQueueService,
-    private readonly storageService: MinioStorageService
-  ) {}
+    private readonly storageService: MinioStorageService,
+    private readonly config: Config
+  ) {
+    // Parse the signer public key from config (expected format: "x,y" in hex)
+    const publicKeyParts = config.signerPublicKey.split(',');
+    if (publicKeyParts.length !== 2) {
+      throw new Error('SIGNER_PUBLIC_KEY must be in format "x,y" (hex strings)');
+    }
+    this.signerPublicKeyX = publicKeyParts[0].trim();
+    this.signerPublicKeyY = publicKeyParts[1].trim();
+  }
 
-  private toResponse(submission: Submission): SubmissionResponse {
+  private toResponse(submission: Submission, likeCount: number): SubmissionResponse {
     return {
       id: submission.id,
       sha256Hash: submission.sha256_hash,
@@ -54,8 +74,10 @@ export class SubmissionsHandler {
       storageKey: submission.storage_key,
       tagline: submission.tagline || undefined,
       chainPosition: submission.chain_position,
+      likeCount,
       status: submission.status,
       transactionId: submission.transaction_id || undefined,
+      transactionSubmittedBlockHeight: submission.transaction_submitted_block_height || undefined,
       failureReason: submission.failure_reason || undefined,
       retryCount: submission.retry_count,
       challengeVerified: submission.challenge_verified,
@@ -68,8 +90,9 @@ export class SubmissionsHandler {
     file: Express.Multer.File | undefined,
     chainId: string | undefined,
     walletAddress: string | undefined,
-    signature: string | undefined
-  ): void {
+    signatureR: string | undefined,
+    signatureS: string | undefined
+  ): { imageBuffer: Buffer; signatureData: ECDSASignatureData } {
     if (!file) {
       throw Errors.badRequest('No image file provided', 'image');
     }
@@ -82,10 +105,6 @@ export class SubmissionsHandler {
       throw Errors.badRequest('walletAddress is required', 'walletAddress');
     }
 
-    if (!signature) {
-      throw Errors.badRequest('signature is required', 'signature');
-    }
-
     // Validate wallet address format (it's a public key in base58)
     try {
       PublicKey.fromBase58(walletAddress);
@@ -93,12 +112,27 @@ export class SubmissionsHandler {
       throw Errors.badRequest('Invalid wallet address format', 'walletAddress');
     }
 
-    // Validate signature format
-    try {
-      Signature.fromBase58(signature);
-    } catch {
-      throw Errors.badRequest('Invalid signature format', 'signature');
+    // Read image buffer
+    const imageBuffer = fs.readFileSync(file.path);
+
+    // Validate image buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw Errors.badRequest('Image buffer is empty', 'image');
     }
+
+    // Parse and validate ECDSA signature components with signer public key from config
+    const signatureData = this.verificationService.parseSignatureData(
+      signatureR,
+      signatureS,
+      this.signerPublicKeyX,
+      this.signerPublicKeyY
+    );
+
+    if ('error' in signatureData) {
+      throw Errors.badRequest(signatureData.error, 'signature');
+    }
+
+    return { imageBuffer, signatureData };
   }
 
   async createSubmission(
@@ -107,22 +141,21 @@ export class SubmissionsHandler {
     next: NextFunction
   ): Promise<void> {
     let storageKey: string | undefined;
-    let submission: Submission | undefined;
 
     try {
       logger.debug('Processing submission request');
 
       const file = req.file;
-      const { chainId, walletAddress, signature, tagline } = req.body;
+      const { chainId, walletAddress, signatureR, signatureS, tagline } = req.body;
 
-      // Validate request
-      this.validateSubmissionRequest(file, chainId, walletAddress, signature);
-
-      // Read image buffer
-      const imageBuffer = fs.readFileSync(file!.path);
-      if (!imageBuffer || imageBuffer.length === 0) {
-        throw Errors.badRequest('Image buffer is empty', 'image');
-      }
+      // Validate request and get image buffer and signature data
+      const { imageBuffer, signatureData } = this.validateSubmissionRequest(
+        file,
+        chainId,
+        walletAddress,
+        signatureR,
+        signatureS
+      );
 
       // Compute SHA256 hash of image
       const sha256Hash = this.verificationService.hashImage(imageBuffer);
@@ -153,8 +186,7 @@ export class SubmissionsHandler {
       logger.debug('Verifying signature');
       const verificationResult = this.verificationService.verifyAndPrepareImage(
         file!.path,
-        signature,
-        walletAddress
+        signatureData
       );
 
       if (!verificationResult.isValid) {
@@ -170,30 +202,23 @@ export class SubmissionsHandler {
       logger.debug({ storageKey, sha256Hash }, 'Image uploaded to MinIO');
 
       // Create submission (with transaction for chain/challenge updates)
-      submission = await this.submissionsRepo.create({
+      // Store only signature r,s (public key is in env var)
+      let submission = await this.submissionsRepo.create({
         sha256Hash,
         walletAddress,
-        signature,
+        signature: JSON.stringify({
+          r: signatureData.signatureR,
+          s: signatureData.signatureS,
+        }),
         challengeId: challenge.id,
         chainId: chainId!,
         storageKey,
         tagline,
       });
 
-      // TODO: configure admin approval flow to Enqueue job for proof generation
-      // const jobId = await this.jobQueue.enqueueProofGeneration({
-      //   sha256Hash,
-      //   signature,
-      //   publicKey,
-      //   storageKey,
-      //   tokenOwnerAddress,
-      //   tokenOwnerPrivateKey: tokenOwnerPrivate,
-      //   uploadedAt: new Date(),
-      //   correlationId: (req as Request & { correlationId: string }).correlationId,
-      // });
-      // logger.info({ jobId, submissionId: submission.id }, 'Proof generation job enqueued');
+      logger.info({ submissionId: submission.id, sha256Hash }, 'Submission created');
 
-      res.status(201).json(this.toResponse(submission));
+      res.status(201).json(this.toResponse(submission, 0));
     } catch (error) {
       logger.error({ err: error }, 'Submission handler error');
 
@@ -222,7 +247,9 @@ export class SubmissionsHandler {
         throw Errors.notFound('Submission');
       }
 
-      res.json(this.toResponse(submission));
+      const likeCount = await this.likesRepo.countBySubmission(submission.id);
+
+      res.json(this.toResponse(submission, likeCount));
     } catch (error) {
       next(error);
     }
@@ -239,7 +266,11 @@ export class SubmissionsHandler {
         status: status as string | undefined,
       });
 
-      res.json(submissions.map((s) => this.toResponse(s)));
+      // Batch fetch like counts for all submissions
+      const submissionIds = submissions.map((s) => s.id);
+      const likeCounts = await this.likesRepo.countBySubmissions(submissionIds);
+
+      res.json(submissions.map((s) => this.toResponse(s, likeCounts.get(s.id) || 0)));
     } catch (error) {
       next(error);
     }
@@ -275,25 +306,28 @@ export class SubmissionsHandler {
           : failureReason || 'Image does not satisfy challenge criteria',
       };
 
-      // TODO: When job queue is enabled, enqueue proof generation job here
-      // if (challengeVerified) {
-      //   const jobId = await this.jobQueue.enqueueProofGeneration({
-      //     sha256Hash: submission.sha256_hash,
-      //     signature: submission.signature,
-      //     walletAddress: submission.wallet_address,
-      //     storageKey: submission.storage_key,
-      //     uploadedAt: new Date(submission.created_at),
-      //     correlationId: (req as Request & { correlationId: string }).correlationId,
-      //   });
-      //   logger.info({ jobId, submissionId: id }, 'Proof generation job enqueued');
-      // }
+      // Enqueue proof generation job if approved
+      if (challengeVerified) {
+        const jobId = await this.jobQueue.enqueueProofGeneration({
+          sha256Hash: submission.sha256_hash,
+          signature: submission.signature,
+          storageKey: submission.storage_key,
+          tokenOwnerAddress: submission.wallet_address,
+          tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
+          uploadedAt: new Date(submission.created_at),
+          correlationId: (req as Request & { correlationId: string }).correlationId,
+        });
+        logger.info({ jobId, submissionId: id }, 'Proof generation job enqueued after approval');
+      }
 
       const updated = await this.submissionsRepo.update(id, updates);
       if (!updated) {
         throw Errors.notFound('Submission');
       }
 
-      res.json(this.toResponse(updated));
+      const likeCount = await this.likesRepo.countBySubmission(updated.id);
+
+      res.json(this.toResponse(updated, likeCount));
     } catch (error) {
       next(error);
     }

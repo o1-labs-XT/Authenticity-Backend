@@ -40,9 +40,21 @@ export interface Submission {
   chain_position: number;
   status: 'awaiting_review' | 'rejected' | 'processing' | 'complete';
   transaction_id?: string | null;
+  transaction_submitted_block_height?: number | null;
   failure_reason?: string | null;
   retry_count: number;
   challenge_verified: boolean; // true = admin approved, false = admin rejected
+  processing_started_at?: string | null;
+  verified_at?: string | null;
+  failed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Like {
+  id: string;
+  submission_id: string;
+  wallet_address: string;
   created_at: string;
   updated_at: string;
 }

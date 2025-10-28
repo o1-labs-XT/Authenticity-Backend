@@ -9,7 +9,7 @@ docker-compose up -d
 # 2. Create MinIO bucket (first time only)
 docker-compose exec minio mc mb /data/authenticity-local
 
-# 3. Setup environment
+# 3. Setup environment, ensure FEE_PAYER_PRIVATE_KEY is set to the key that deployed the zkapp
 cp .env.example .env
 
 # 3. Install dependencies
@@ -29,6 +29,24 @@ cd admin-dashboard
 cp .env.example .env.local
 npm run dev
 ```
+
+## Key Generation
+
+Generate ECDSA keypair for image signature verification:
+
+```bash
+npx tsx scripts/generate-signer-keypair.mts
+```
+
+This generates keys for `SIGNER_PUBLIC_KEY` and `SIGNER_PRIVATE_KEY`. Add them to:
+
+**Production/Development (must match):**
+- **Backend `.env`** - Add `SIGNER_PUBLIC_KEY` (server verifies signatures)
+- **Admin Dashboard `admin-dashboard/.env.local`** - Add `SIGNER_PRIVATE_KEY` (Secret, dashboard signs images)
+
+**Testing (separate keypair):**
+- **Backend `.env.test`** - Add both keys, integration tests can use their own test keypair
+
 
 ## API Endpoints
 

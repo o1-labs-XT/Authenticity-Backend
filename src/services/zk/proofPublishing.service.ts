@@ -1,9 +1,16 @@
-import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authenticity-zkapp';
-import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount } from 'o1js';
-import { AuthenticityRepository } from '../../db/repositories/authenticity.repository.js';
+import {
+  AuthenticityZkApp,
+  AuthenticityProof,
+  AuthenticityInputs,
+  BatchReducerUtils,
+} from 'authenticity-zkapp';
+import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8, Cache } from 'o1js';
+import { SubmissionsRepository } from '../../db/repositories/submissions.repository.js';
+import { MinaNodeService } from '../blockchain/minaNode.service.js';
 import { logger } from '../../utils/logger.js';
 import { Errors } from '../../utils/errors.js';
 import { PerformanceTracker } from '../../utils/performance.js';
+import { config } from '../../config/index.js';
 
 export class ProofPublishingService {
   private zkApp: AuthenticityZkApp;
@@ -14,7 +21,8 @@ export class ProofPublishingService {
     zkAppAddress: string,
     feePayerKey: string,
     network: string,
-    private repository?: AuthenticityRepository
+    private submissionsRepository?: SubmissionsRepository,
+    private minaNodeService?: MinaNodeService
   ) {
     this.zkAppAddress = zkAppAddress;
     this.feePayerKey = feePayerKey;
@@ -70,9 +78,12 @@ export class ProofPublishingService {
 
     logger.info({ sha256Hash }, 'Publishing proof to blockchain');
 
-    // Ensure contract is compiled (o1js caches this internally)
+    // Ensure contract is compiled
+    const cache = Cache.FileSystem(config.circuitCachePath);
     const compileTracker = new PerformanceTracker('publish.compile');
-    await AuthenticityZkApp.compile();
+    BatchReducerUtils.setContractInstance(this.zkApp);
+    await BatchReducerUtils.compile(); // TODO: add caching option
+    await AuthenticityZkApp.compile({ cache });
     compileTracker.end('success');
 
     // Parse addresses and keys
@@ -84,12 +95,29 @@ export class ProofPublishingService {
       {
         feePayer: feePayer.toPublicKey().toBase58(),
         tokenOwner: tokenOwner.toBase58(),
-        creator: proof.publicInput.publicKey.toBase58(),
+        creator: `(${proof.publicInput.publicKey.x.toBigInt()}, ${proof.publicInput.publicKey.y.toBigInt()})`,
       },
       'Transaction participants'
     );
 
     logger.debug('Creating transaction...');
+
+    // Capture current block height before submitting transaction
+    let submittedBlockHeight: number | undefined;
+    if (this.minaNodeService) {
+      try {
+        submittedBlockHeight = await this.minaNodeService.getCurrentBlockHeight();
+        logger.debug(
+          { submittedBlockHeight },
+          'Captured current block height before transaction submission'
+        );
+      } catch (error) {
+        logger.warn(
+          { err: error },
+          'Failed to capture current block height, proceeding without it'
+        );
+      }
+    }
 
     try {
       // Create transaction to verify and store the proof on-chain
@@ -98,8 +126,8 @@ export class ProofPublishingService {
         AccountUpdate.fundNewAccount(feePayer.toPublicKey());
 
         // Call verifyAndStore on the zkApp
-        // Pass the actual token owner address (not fee payer)
-        await this.zkApp.verifyAndStore(tokenOwner, proof, publicInputs);
+        // Pass the actual token owner address and a default chain ID
+        await this.zkApp.verifyAndStore(tokenOwner, UInt8.from(0), proof);
       });
 
       logger.debug('Proving transaction...');
@@ -119,14 +147,22 @@ export class ProofPublishingService {
 
       logger.info({ transactionHash: pendingTxn.hash }, 'Transaction sent');
 
-      // Save transaction ID to database immediately after sending
-      if (this.repository) {
-        await this.repository.updateRecord(sha256Hash, {
-          transaction_id: pendingTxn.hash,
-        });
+      // Save transaction ID and block height to database immediately after sending
+      if (this.submissionsRepository) {
+        const updateData: { transaction_id: string; transaction_submitted_block_height?: number } =
+          {
+            transaction_id: pendingTxn.hash,
+          };
+
+        if (submittedBlockHeight !== undefined) {
+          updateData.transaction_submitted_block_height = submittedBlockHeight;
+        }
+
+        await this.submissionsRepository.updateBySha256Hash(sha256Hash, updateData);
+
         logger.debug(
-          { sha256Hash, transactionHash: pendingTxn.hash },
-          'Transaction ID saved to database'
+          { sha256Hash, transactionHash: pendingTxn.hash, submittedBlockHeight },
+          'Transaction ID and block height saved to database'
         );
       }
 

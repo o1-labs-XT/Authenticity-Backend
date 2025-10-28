@@ -7,37 +7,28 @@ import YAML from 'yamljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from '../config/index.js';
-import { createUploadRoutes } from './routes/upload.routes.js';
-import { createStatusRoutes } from './routes/status.routes.js';
-import { createTokenOwnerRoutes } from './routes/tokenOwner.routes.js';
-import { createAdminRoutes } from './routes/admin.routes.js';
 import { createChallengesRoutes } from './routes/challenges.routes.js';
 import { createChainsRoutes } from './routes/chains.routes.js';
 import { createUsersRoutes } from './routes/users.routes.js';
 import { createSubmissionsRoutes } from './routes/submissions.routes.js';
+import { createLikesRoutes } from './routes/likes.routes.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 import { loggingMiddleware } from './middleware/logging.middleware.js';
 import { contextMiddleware } from './middleware/context.middleware.js';
-import { UploadHandler } from '../handlers/upload.handler.js';
-import { StatusHandler } from '../handlers/status.handler.js';
-import { TokenOwnerHandler } from '../handlers/tokenOwner.handler.js';
-import { AdminHandler } from '../handlers/admin.handler.js';
 import { ChallengesHandler } from '../handlers/challenges.handler.js';
 import { ChainsHandler } from '../handlers/chains.handler.js';
 import { UsersHandler } from '../handlers/users.handler.js';
 import { SubmissionsHandler } from '../handlers/submissions.handler.js';
+import { LikesHandler } from '../handlers/likes.handler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface ServerDependencies {
-  uploadHandler: UploadHandler;
-  statusHandler: StatusHandler;
-  tokenOwnerHandler: TokenOwnerHandler;
-  adminHandler: AdminHandler;
   challengesHandler: ChallengesHandler;
   chainsHandler: ChainsHandler;
   usersHandler: UsersHandler;
   submissionsHandler: SubmissionsHandler;
+  likesHandler: LikesHandler;
 }
 
 export function createServer(dependencies: ServerDependencies): Express {
@@ -93,10 +84,9 @@ export function createServer(dependencies: ServerDependencies): Express {
   });
 
   const swaggerDocument = YAML.load(path.join(__dirname, '../../swagger/swagger.yaml'));
-  const baseUrl =
-    config.nodeEnv === 'development'
-      ? `http://localhost:${config.port}`
-      : `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  const baseUrl = config.railwayPublicDomain
+    ? `https://${config.railwayPublicDomain}`
+    : `http://localhost:${config.port}`;
   swaggerDocument.servers = [
     {
       url: `${baseUrl}/api`,
@@ -107,17 +97,6 @@ export function createServer(dependencies: ServerDependencies): Express {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
   // Mount API routes
-  const uploadRoutes = createUploadRoutes(dependencies.uploadHandler);
-  const statusRoutes = createStatusRoutes(dependencies.statusHandler);
-  const tokenOwnerRoutes = createTokenOwnerRoutes(dependencies.tokenOwnerHandler);
-
-  app.use('/api', uploadRoutes);
-  app.use('/api', statusRoutes);
-  app.use('/api', tokenOwnerRoutes);
-
-  const adminRoutes = createAdminRoutes(dependencies.adminHandler);
-  app.use('/api', adminRoutes);
-
   const challengesRoutes = createChallengesRoutes(dependencies.challengesHandler);
   app.use('/api/challenges', challengesRoutes);
 
@@ -129,6 +108,9 @@ export function createServer(dependencies: ServerDependencies): Express {
 
   const submissionsRoutes = createSubmissionsRoutes(dependencies.submissionsHandler);
   app.use('/api/submissions', submissionsRoutes);
+
+  const likesRoutes = createLikesRoutes(dependencies.likesHandler);
+  app.use('/api/submissions/:submissionId/likes', likesRoutes);
 
   // 404 handler
   app.use((req, res) => {

@@ -1,22 +1,19 @@
 import { config } from './config/index.js';
 import { createServer } from './api/server.js';
 import { DatabaseConnection } from './db/database.js';
-import { AuthenticityRepository } from './db/repositories/authenticity.repository.js';
 import { ChallengesRepository } from './db/repositories/challenges.repository.js';
 import { ChainsRepository } from './db/repositories/chains.repository.js';
 import { UsersRepository } from './db/repositories/users.repository.js';
 import { SubmissionsRepository } from './db/repositories/submissions.repository.js';
+import { LikesRepository } from './db/repositories/likes.repository.js';
 import { ImageAuthenticityService } from './services/image/verification.service.js';
 import { MinioStorageService } from './services/storage/minio.service.js';
 import { JobQueueService } from './services/queue/jobQueue.service.js';
-import { UploadHandler } from './handlers/upload.handler.js';
-import { StatusHandler } from './handlers/status.handler.js';
-import { TokenOwnerHandler } from './handlers/tokenOwner.handler.js';
-import { AdminHandler } from './handlers/admin.handler.js';
 import { ChallengesHandler } from './handlers/challenges.handler.js';
 import { ChainsHandler } from './handlers/chains.handler.js';
 import { UsersHandler } from './handlers/users.handler.js';
 import { SubmissionsHandler } from './handlers/submissions.handler.js';
+import { LikesHandler } from './handlers/likes.handler.js';
 import { logger } from './utils/logger.js';
 
 async function main() {
@@ -29,11 +26,11 @@ async function main() {
       connectionString: config.databaseUrl,
     });
     await dbConnection.initialize();
-    const repository = new AuthenticityRepository(dbConnection.getAdapter());
     const challengesRepository = new ChallengesRepository(dbConnection.getAdapter());
     const chainsRepository = new ChainsRepository(dbConnection.getAdapter());
     const usersRepository = new UsersRepository(dbConnection.getAdapter());
     const submissionsRepository = new SubmissionsRepository(dbConnection.getAdapter());
+    const likesRepository = new LikesRepository(dbConnection.getAdapter());
 
     // Initialize services
     logger.info('Initializing services...');
@@ -43,15 +40,6 @@ async function main() {
     await jobQueue.start();
 
     // Initialize handlers
-    const uploadHandler = new UploadHandler(
-      verificationService,
-      repository,
-      jobQueue,
-      storageService
-    );
-    const statusHandler = new StatusHandler(repository);
-    const tokenOwnerHandler = new TokenOwnerHandler(repository);
-    const adminHandler = new AdminHandler(jobQueue, repository);
     const challengesHandler = new ChallengesHandler(challengesRepository);
     const chainsHandler = new ChainsHandler(chainsRepository);
     const usersHandler = new UsersHandler(usersRepository);
@@ -60,21 +48,21 @@ async function main() {
       usersRepository,
       chainsRepository,
       challengesRepository,
+      likesRepository,
       verificationService,
       jobQueue,
-      storageService
+      storageService,
+      config
     );
+    const likesHandler = new LikesHandler(likesRepository, usersRepository, submissionsRepository);
 
     // Create and start server
     const app = createServer({
-      uploadHandler,
-      statusHandler,
-      tokenOwnerHandler,
-      adminHandler,
       challengesHandler,
       chainsHandler,
       usersHandler,
       submissionsHandler,
+      likesHandler,
     });
 
     const port = config.port;

@@ -38,6 +38,7 @@ export interface Submission {
   storageKey: string;
   tagline?: string;
   chainPosition: number;
+  likeCount: number;
   status: string;
   transactionId?: string;
   failureReason?: string;
@@ -57,30 +58,12 @@ export interface AuthenticityRecord {
   verifiedAt?: string;
 }
 
-export interface Job {
+export interface Like {
   id: string;
-  state: string;
-  data: any;
-  output?: any;
-  retrycount: number;
-  createdon: string;
-  completedon?: string;
-}
-
-export interface JobStats {
-  queue: {
-    created: number;
-    active: number;
-    completed: number;
-    failed: number;
-  };
-  database: {
-    pending: number;
-    processing: number;
-    verified: number;
-    failed: number;
-  };
-  timestamp: string;
+  submissionId: string;
+  walletAddress: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ApiError {

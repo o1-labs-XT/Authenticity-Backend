@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
 
+# Load test environment variables from .env.test
+set -a  # automatically export all variables
+source .env.test
+set +a
+
 # Use test database
 export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/authenticity_test"
-
-# Set test environment variables for integration tests
-export TEST_API_URL="http://localhost:3000"
-export TEST_ADMIN_USERNAME="admin"
-export TEST_ADMIN_PASSWORD="serverpass"
 
 # Cleanup function
 cleanup() {

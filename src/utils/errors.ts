@@ -18,6 +18,9 @@ export const Errors = {
   // 400 Bad Request
   badRequest: (message: string, field?: string) => new ApiError(400, message, field),
 
+  // 403 Forbidden
+  forbidden: (message: string, field?: string) => new ApiError(403, message, field),
+
   // 404 Not Found
   notFound: (resource: string) => new ApiError(404, `${resource} not found`),
 

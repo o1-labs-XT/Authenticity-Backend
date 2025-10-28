@@ -3,6 +3,12 @@ import { Submission } from '../types/touchgrass.types.js';
 import { Knex } from 'knex';
 import { Errors } from '../../utils/errors.js';
 
+export interface TransactionInfo {
+  hash: string;
+  submittedHeight: number;
+  sha256Hash: string;
+}
+
 export interface CreateSubmissionInput {
   sha256Hash: string;
   walletAddress: string; // User's wallet address (public key)
@@ -123,5 +129,41 @@ export class SubmissionsRepository {
   async delete(id: string): Promise<boolean> {
     const deleted = await this.db.getKnex()('submissions').where('id', id).delete();
     return deleted > 0;
+  }
+
+  // todo: this is a duplicate, there should only be one update method
+  async updateBySha256Hash(
+    sha256Hash: string,
+    updates: Partial<Submission>
+  ): Promise<Submission | null> {
+    const knex = this.db.getKnex();
+    const [updated] = await knex('submissions')
+      .where('sha256_hash', sha256Hash)
+      .update({
+        ...updates,
+        updated_at: knex.fn.now(),
+      })
+      .returning('*');
+
+    return updated || null;
+  }
+
+  // todo: could we combine this with findall?
+  async getRecentTransactionsForMonitoring(lookbackBlocks: number): Promise<TransactionInfo[]> {
+    const results = await this.db
+      .getKnex()('submissions')
+      .select('transaction_id', 'transaction_submitted_block_height', 'sha256_hash')
+      .whereNotNull('transaction_id')
+      .whereNotNull('transaction_submitted_block_height')
+      .orderBy('transaction_submitted_block_height', 'desc')
+      .limit(lookbackBlocks * 10); // Get more records than blocks to ensure coverage
+
+    return results
+      .filter((result) => result.transaction_id && result.transaction_submitted_block_height)
+      .map((result) => ({
+        hash: result.transaction_id!,
+        submittedHeight: result.transaction_submitted_block_height!,
+        sha256Hash: result.sha256_hash,
+      }));
   }
 }

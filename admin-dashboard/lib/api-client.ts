@@ -1,12 +1,4 @@
-import type {
-  Challenge,
-  User,
-  Chain,
-  Submission,
-  AuthenticityRecord,
-  Job,
-  JobStats,
-} from './types';
+import type { Challenge, User, Chain, Submission, AuthenticityRecord, Like } from './types';
 
 /**
  * API client wraps backend API calls with proxy routing.
@@ -84,15 +76,6 @@ class ApiClient {
       this.request<{ tokenOwner: string }>(`token-owner/${sha256Hash}`),
   };
 
-  // Jobs
-  jobs = {
-    stats: () => this.request<JobStats>('admin/jobs/stats'),
-    failed: (limit = 10, offset = 0) =>
-      this.request<{ jobs: Job[] }>(`admin/jobs/failed?limit=${limit}&offset=${offset}`),
-    details: (jobId: string) => this.request<Job>(`admin/jobs/${jobId}`),
-    retry: (jobId: string) => this.request<void>(`admin/jobs/${jobId}/retry`, { method: 'POST' }),
-  };
-
   // Submissions
   submissions = {
     list: (filters?: {
@@ -129,6 +112,24 @@ class ApiClient {
         body: JSON.stringify(data),
       }),
     delete: (id: string) => this.request<void>(`submissions/${id}`, { method: 'DELETE' }),
+  };
+
+  // Likes
+  likes = {
+    list: (submissionId: string) => this.request<Like[]>(`submissions/${submissionId}/likes`),
+    getCount: (submissionId: string) =>
+      this.request<{ submissionId: string; count: number }>(
+        `submissions/${submissionId}/likes/count`
+      ),
+    create: (submissionId: string, walletAddress: string) =>
+      this.request<Like>(`submissions/${submissionId}/likes`, {
+        method: 'POST',
+        body: JSON.stringify({ walletAddress }),
+      }),
+    delete: (submissionId: string, walletAddress: string) =>
+      this.request<void>(`submissions/${submissionId}/likes/${walletAddress}`, {
+        method: 'DELETE',
+      }),
   };
 }
 
