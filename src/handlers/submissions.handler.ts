@@ -5,6 +5,7 @@ import { SubmissionsRepository } from '../db/repositories/submissions.repository
 import { UsersRepository } from '../db/repositories/users.repository.js';
 import { ChainsRepository } from '../db/repositories/chains.repository.js';
 import { ChallengesRepository } from '../db/repositories/challenges.repository.js';
+import { LikesRepository } from '../db/repositories/likes.repository.js';
 import {
   ImageAuthenticityService,
   ECDSASignatureData,
@@ -27,6 +28,7 @@ export interface SubmissionResponse {
   storageKey: string;
   tagline?: string;
   chainPosition: number;
+  likeCount: number;
   status: string;
   transactionId?: string;
   transactionSubmittedBlockHeight?: number;
@@ -46,6 +48,7 @@ export class SubmissionsHandler {
     private readonly usersRepo: UsersRepository,
     private readonly chainsRepo: ChainsRepository,
     private readonly challengesRepo: ChallengesRepository,
+    private readonly likesRepo: LikesRepository,
     private readonly verificationService: ImageAuthenticityService,
     private readonly jobQueue: JobQueueService,
     private readonly storageService: MinioStorageService,
@@ -60,7 +63,7 @@ export class SubmissionsHandler {
     this.signerPublicKeyY = publicKeyParts[1].trim();
   }
 
-  private toResponse(submission: Submission): SubmissionResponse {
+  private toResponse(submission: Submission, likeCount: number): SubmissionResponse {
     return {
       id: submission.id,
       sha256Hash: submission.sha256_hash,
@@ -71,6 +74,7 @@ export class SubmissionsHandler {
       storageKey: submission.storage_key,
       tagline: submission.tagline || undefined,
       chainPosition: submission.chain_position,
+      likeCount,
       status: submission.status,
       transactionId: submission.transaction_id || undefined,
       transactionSubmittedBlockHeight: submission.transaction_submitted_block_height || undefined,
@@ -214,7 +218,7 @@ export class SubmissionsHandler {
 
       logger.info({ submissionId: submission.id, sha256Hash }, 'Submission created');
 
-      res.status(201).json(this.toResponse(submission));
+      res.status(201).json(this.toResponse(submission, 0));
     } catch (error) {
       logger.error({ err: error }, 'Submission handler error');
 
@@ -243,7 +247,9 @@ export class SubmissionsHandler {
         throw Errors.notFound('Submission');
       }
 
-      res.json(this.toResponse(submission));
+      const likeCount = await this.likesRepo.countBySubmission(submission.id);
+
+      res.json(this.toResponse(submission, likeCount));
     } catch (error) {
       next(error);
     }
@@ -260,7 +266,11 @@ export class SubmissionsHandler {
         status: status as string | undefined,
       });
 
-      res.json(submissions.map((s) => this.toResponse(s)));
+      // Batch fetch like counts for all submissions
+      const submissionIds = submissions.map((s) => s.id);
+      const likeCounts = await this.likesRepo.countBySubmissions(submissionIds);
+
+      res.json(submissions.map((s) => this.toResponse(s, likeCounts.get(s.id) || 0)));
     } catch (error) {
       next(error);
     }
@@ -315,7 +325,9 @@ export class SubmissionsHandler {
         throw Errors.notFound('Submission');
       }
 
-      res.json(this.toResponse(updated));
+      const likeCount = await this.likesRepo.countBySubmission(updated.id);
+
+      res.json(this.toResponse(updated, likeCount));
     } catch (error) {
       next(error);
     }

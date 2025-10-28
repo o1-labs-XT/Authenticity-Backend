@@ -48,6 +48,7 @@ async function main() {
       usersRepository,
       chainsRepository,
       challengesRepository,
+      likesRepository,
       verificationService,
       jobQueue,
       storageService,
