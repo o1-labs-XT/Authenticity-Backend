@@ -7,6 +7,7 @@ export interface ProofGenerationJobData {
   storageKey: string; // minio storage key
   tokenOwnerAddress: string;
   tokenOwnerPrivateKey: string;
+  zkAppAddress: string; // NEW: zkApp address for this proof
   uploadedAt: Date;
   priority?: number;
   correlationId?: string;
@@ -15,6 +16,11 @@ export interface ProofGenerationJobData {
 export interface BlockchainMonitoringJobData {
   scheduledAt: Date;
   lookbackBlocks?: number;
+}
+
+export interface ContractDeploymentJobData {
+  challengeId: string;
+  correlationId?: string;
 }
 
 export class JobQueueService {
@@ -30,6 +36,7 @@ export class JobQueueService {
     // Create queues if they don't exist
     await this.boss.createQueue('proof-generation');
     await this.boss.createQueue('blockchain-monitoring');
+    await this.boss.createQueue('contract-deployment');
     logger.info('Job queue started');
   }
 
@@ -73,6 +80,26 @@ export class JobQueueService {
       logger.info('Blockchain monitoring job scheduled (every 5 minutes)');
     } catch (error) {
       logger.error({ err: error }, 'Failed to schedule monitoring job');
+      throw error;
+    }
+  }
+
+  async enqueueContractDeployment(data: ContractDeploymentJobData): Promise<string> {
+    try {
+      const jobId = await this.boss.send('contract-deployment', data, {
+        retryLimit: 3, // 3 attempts total
+        retryDelay: 120, // 2 minutes between retries
+        retryBackoff: true, // Exponential backoff (2min, 4min, 8min)
+        singletonKey: data.challengeId, // Prevent duplicate deployment jobs
+      });
+
+      logger.info({ jobId, challengeId: data.challengeId }, 'Contract deployment job enqueued');
+      return jobId || '';
+    } catch (error) {
+      logger.error(
+        { err: error, challengeId: data.challengeId },
+        'Failed to enqueue deployment job'
+      );
       throw error;
     }
   }

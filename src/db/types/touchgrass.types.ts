@@ -14,6 +14,18 @@ export interface Challenge {
   end_time: string;
   participant_count: number;
   chain_count: number;
+
+  // zkApp deployment fields
+  zkapp_address?: string | null;
+  deployment_transaction_hash?: string | null;
+  deployment_job_id?: string | null;
+  deployment_status: 'pending_deployment' | 'deploying' | 'active' | 'deployment_failed';
+  deployment_started_at?: string | null;
+  deployment_completed_at?: string | null;
+  deployment_failed_at?: string | null;
+  deployment_failure_reason?: string | null;
+  deployment_retry_count: number;
+
   created_at: string;
   updated_at: string;
 }

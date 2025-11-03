@@ -175,6 +175,14 @@ export class SubmissionsHandler {
         throw Errors.badRequest('Challenge is not currently active');
       }
 
+      // NEW: Verify challenge zkApp is deployed
+      if (challenge.deployment_status !== 'active' || !challenge.zkapp_address) {
+        throw Errors.badRequest(
+          'Challenge zkapp is not yet deployed. Please try again shortly.',
+          'challenge'
+        );
+      }
+
       // Ensure user exists
       await this.usersRepo.findOrCreate(walletAddress);
 
@@ -298,12 +306,31 @@ export class SubmissionsHandler {
 
       // Enqueue proof generation job if approved
       if (challengeVerified) {
+        // Get challenge to retrieve zkApp address
+        const chain = await this.chainsRepo.findById(submission.chain_id);
+        if (!chain) {
+          throw Errors.notFound('Chain');
+        }
+        const challenge = await this.challengesRepo.findById(chain.challenge_id);
+        if (!challenge) {
+          throw Errors.notFound('Challenge');
+        }
+
+        // Validate challenge has deployed zkApp
+        if (challenge.deployment_status !== 'active' || !challenge.zkapp_address) {
+          throw Errors.badRequest(
+            'Challenge zkApp is not yet deployed. Please wait for deployment to complete.',
+            'challenge'
+          );
+        }
+
         const jobId = await this.jobQueue.enqueueProofGeneration({
           sha256Hash: submission.sha256_hash,
           signature: submission.signature,
           storageKey: submission.storage_key,
           tokenOwnerAddress: submission.wallet_address,
           tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
+          zkAppAddress: challenge.zkapp_address, // NEW: pass challenge-specific zkApp
           uploadedAt: new Date(submission.created_at),
           correlationId: (req as Request & { correlationId: string }).correlationId,
         });

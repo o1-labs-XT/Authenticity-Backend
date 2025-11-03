@@ -12,78 +12,74 @@ import { Errors } from '../../utils/errors.js';
 import { PerformanceTracker } from '../../utils/performance.js';
 import { config } from '../../config/index.js';
 
+// REVISED: Service is now stateless - no instance variables for zkApp
 export class ProofPublishingService {
-  private zkApp: AuthenticityZkApp;
-  private zkAppAddress: string;
   private feePayerKey: string;
 
   constructor(
-    zkAppAddress: string,
     feePayerKey: string,
     network: string,
     private submissionsRepository?: SubmissionsRepository,
     private minaNodeService?: MinaNodeService
   ) {
-    this.zkAppAddress = zkAppAddress;
     this.feePayerKey = feePayerKey;
 
-    // Initialize network
+    // Initialize network once in constructor
     this.setupNetwork(network);
-
-    // Initialize zkApp instance - will throw if address is invalid
-    const zkAppPublicKey = PublicKey.fromBase58(this.zkAppAddress);
-    this.zkApp = new AuthenticityZkApp(zkAppPublicKey);
-    logger.info(`ProofPublishingService initialized with zkApp at ${zkAppAddress}`);
   }
 
   /**
-   * Setup the Mina network connection
-   * todo: refactor
+   * Setup the Mina network connection using MINA_NODE_ENDPOINT from config
    */
   private setupNetwork(network: string): void {
-    if (network === 'testnet') {
-      const Testnet = Mina.Network({
-        networkId: 'testnet',
-        mina: 'https://api.minascan.io/node/devnet/v1/graphql',
-      });
-      Mina.setActiveInstance(Testnet);
-      logger.info('Connected to Mina testnet at https://api.minascan.io/node/devnet/v1/graphql');
-    } else if (network === 'mainnet') {
-      const Mainnet = Mina.Network('https://api.minascan.io/node/mainnet/v1/graphql');
-      Mina.setActiveInstance(Mainnet);
-      logger.info('Connected to Mina mainnet');
-    }
+    // Use config.minaNodeEndpoint instead of hardcoded URLs
+    const Network = Mina.Network(config.minaNodeEndpoint);
+    Mina.setActiveInstance(Network);
+    logger.info(
+      {
+        network,
+        endpoint: config.minaNodeEndpoint,
+      },
+      'Connected to Mina network'
+    );
   }
 
   /**
-   * Publish a proof of authenticity to the blockchain
-   * This calls the deployed AuthenticityZkApp.verifyAndStore method
-   * Automatically saves the transaction ID to the database as soon as it's available
+   * REVISED: Publish a proof to a specific zkApp address
+   * zkAppAddress is now a parameter, making this service reusable across challenges
    */
   async publishProof(
     sha256Hash: string,
     proof: AuthenticityProof,
     publicInputs: AuthenticityInputs,
-    tokenOwnerPrivateKey: string
+    tokenOwnerPrivateKey: string,
+    zkAppAddress: string // NEW: zkApp address per proof
   ): Promise<string> {
     // Check if zkApp is deployed
-    const isDeployed = await this.isDeployed();
+    const isDeployed = await this.isDeployed(zkAppAddress);
     if (!isDeployed) {
-      throw Errors.internal('AuthenticityZkApp is not deployed. Please deploy the contract first.');
+      throw Errors.internal(`AuthenticityZkApp at ${zkAppAddress} is not deployed`);
     }
 
     if (!this.feePayerKey) {
       throw Errors.internal('Fee payer private key not configured');
     }
 
-    logger.info({ sha256Hash }, 'Publishing proof to blockchain');
+    logger.info({ sha256Hash, zkAppAddress }, 'Publishing proof to blockchain');
 
-    // Ensure contract is compiled
+    // Create zkApp instance for this specific address
+    const zkAppPublicKey = PublicKey.fromBase58(zkAppAddress);
+    const zkApp = new AuthenticityZkApp(zkAppPublicKey);
+
+    // Compile contracts
     const cache = Cache.FileSystem(config.circuitCachePath);
     const compileTracker = new PerformanceTracker('publish.compile');
-    BatchReducerUtils.setContractInstance(this.zkApp);
-    await BatchReducerUtils.compile(); // TODO: add caching option
+
+    // Set contract instance and compile BatchReducerUtils
+    BatchReducerUtils.setContractInstance(zkApp);
+    await BatchReducerUtils.compile();
     await AuthenticityZkApp.compile({ cache });
+
     compileTracker.end('success');
 
     // Parse addresses and keys
@@ -126,8 +122,7 @@ export class ProofPublishingService {
         AccountUpdate.fundNewAccount(feePayer.toPublicKey());
 
         // Call verifyAndStore on the zkApp
-        // Pass the actual token owner address and a default chain ID
-        await this.zkApp.verifyAndStore(tokenOwner, UInt8.from(0), proof);
+        await zkApp.verifyAndStore(tokenOwner, UInt8.from(0), proof);
       });
 
       logger.debug('Proving transaction...');
@@ -182,12 +177,12 @@ export class ProofPublishingService {
   }
 
   /**
-   * Check if the zkApp is deployed and ready
+   * REVISED: Check if a specific zkApp is deployed
    */
-  async isDeployed(): Promise<boolean> {
+  async isDeployed(zkAppAddress: string): Promise<boolean> {
     try {
-      const zkAppPublicKey = PublicKey.fromBase58(this.zkAppAddress);
-      logger.debug(`Checking zkApp deployment at ${this.zkAppAddress}`);
+      const zkAppPublicKey = PublicKey.fromBase58(zkAppAddress);
+      logger.debug(`Checking zkApp deployment at ${zkAppAddress}`);
 
       await fetchAccount({ publicKey: zkAppPublicKey });
       const account = Mina.getAccount(zkAppPublicKey);

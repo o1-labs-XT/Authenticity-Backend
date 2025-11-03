@@ -40,7 +40,7 @@ async function main() {
     await jobQueue.start();
 
     // Initialize handlers
-    const challengesHandler = new ChallengesHandler(challengesRepository);
+    const challengesHandler = new ChallengesHandler(challengesRepository, jobQueue);
     const chainsHandler = new ChainsHandler(chainsRepository);
     const usersHandler = new UsersHandler(usersRepository);
     const submissionsHandler = new SubmissionsHandler(

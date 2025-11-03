@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { ChallengesRepository } from '../db/repositories/challenges.repository.js';
 import { Challenge } from '../db/types/touchgrass.types.js';
 import { Errors } from '../utils/errors.js';
+import { JobQueueService } from '../services/queue/jobQueue.service.js';
+import { logger } from '../utils/logger.js';
 
 export interface ChallengeResponse {
   id: string;
@@ -11,12 +13,23 @@ export interface ChallengeResponse {
   endTime: Date;
   participantCount: number;
   chainCount: number;
+
+  // zkApp deployment fields (NEW)
+  zkAppAddress?: string;
+  deploymentStatus: 'pending_deployment' | 'deploying' | 'active' | 'deployment_failed';
+  deploymentTransactionHash?: string;
+  deploymentFailureReason?: string;
+  deploymentRetryCount: number;
+
   createdAt: Date;
   updatedAt: Date;
 }
 
 export class ChallengesHandler {
-  constructor(private readonly challengesRepo: ChallengesRepository) {}
+  constructor(
+    private readonly challengesRepo: ChallengesRepository,
+    private readonly jobQueue: JobQueueService // NEW dependency
+  ) {}
 
   private toResponse(challenge: Challenge): ChallengeResponse {
     return {
@@ -27,6 +40,14 @@ export class ChallengesHandler {
       endTime: new Date(challenge.end_time),
       participantCount: challenge.participant_count,
       chainCount: challenge.chain_count,
+
+      // zkApp deployment fields
+      zkAppAddress: challenge.zkapp_address || undefined,
+      deploymentStatus: challenge.deployment_status,
+      deploymentTransactionHash: challenge.deployment_transaction_hash || undefined,
+      deploymentFailureReason: challenge.deployment_failure_reason || undefined,
+      deploymentRetryCount: challenge.deployment_retry_count,
+
       createdAt: new Date(challenge.created_at),
       updatedAt: new Date(challenge.updated_at),
     };
@@ -71,6 +92,7 @@ export class ChallengesHandler {
     try {
       const { title, description, startTime, endTime } = req.body;
 
+      // Validation (existing)
       if (!title) throw Errors.badRequest('title is required', 'title');
       if (!description) throw Errors.badRequest('description is required', 'description');
       if (!startTime) throw Errors.badRequest('startTime is required', 'startTime');
@@ -83,13 +105,29 @@ export class ChallengesHandler {
         throw Errors.badRequest('endTime must be after startTime');
       }
 
+      // Create challenge record with pending deployment status
       const challenge = await this.challengesRepo.create({
         title,
         description,
-        start_time: new Date(startTime),
-        end_time: new Date(endTime),
+        start_time: start,
+        end_time: end,
       });
 
+      logger.info({ challengeId: challenge.id }, 'Challenge created, enqueueing deployment');
+
+      const jobId = await this.jobQueue.enqueueContractDeployment({
+        challengeId: challenge.id,
+        correlationId: (req as Request & { correlationId: string }).correlationId,
+      });
+
+      // Update challenge with job ID
+      await this.challengesRepo.update(challenge.id, {
+        deployment_job_id: jobId,
+      });
+
+      logger.info({ challengeId: challenge.id, jobId }, 'Contract deployment job enqueued');
+
+      // Return challenge with pending deployment status
       res.status(201).json(this.toResponse(challenge));
     } catch (error) {
       next(error);

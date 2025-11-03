@@ -61,6 +61,7 @@ export class ProofGenerationWorker {
                 storageKey,
                 tokenOwnerAddress: _tokenOwnerAddress, // currently unused
                 tokenOwnerPrivateKey,
+                zkAppAddress, // NEW: Extract from job data
               } = job.data;
 
               // Parse ECDSA signature from JSON and get public key from config
@@ -129,11 +130,13 @@ export class ProofGenerationWorker {
                 // Step 4: Publish to blockchain
                 logger.info('Publishing proof to Mina blockchain');
                 const publishTracker = new PerformanceTracker('job.publishProof');
+                // REVISED: Pass zkAppAddress to publishProof
                 const transactionId = await this.proofPublishingService.publishProof(
                   sha256Hash,
                   proof,
                   publicInputs,
-                  tokenOwnerPrivateKey
+                  tokenOwnerPrivateKey,
+                  zkAppAddress // NEW: Pass zkApp address
                 );
                 publishTracker.end('success', { transactionId });
 
