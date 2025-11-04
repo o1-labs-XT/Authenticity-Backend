@@ -1,5 +1,43 @@
 import request from 'supertest';
+import knex, { Knex } from 'knex';
+import { PrivateKey } from 'o1js';
 import { API_URL, ADMIN_USERNAME, ADMIN_PASSWORD } from '../config.js';
+
+// Database connection for direct access (used to bypass worker deployment in tests)
+let dbConnection: Knex | null = null;
+
+const getDbConnection = (): Knex => {
+  if (!dbConnection) {
+    dbConnection = knex({
+      client: 'pg',
+      connection: {
+        connectionString: process.env.DATABASE_URL,
+        ssl: false,
+      },
+    });
+  }
+  return dbConnection;
+};
+
+/**
+ * Manually mark a challenge as deployed with mock zkApp data
+ * This bypasses the actual contract deployment worker for testing
+ */
+export const markChallengeAsDeployed = async (challengeId: string): Promise<void> => {
+  const db = getDbConnection();
+
+  // Generate a mock zkApp address (valid format but not actually deployed)
+  const mockZkAppAddress = PrivateKey.random().toPublicKey().toBase58();
+  const mockTxHash = `mock-tx-${Date.now()}`;
+
+  await db('challenges').where({ id: challengeId }).update({
+    deployment_status: 'active',
+    zkapp_address: mockZkAppAddress,
+    deployment_transaction_hash: mockTxHash,
+    deployment_completed_at: new Date().toISOString(),
+    deployment_failure_reason: null,
+  });
+};
 
 /**
  * Creates a date relative to the current date
@@ -13,6 +51,7 @@ export const getRelativeDate = (daysFromNow: number): string => {
 
 /**
  * Creates a test challenge for integration testing
+ * Automatically marks the challenge as deployed (bypassing worker deployment)
  * @param options Optional configuration
  * @returns Challenge ID
  */
@@ -35,7 +74,12 @@ export const createTestChallenge = async (options?: {
     throw new Error(`Failed to create test challenge: ${res.status} ${JSON.stringify(res.body)}`);
   }
 
-  return res.body.id;
+  const challengeId = res.body.id;
+
+  // Mark challenge as deployed with mock zkApp data (bypasses worker deployment for tests)
+  await markChallengeAsDeployed(challengeId);
+
+  return challengeId;
 };
 
 /**
