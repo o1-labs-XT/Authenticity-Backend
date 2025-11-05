@@ -27,6 +27,7 @@ npm run dev:worker   # Background worker for proof generation
 ```bash
 cd admin-dashboard
 cp .env.example .env.local
+npm install
 npm run dev
 ```
 
