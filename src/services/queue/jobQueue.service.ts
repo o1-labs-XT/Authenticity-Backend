@@ -4,10 +4,10 @@ import { logger } from '../../utils/logger.js';
 export interface ProofGenerationJobData {
   sha256Hash: string;
   signature: string;
-  storageKey: string; // minio storage key
+  storageKey: string;
   tokenOwnerAddress: string;
   tokenOwnerPrivateKey: string;
-  zkAppAddress: string; // NEW: zkApp address for this proof
+  zkAppAddress: string;
   uploadedAt: Date;
   priority?: number;
   correlationId?: string;

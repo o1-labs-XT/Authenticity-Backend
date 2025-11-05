@@ -15,21 +15,10 @@ export class ContractDeploymentService {
 
   /**
    * Deploy a new AuthenticityZkApp contract
-   *
-   * Compilation Strategy:
-   * - AuthenticityProgram and AuthenticityZkApp are pre-compiled at worker startup
-   *   via compile-zkapp.ts script (loaded from cache during deployment)
-   * - BatchReducerUtils is compiled per-deployment with the actual zkApp instance
-   *   to ensure proper binding (follows proven pattern from proofPublishing.service.ts)
-   *
-   * TODO: Investigate if BatchReducerUtils can be compiled once at startup with a
-   * dummy instance to speed up deployments. Current approach is safe but slower.
    */
   async deployContract(challengeId: string): Promise<DeploymentResult> {
     try {
       logger.info({ challengeId }, 'Starting contract deployment');
-
-      // Connect to network using MINA_NODE_ENDPOINT from config
       const Network = Mina.Network(config.minaNodeEndpoint);
       Mina.setActiveInstance(Network);
       logger.info({ endpoint: config.minaNodeEndpoint }, 'Connected to Mina network');
@@ -48,30 +37,24 @@ export class ContractDeploymentService {
       const zkApp = new AuthenticityZkApp(zkAppAddress);
       BatchReducerUtils.setContractInstance(zkApp);
 
-      // IMPORTANT: Must compile in this exact order to satisfy dependencies
-      // Reference: ../Authenticity-Zkapp/PGBOSS_DEPLOYMENT_SNIPPET.md (lines 260-266)
-
-      // 1. AuthenticityProgram (the zkProgram dependency)
+      // 1. AuthenticityProgram
       logger.info('Compiling AuthenticityProgram...');
       const programStartTime = Date.now();
       await AuthenticityProgram.compile();
       logger.info({ durationMs: Date.now() - programStartTime }, 'AuthenticityProgram compiled');
 
-      // 2. BatchReducerUtils (the batch reducer)
+      // 2. BatchReducerUtils
       logger.info('Compiling BatchReducerUtils...');
       const batchStartTime = Date.now();
       await BatchReducerUtils.compile();
       logger.info({ durationMs: Date.now() - batchStartTime }, 'BatchReducerUtils compiled');
 
-      // 3. AuthenticityZkApp (depends on AuthenticityProgram)
+      // 3. AuthenticityZkApp
       logger.info('Compiling AuthenticityZkApp...');
       const contractStartTime = Date.now();
       await AuthenticityZkApp.compile();
       logger.info({ durationMs: Date.now() - contractStartTime }, 'AuthenticityZkApp compiled');
 
-      // Create deployment transaction
-      // NOTE: Verify 0.1 MINA fee is sufficient for devnet/mainnet deployments
-      // May need adjustment based on network conditions
       logger.info('Creating deployment transaction');
       const deployTxn = await Mina.transaction(
         { sender: feePayerPublicKey, fee: 0.1e9 },

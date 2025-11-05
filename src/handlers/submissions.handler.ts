@@ -175,7 +175,7 @@ export class SubmissionsHandler {
         throw Errors.badRequest('Challenge is not currently active');
       }
 
-      // NEW: Verify challenge zkApp is deployed
+      // Verify challenge zkApp is deployed
       if (challenge.deployment_status !== 'active' || !challenge.zkapp_address) {
         throw Errors.badRequest(
           'Challenge zkapp is not yet deployed. Please try again shortly.',

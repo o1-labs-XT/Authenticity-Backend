@@ -12,7 +12,6 @@ import { Errors } from '../../utils/errors.js';
 import { PerformanceTracker } from '../../utils/performance.js';
 import { config } from '../../config/index.js';
 
-// REVISED: Service is now stateless - no instance variables for zkApp
 export class ProofPublishingService {
   private feePayerKey: string;
 
@@ -23,16 +22,10 @@ export class ProofPublishingService {
     private minaNodeService?: MinaNodeService
   ) {
     this.feePayerKey = feePayerKey;
-
-    // Initialize network once in constructor
     this.setupNetwork(network);
   }
 
-  /**
-   * Setup the Mina network connection using MINA_NODE_ENDPOINT from config
-   */
   private setupNetwork(network: string): void {
-    // Use config.minaNodeEndpoint instead of hardcoded URLs
     const Network = Mina.Network(config.minaNodeEndpoint);
     Mina.setActiveInstance(Network);
     logger.info(
@@ -45,15 +38,14 @@ export class ProofPublishingService {
   }
 
   /**
-   * REVISED: Publish a proof to a specific zkApp address
-   * zkAppAddress is now a parameter, making this service reusable across challenges
+   * Publish a proof to a specific zkApp address
    */
   async publishProof(
     sha256Hash: string,
     proof: AuthenticityProof,
     publicInputs: AuthenticityInputs,
     tokenOwnerPrivateKey: string,
-    zkAppAddress: string // NEW: zkApp address per proof
+    zkAppAddress: string
   ): Promise<string> {
     // Check if zkApp is deployed
     const isDeployed = await this.isDeployed(zkAppAddress);
@@ -177,7 +169,7 @@ export class ProofPublishingService {
   }
 
   /**
-   * REVISED: Check if a specific zkApp is deployed
+   * Check if a specific zkApp is deployed
    */
   async isDeployed(zkAppAddress: string): Promise<boolean> {
     try {

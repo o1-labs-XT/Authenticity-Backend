@@ -40,7 +40,7 @@ async function startWorker() {
     const proofGenerationService = new ProofGenerationService();
 
     logger.info('Initializing proof publishing service...');
-    // REVISED: Remove zkAppAddress from constructor (now passed per-proof)
+
     const proofPublishingService = new ProofPublishingService(
       config.feePayerPrivateKey,
       config.minaNetwork,

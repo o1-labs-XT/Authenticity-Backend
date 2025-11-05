@@ -27,7 +27,7 @@ export interface ChallengeResponse {
 export class ChallengesHandler {
   constructor(
     private readonly challengesRepo: ChallengesRepository,
-    private readonly jobQueue: JobQueueService // NEW dependency
+    private readonly jobQueue: JobQueueService
   ) {}
 
   private toResponse(challenge: Challenge): ChallengeResponse {
@@ -39,8 +39,6 @@ export class ChallengesHandler {
       endTime: new Date(challenge.end_time),
       participantCount: challenge.participant_count,
       chainCount: challenge.chain_count,
-
-      // zkApp deployment fields
       zkAppAddress: challenge.zkapp_address || undefined,
       deploymentStatus: challenge.deployment_status,
       transactionId: challenge.transaction_id || undefined,
