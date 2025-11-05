@@ -14,12 +14,11 @@ export interface ChallengeResponse {
   participantCount: number;
   chainCount: number;
 
-  // zkApp deployment fields (NEW)
+  // zkApp deployment fields
   zkAppAddress?: string;
   deploymentStatus: 'pending_deployment' | 'deploying' | 'active' | 'deployment_failed';
-  deploymentTransactionHash?: string;
-  deploymentFailureReason?: string;
-  deploymentRetryCount: number;
+  transactionId?: string;
+  failureReason?: string;
 
   createdAt: Date;
   updatedAt: Date;
@@ -44,9 +43,8 @@ export class ChallengesHandler {
       // zkApp deployment fields
       zkAppAddress: challenge.zkapp_address || undefined,
       deploymentStatus: challenge.deployment_status,
-      deploymentTransactionHash: challenge.deployment_transaction_hash || undefined,
-      deploymentFailureReason: challenge.deployment_failure_reason || undefined,
-      deploymentRetryCount: challenge.deployment_retry_count,
+      transactionId: challenge.transaction_id || undefined,
+      failureReason: challenge.failure_reason || undefined,
 
       createdAt: new Date(challenge.created_at),
       updatedAt: new Date(challenge.updated_at),
@@ -118,11 +116,6 @@ export class ChallengesHandler {
       const jobId = await this.jobQueue.enqueueContractDeployment({
         challengeId: challenge.id,
         correlationId: (req as Request & { correlationId: string }).correlationId,
-      });
-
-      // Update challenge with job ID
-      await this.challengesRepo.update(challenge.id, {
-        deployment_job_id: jobId,
       });
 
       logger.info({ challengeId: challenge.id, jobId }, 'Contract deployment job enqueued');

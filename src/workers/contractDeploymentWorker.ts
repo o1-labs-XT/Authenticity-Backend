@@ -58,8 +58,6 @@ export class ContractDeploymentWorker {
                 // Update status to deploying
                 await this.challengesRepository.update(challengeId, {
                   deployment_status: 'deploying',
-                  deployment_started_at: new Date().toISOString(),
-                  deployment_retry_count: retryCount,
                 });
 
                 // Deploy contract
@@ -74,9 +72,8 @@ export class ContractDeploymentWorker {
                 await this.challengesRepository.update(challengeId, {
                   deployment_status: 'active',
                   zkapp_address: result.zkAppAddress,
-                  deployment_transaction_hash: result.txHash,
-                  deployment_completed_at: new Date().toISOString(),
-                  deployment_failure_reason: null,
+                  transaction_id: result.txHash,
+                  failure_reason: null,
                 });
 
                 jobTracker.end('success', {
@@ -97,9 +94,7 @@ export class ContractDeploymentWorker {
 
                 await this.challengesRepository.update(challengeId, {
                   deployment_status: isLastRetry ? 'deployment_failed' : 'deploying',
-                  deployment_failed_at: isLastRetry ? new Date().toISOString() : null,
-                  deployment_failure_reason: failureReason,
-                  deployment_retry_count: retryCount + 1,
+                  failure_reason: failureReason,
                 });
 
                 // Re-throw to trigger pg-boss retry
