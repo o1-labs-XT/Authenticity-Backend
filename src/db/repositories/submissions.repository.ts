@@ -71,9 +71,6 @@ export class SubmissionsRepository {
           if (dbError.constraint?.includes('sha256_hash')) {
             throw Errors.conflict('Image already submitted');
           }
-          if (dbError.constraint?.includes('wallet_address_challenge_id')) {
-            throw Errors.conflict('You have already submitted to this challenge');
-          }
         }
         // Foreign key violation
         if (dbError.code === '23503') {
