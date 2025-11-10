@@ -66,4 +66,17 @@ export class ChallengesRepository {
 
     return deleted > 0;
   }
+
+  async update(id: string, data: Partial<Challenge>): Promise<Challenge | null> {
+    const [updated] = await this.db
+      .getKnex()('challenges')
+      .where('id', id)
+      .update({
+        ...data,
+        updated_at: this.db.getKnex().fn.now(),
+      })
+      .returning('*');
+
+    return updated || null;
+  }
 }
