@@ -20,6 +20,7 @@ export class ContractDeploymentWorker {
       'contract-deployment',
       {
         includeMetadata: true,
+        batchSize: 1, // Mina transactions doesn't support concurrency, process one job at a time
       },
       async (jobs: PgBoss.JobWithMetadata<ContractDeploymentJobData>[]) => {
         for (const job of jobs) {
