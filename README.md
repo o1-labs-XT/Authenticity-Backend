@@ -19,8 +19,10 @@ npm install
 npm run db:migrate
 
 # 5. Start services (in separate terminals)
-npm run dev:api      # API server on port 3000
-npm run dev:worker   # Background worker for proof generation
+npm run dev:api         # API server on port 3000
+npm run dev:deployment  # Contract deployment worker (required for challenges)
+npm run dev:worker      # Proof generation worker (processes approved submissions)
+npm run dev:monitoring  # Blockchain monitoring worker (optional, tracks tx status)
 ```
 
 ## Admin Dashboard
