@@ -7,6 +7,7 @@ export interface TransactionInfo {
   hash: string;
   submittedHeight: number;
   sha256Hash: string;
+  zkappAddress: string; // Challenge's deployed contract address
 }
 
 export interface CreateSubmissionInput {
@@ -152,18 +153,29 @@ export class SubmissionsRepository {
   async getRecentTransactionsForMonitoring(lookbackBlocks: number): Promise<TransactionInfo[]> {
     const results = await this.db
       .getKnex()('submissions')
-      .select('transaction_id', 'transaction_submitted_block_height', 'sha256_hash')
-      .whereNotNull('transaction_id')
-      .whereNotNull('transaction_submitted_block_height')
-      .orderBy('transaction_submitted_block_height', 'desc')
+      .select(
+        'submissions.transaction_id',
+        'submissions.transaction_submitted_block_height',
+        'submissions.sha256_hash',
+        'challenges.zkapp_address'
+      )
+      .join('challenges', 'submissions.challenge_id', '=', 'challenges.id')
+      .whereNotNull('submissions.transaction_id')
+      .whereNotNull('submissions.transaction_submitted_block_height')
+      .whereNotNull('challenges.zkapp_address') // Only monitor deployed contracts
+      .orderBy('submissions.transaction_submitted_block_height', 'desc')
       .limit(lookbackBlocks * 10); // Get more records than blocks to ensure coverage
 
     return results
-      .filter((result) => result.transaction_id && result.transaction_submitted_block_height)
+      .filter(
+        (result) =>
+          result.transaction_id && result.transaction_submitted_block_height && result.zkapp_address
+      )
       .map((result) => ({
         hash: result.transaction_id!,
         submittedHeight: result.transaction_submitted_block_height!,
         sha256Hash: result.sha256_hash,
+        zkappAddress: result.zkapp_address!,
       }));
   }
 }
