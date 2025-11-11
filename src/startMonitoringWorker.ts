@@ -47,15 +47,13 @@ async function startMonitoringWorker() {
     const minaNodeService = new MinaNodeService(config.minaNodeEndpoint);
     const monitoringService = new BlockchainMonitoringService();
 
-    // Start monitoring worker
-    // For now, pass empty string as zkApp address (monitoring disabled for per-challenge contracts)
+    // Start monitoring worker (supports multiple zkApp addresses per-challenge)
     const worker = new BlockchainMonitorWorker(
       boss,
       repository,
       archiveNodeService,
       minaNodeService,
-      monitoringService,
-      '' // TODO: update monitoring to handle multiple zkApp addresses
+      monitoringService
     );
 
     await worker.start();
