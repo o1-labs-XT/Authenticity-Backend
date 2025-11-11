@@ -111,7 +111,12 @@ describe('Submissions API Integration', () => {
     // Cleanup temp test files
     const tmpDir = path.join(process.cwd(), 'tmp', 'test-uploads');
     if (fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
+      try {
+        // Use maxRetries option to handle locked files
+        fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      } catch (err) {
+        console.warn('Warning: Could not clean up test-uploads directory:', err);
+      }
     }
   });
 

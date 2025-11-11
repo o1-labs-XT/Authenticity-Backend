@@ -40,8 +40,8 @@ async function startWorker() {
     const proofGenerationService = new ProofGenerationService();
 
     logger.info('Initializing proof publishing service...');
+
     const proofPublishingService = new ProofPublishingService(
-      config.zkappAddress,
       config.feePayerPrivateKey,
       config.minaNetwork,
       submissionsRepository,

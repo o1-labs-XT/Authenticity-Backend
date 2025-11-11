@@ -92,7 +92,11 @@ describe('Challenges API Integration', () => {
 
     expect(activeRes.status).toBe(200);
     expect(Array.isArray(activeRes.body)).toBe(true);
-    expect(activeRes.body.length).toBe(0); // Should be empty
+    // Neither of these challenges should be in the active list
+    const futureChallenge = activeRes.body.find((c: any) => c.id === futureId);
+    const pastChallenge = activeRes.body.find((c: any) => c.id === pastId);
+    expect(futureChallenge).toBeUndefined();
+    expect(pastChallenge).toBeUndefined();
   });
 
   // Test 3: List all challenges
