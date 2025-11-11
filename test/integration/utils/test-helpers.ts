@@ -33,9 +33,8 @@ export const markChallengeAsDeployed = async (challengeId: string): Promise<void
   await db('challenges').where({ id: challengeId }).update({
     deployment_status: 'active',
     zkapp_address: mockZkAppAddress,
-    deployment_transaction_hash: mockTxHash,
-    deployment_completed_at: new Date().toISOString(),
-    deployment_failure_reason: null,
+    transaction_id: mockTxHash,
+    failure_reason: null,
   });
 };
 

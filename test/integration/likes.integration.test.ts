@@ -138,7 +138,7 @@ describe('Likes API Integration', () => {
 
   // ===== Happy Path Tests =====
 
-  it('should create a like with valid data when user has approved submission', async () => {
+  it('should create a like with valid data immediately after submission', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
     createdUserAddresses.push(testData1.walletAddress, testData2.walletAddress);
@@ -151,13 +151,7 @@ describe('Likes API Integration', () => {
     const submissionId2 = await createTestSubmission(chainId, testData2.walletAddress);
     createdSubmissionIds.push(submissionId2);
 
-    // Admin approves user1's submission (so they can like)
-    await request(API_URL)
-      .patch(`/api/submissions/${submissionId1}`)
-      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
-      .send({ challengeVerified: true });
-
-    // User1 likes user2's submission
+    // User1 likes user2's submission immediately (no approval needed)
     const res = await request(API_URL)
       .post(`/api/submissions/${submissionId2}/likes`)
       .send({ walletAddress: testData1.walletAddress });
@@ -172,7 +166,7 @@ describe('Likes API Integration', () => {
     });
   });
 
-  it('should allow user with approved submission to create multiple likes', async () => {
+  it('should allow user to create multiple likes immediately after submission', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
     const testData3 = createSubmissionTestData();
@@ -188,13 +182,7 @@ describe('Likes API Integration', () => {
     const submissionId3 = await createTestSubmission(chainId, testData3.walletAddress);
     createdSubmissionIds.push(submissionId1, submissionId2, submissionId3);
 
-    // Admin approves user1's submission
-    await request(API_URL)
-      .patch(`/api/submissions/${submissionId1}`)
-      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
-      .send({ challengeVerified: true });
-
-    // User1 likes both user2's and user3's submissions
+    // User1 likes both user2's and user3's submissions immediately
     const res1 = await request(API_URL)
       .post(`/api/submissions/${submissionId2}/likes`)
       .send({ walletAddress: testData1.walletAddress });
@@ -218,13 +206,7 @@ describe('Likes API Integration', () => {
     const submissionId2 = await createTestSubmission(chainId, testData2.walletAddress);
     createdSubmissionIds.push(submissionId1, submissionId2);
 
-    // Admin approves user1's submission
-    await request(API_URL)
-      .patch(`/api/submissions/${submissionId1}`)
-      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
-      .send({ challengeVerified: true });
-
-    // Create a like
+    // Create a like immediately
     const createRes = await request(API_URL)
       .post(`/api/submissions/${submissionId2}/likes`)
       .send({ walletAddress: testData1.walletAddress });
@@ -390,7 +372,7 @@ describe('Likes API Integration', () => {
     expect(duplicateRes.body.error.message).toContain('already liked');
   });
 
-  it('should reject like from user without approved submission', async () => {
+  it('should allow like from user with unapproved submission', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
     createdUserAddresses.push(testData1.walletAddress, testData2.walletAddress);
@@ -400,18 +382,16 @@ describe('Likes API Integration', () => {
     const submissionId2 = await createTestSubmission(chainId, testData2.walletAddress);
     createdSubmissionIds.push(submissionId1, submissionId2);
 
-    // Do NOT approve user1's submission
-
-    // Try to create like without approval
+    // User1 can like even without approval
     const res = await request(API_URL)
       .post(`/api/submissions/${submissionId2}/likes`)
       .send({ walletAddress: testData1.walletAddress });
 
-    expect(res.status).toBe(403);
-    expect(res.body.error.message).toContain('approved submission');
+    expect(res.status).toBe(201);
+    expect(res.body.walletAddress).toBe(testData1.walletAddress);
   });
 
-  it('should reject like from user with rejected submission', async () => {
+  it('should allow like from user with rejected submission', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
     createdUserAddresses.push(testData1.walletAddress, testData2.walletAddress);
@@ -427,13 +407,13 @@ describe('Likes API Integration', () => {
       .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
       .send({ challengeVerified: false, failureReason: 'Does not meet criteria' });
 
-    // Try to create like with rejected submission
+    // User1 can still like even with rejected submission
     const res = await request(API_URL)
       .post(`/api/submissions/${submissionId2}/likes`)
       .send({ walletAddress: testData1.walletAddress });
 
-    expect(res.status).toBe(403);
-    expect(res.body.error.message).toContain('approved submission');
+    expect(res.status).toBe(201);
+    expect(res.body.walletAddress).toBe(testData1.walletAddress);
   });
 
   it('should reject like from non-existent user', async () => {
@@ -452,6 +432,27 @@ describe('Likes API Integration', () => {
 
     expect(res.status).toBe(404);
     expect(res.body.error.message).toContain('User not found');
+  });
+
+  it('should reject like from user without any submissions', async () => {
+    const testData1 = createSubmissionTestData();
+    const testData2 = createSubmissionTestData();
+    createdUserAddresses.push(testData1.walletAddress, testData2.walletAddress);
+
+    // Create submission from user1
+    const submissionId = await createTestSubmission(chainId, testData1.walletAddress);
+    createdSubmissionIds.push(submissionId);
+
+    // Create user2 WITHOUT creating a submission
+    await request(API_URL).post('/api/users').send({ walletAddress: testData2.walletAddress });
+
+    // Try to like with user2 who has no submissions
+    const res = await request(API_URL)
+      .post(`/api/submissions/${submissionId}/likes`)
+      .send({ walletAddress: testData2.walletAddress });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toContain('upload at least one image');
   });
 
   it('should reject like for non-existent submission', async () => {
@@ -518,18 +519,7 @@ describe('Likes API Integration', () => {
     const submissionId3 = await createTestSubmission(chainId, testData3.walletAddress);
     createdSubmissionIds.push(submissionId1, submissionId2, submissionId3);
 
-    // Admin approves user2 and user3 submissions (so they can like)
-    await request(API_URL)
-      .patch(`/api/submissions/${submissionId2}`)
-      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
-      .send({ challengeVerified: true });
-
-    await request(API_URL)
-      .patch(`/api/submissions/${submissionId3}`)
-      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
-      .send({ challengeVerified: true });
-
-    // Create multiple likes on user1's submission
+    // Create multiple likes on user1's submission immediately
     await request(API_URL)
       .post(`/api/submissions/${submissionId1}/likes`)
       .send({ walletAddress: testData2.walletAddress });
@@ -595,13 +585,7 @@ describe('Likes API Integration', () => {
     const submissionId3 = await createTestSubmission(chainId, testData2.walletAddress);
     createdSubmissionIds.push(submissionId1, submissionId2, submissionId3);
 
-    // Admin approves user2's submission (so they can like)
-    await request(API_URL)
-      .patch(`/api/submissions/${submissionId3}`)
-      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
-      .send({ challengeVerified: true });
-
-    // testData2 user likes both of user1's submissions
+    // testData2 user likes both of user1's submissions immediately
     await request(API_URL)
       .post(`/api/submissions/${submissionId1}/likes`)
       .send({ walletAddress: testData2.walletAddress });
@@ -688,18 +672,7 @@ describe('Likes API Integration', () => {
     const submissionId3 = await createTestSubmission(chainId, testData3.walletAddress);
     createdSubmissionIds.push(submissionId1, submissionId2, submissionId3);
 
-    // Admin approves user2 and user3 submissions (so they can like)
-    await request(API_URL)
-      .patch(`/api/submissions/${submissionId2}`)
-      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
-      .send({ challengeVerified: true });
-
-    await request(API_URL)
-      .patch(`/api/submissions/${submissionId3}`)
-      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
-      .send({ challengeVerified: true });
-
-    // User 2 likes submission 1
+    // User 2 likes submission 1 immediately
     await request(API_URL)
       .post(`/api/submissions/${submissionId1}/likes`)
       .send({ walletAddress: testData2.walletAddress });
@@ -728,7 +701,7 @@ describe('Likes API Integration', () => {
     expect(likes2.body[0].walletAddress).toBe(testData3.walletAddress);
   });
 
-  it('should allow user to like their own submission if approved', async () => {
+  it('should allow user to like their own submission immediately', async () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
 
@@ -736,13 +709,7 @@ describe('Likes API Integration', () => {
     const submissionId = await createTestSubmission(chainId, testData.walletAddress);
     createdSubmissionIds.push(submissionId);
 
-    // Admin approves the submission
-    await request(API_URL)
-      .patch(`/api/submissions/${submissionId}`)
-      .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
-      .send({ challengeVerified: true });
-
-    // User likes their own submission
+    // User likes their own submission immediately (no approval needed)
     const res = await request(API_URL)
       .post(`/api/submissions/${submissionId}/likes`)
       .send({ walletAddress: testData.walletAddress });

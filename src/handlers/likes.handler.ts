@@ -36,18 +36,6 @@ export class LikesHandler {
     };
   }
 
-  /**
-   * Check if user has at least one admin-approved submission
-   */
-  private async canUserLike(walletAddress: string): Promise<boolean> {
-    const submissions = await this.submissionsRepo.findAll({
-      walletAddress,
-    });
-
-    // User must have at least one submission where challengeVerified is true
-    return submissions.some((s) => s.challenge_verified === true);
-  }
-
   async createLike(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { submissionId } = req.params;
@@ -77,11 +65,14 @@ export class LikesHandler {
         throw Errors.notFound('User not found');
       }
 
-      // Check if user has approved submission
-      const canLike = await this.canUserLike(walletAddress);
-      if (!canLike) {
+      // Check if user has at least one submission (any status)
+      const userSubmissions = await this.submissionsRepo.findAll({
+        walletAddress,
+      });
+
+      if (userSubmissions.length === 0) {
         throw Errors.forbidden(
-          'You must have an admin-approved submission before you can like other submissions',
+          'You must upload at least one image before you can like submissions',
           'walletAddress'
         );
       }
