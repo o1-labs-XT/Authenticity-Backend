@@ -4,7 +4,7 @@ import {
   TransactionInfo,
 } from '../db/repositories/submissions.repository.js';
 import { BlockchainMonitoringJobData } from '../services/queue/jobQueue.service.js';
-import { ArchiveNodeService } from '../services/blockchain/archiveNode.service.js';
+import { ArchiveNodeService, ActionResult } from '../services/blockchain/archiveNode.service.js';
 import { MinaNodeService } from '../services/blockchain/minaNode.service.js';
 import { BlockchainMonitoringService } from '../services/blockchain/monitoring.service.js';
 import { logger, withContext } from '../utils/logger.js';
@@ -16,8 +16,7 @@ export class BlockchainMonitorWorker {
     private repository: SubmissionsRepository,
     private archiveNodeService: ArchiveNodeService,
     private minaNodeService: MinaNodeService,
-    private monitoringService: BlockchainMonitoringService,
-    private zkappAddress: string
+    private monitoringService: BlockchainMonitoringService
   ) {}
 
   async start(): Promise<void> {
@@ -73,29 +72,49 @@ export class BlockchainMonitorWorker {
             'Loaded transactions from database'
           );
 
-          // Step 3: Query archive node for actions
-          const archiveTracker = new PerformanceTracker('job.archiveQuery');
-          const actionsResponse = await this.archiveNodeService.fetchActionsWithBlockInfo(
-            this.zkappAddress,
-            fromHeight,
-            toHeight,
-            false // Don't log the request
+          // Step 3: Get unique zkApp addresses from transactions
+          const zkappAddresses = new Set<string>();
+          for (const tx of dbTransactions) {
+            zkappAddresses.add(tx.zkappAddress);
+          }
+
+          logger.debug(
+            { zkappAddressCount: zkappAddresses.size },
+            'Found unique zkApp addresses to monitor'
           );
+
+          // Step 4: Query archive node for each zkApp address
+          const archiveTracker = new PerformanceTracker('job.archiveQuery');
+          const allActions: ActionResult[] = [];
+
+          for (const zkappAddress of zkappAddresses) {
+            const actionsForAddress = await this.archiveNodeService.fetchActionsWithBlockInfo(
+              zkappAddress,
+              fromHeight,
+              toHeight,
+              false // Don't log the request
+            );
+            allActions.push(...actionsForAddress);
+          }
+
           const archiveQueryDuration = archiveTracker.end('success');
 
           logger.debug(
-            { actionsCount: actionsResponse.length },
-            'Retrieved actions from archive node'
+            {
+              actionsCount: allActions.length,
+              zkappAddressCount: zkappAddresses.size,
+            },
+            'Retrieved actions from archive node for all contracts'
           );
 
-          // Step 4: Aggregate transaction status
+          // Step 5: Aggregate transaction status across all contracts
           const report = this.monitoringService.aggregateTransactionStatus(
             submittedTxs,
-            actionsResponse,
+            allActions,
             currentHeight
           );
 
-          // Step 5: Log the results
+          // Step 6: Log the results
           const totalDuration = totalTracker.end('success');
           this.monitoringService.logTransactionStatus(
             report,
