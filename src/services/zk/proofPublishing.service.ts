@@ -26,7 +26,14 @@ export class ProofPublishingService {
   }
 
   private setupNetwork(network: string): void {
-    const Network = Mina.Network(config.minaNodeEndpoint);
+    // if the configured network is mainnet, set the networkId to mainnet
+    const Network =
+      config.minaNetwork === 'mainnet'
+        ? Mina.Network({
+            networkId: 'mainnet', // Required for mainnet signatures to be valid
+            mina: config.minaNodeEndpoint,
+          })
+        : Mina.Network(config.minaNodeEndpoint); // default value is 'devnet', which is correct (touchgrass calls it 'testnet', so it's simpler to not specify it here)
     Mina.setActiveInstance(Network);
     logger.info(
       {
