@@ -413,7 +413,7 @@ describe('Submissions API Integration', () => {
     expect(res2.body.error.message).toContain('already submitted');
   });
 
-  it('should reject different image submission for same user and challenge', async () => {
+  it('should allow multiple submissions from same user to same challenge', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
     createdUserAddresses.push(testData1.walletAddress);
@@ -436,7 +436,7 @@ describe('Submissions API Integration', () => {
     const signature2 = Ecdsa.signHash(verificationInputs2.expectedHash, signerKey.toBigInt());
     const signatureData2 = signature2.toBigInt();
 
-    // Second submission with different image but same user (should return 409)
+    // Second submission with different image but same user (should succeed now)
     const res2 = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
@@ -445,8 +445,19 @@ describe('Submissions API Integration', () => {
       .field('signatureS', signatureData2.s.toString(16).padStart(64, '0'))
       .attach('image', testData2.imagePath);
 
-    expect(res2.status).toBe(409);
-    expect(res2.body.error.message).toContain('already submitted');
+    expect(res2.status).toBe(201);
+    expect(res2.body.walletAddress).toBe(testData1.walletAddress);
+    expect(res2.body.chainId).toBe(chainId);
+    createdSubmissionIds.push(res2.body.id);
+
+    // Verify both submissions exist for this user
+    const getRes = await request(API_URL).get(
+      `/api/submissions?walletAddress=${testData1.walletAddress}&challengeId=${challengeId}`
+    );
+
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.length).toBe(2);
+    expect(getRes.body.every((s: any) => s.walletAddress === testData1.walletAddress)).toBe(true);
   });
 
   it('should increment chain position and update chain length for sequential submissions', async () => {

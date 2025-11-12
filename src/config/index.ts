@@ -54,6 +54,9 @@ export interface Config {
   workerRetryLimit: number;
   workerTempDir: string;
   workerMaxJobsBeforeRestart: number;
+
+  // Transaction Configuration
+  minaTransactionFee: number;
 }
 
 /**
@@ -132,6 +135,7 @@ function parseConfig(): Config {
     workerRetryLimit: parseInt(process.env.WORKER_RETRY_LIMIT || '3', 10),
     workerTempDir: process.env.WORKER_TEMP_DIR || '/tmp',
     workerMaxJobsBeforeRestart: parseInt(process.env.WORKER_MAX_JOBS_BEFORE_RESTART || '10', 10),
+    minaTransactionFee: parseFloat(process.env.MINA_TRANSACTION_FEE || '0.01'),
   };
 
   // Throw if any errors
