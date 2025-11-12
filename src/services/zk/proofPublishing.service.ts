@@ -109,13 +109,16 @@ export class ProofPublishingService {
 
     try {
       // Create transaction to verify and store the proof on-chain
-      const txn = await Mina.transaction({ sender: feePayer.toPublicKey(), fee: 1e9 }, async () => {
-        // Fund the new token account
-        AccountUpdate.fundNewAccount(feePayer.toPublicKey());
+      const txn = await Mina.transaction(
+        { sender: feePayer.toPublicKey(), fee: config.minaTransactionFee * 1e9 },
+        async () => {
+          // Fund the new token account
+          AccountUpdate.fundNewAccount(feePayer.toPublicKey());
 
-        // Call verifyAndStore on the zkApp
-        await zkApp.verifyAndStore(tokenOwner, UInt8.from(0), proof);
-      });
+          // Call verifyAndStore on the zkApp
+          await zkApp.verifyAndStore(tokenOwner, UInt8.from(0), proof);
+        }
+      );
 
       logger.debug('Proving transaction...');
       const proveTracker = new PerformanceTracker('publish.prove');

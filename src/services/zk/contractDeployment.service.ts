@@ -57,7 +57,7 @@ export class ContractDeploymentService {
 
       logger.info('Creating deployment transaction');
       const deployTxn = await Mina.transaction(
-        { sender: feePayerPublicKey, fee: 0.1e9 },
+        { sender: feePayerPublicKey, fee: config.minaTransactionFee * 1e9 },
         async () => {
           AccountUpdate.fundNewAccount(feePayerPublicKey);
           await zkApp.deploy();
