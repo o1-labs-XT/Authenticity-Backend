@@ -688,7 +688,7 @@ describe('Submissions API Integration', () => {
     expect(createRes.status).toBe(201);
     createdSubmissionIds.push(createRes.body.id);
 
-    // Query for submissions with 'processing' status (auto-approved)
+    // Query for submissions with 'processing' status
     const getRes = await request(API_URL).get('/api/submissions?status=processing');
 
     expect(getRes.status).toBe(200);
@@ -800,7 +800,7 @@ describe('Submissions API Integration', () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
 
-    // Create submission (auto-approved)
+    // Create submission
     const createRes = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
@@ -862,11 +862,11 @@ describe('Submissions API Integration', () => {
   });
 
   // Skipped because submissions are auto-approved, so admin review workflow no longer applies
-  it.skip('should reject admin review attempt when submission is auto-approved', async () => {
+  it.skip('should use default failure reason when rejecting without explicit reason', async () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
 
-    // Create submission (auto-approved)
+    // Create submission
     const createRes = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
@@ -880,7 +880,7 @@ describe('Submissions API Integration', () => {
     const submissionId = createRes.body.id;
     createdSubmissionIds.push(submissionId);
 
-    // Try to reject without explicit failure reason (should fail since already processing)
+    // Reject without explicit failure reason
     const rejectRes = await request(API_URL)
       .patch(`/api/submissions/${submissionId}`)
       .auth(ADMIN_USERNAME, ADMIN_PASSWORD)
@@ -892,11 +892,11 @@ describe('Submissions API Integration', () => {
   });
 
   // Skipped because submissions are auto-approved, so admin review workflow no longer applies
-  it.skip('should require challengeVerified field for updates but reject auto-approved submissions', async () => {
+  it.skip('should require challengeVerified field for updates', async () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
 
-    // Create submission (auto-approved)
+    // Create submission
     const createRes = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
@@ -925,7 +925,7 @@ describe('Submissions API Integration', () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
 
-    // Create submission (auto-approved)
+    // Create submission
     const createRes = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
@@ -939,7 +939,7 @@ describe('Submissions API Integration', () => {
     const submissionId = createRes.body.id;
     createdSubmissionIds.push(submissionId);
 
-    // Try to update without auth (should fail due to auth, not status)
+    // Try to update without auth
     const updateRes = await request(API_URL)
       .patch(`/api/submissions/${submissionId}`)
       .send({ challengeVerified: true });
@@ -998,7 +998,7 @@ describe('Submissions API Integration', () => {
     const testData = createSubmissionTestData();
     createdUserAddresses.push(testData.walletAddress);
 
-    // Create submission (auto-approved)
+    // Create submission
     const createRes = await request(API_URL)
       .post('/api/submissions')
       .field('chainId', chainId)
