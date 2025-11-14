@@ -1,4 +1,4 @@
-import { Mina, PrivateKey, AccountUpdate } from 'o1js';
+import { Mina, PrivateKey, AccountUpdate, Cache } from 'o1js';
 import { AuthenticityZkApp, AuthenticityProgram, BatchReducerUtils } from 'authenticity-zkapp';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config/index.js';
@@ -47,7 +47,8 @@ export class ContractDeploymentService {
       // 1. AuthenticityProgram
       logger.info('Compiling AuthenticityProgram...');
       const programStartTime = Date.now();
-      await AuthenticityProgram.compile();
+      const cache = Cache.FileSystem(config.circuitCachePath);
+      await AuthenticityProgram.compile({ cache });
       logger.info({ durationMs: Date.now() - programStartTime }, 'AuthenticityProgram compiled');
 
       // 2. BatchReducerUtils
@@ -59,7 +60,7 @@ export class ContractDeploymentService {
       // 3. AuthenticityZkApp
       logger.info('Compiling AuthenticityZkApp...');
       const contractStartTime = Date.now();
-      await AuthenticityZkApp.compile();
+      await AuthenticityZkApp.compile({ cache });
       logger.info({ durationMs: Date.now() - contractStartTime }, 'AuthenticityZkApp compiled');
 
       logger.info('Creating deployment transaction');
