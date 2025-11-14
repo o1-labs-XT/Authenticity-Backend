@@ -1,5 +1,5 @@
 import { Mina, PrivateKey, AccountUpdate, Cache } from 'o1js';
-import { AuthenticityZkApp, AuthenticityProgram, BatchReducerUtils } from 'authenticity-zkapp';
+import { AuthenticityZkApp, AuthenticityProgram } from 'authenticity-zkapp';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config/index.js';
 
@@ -40,9 +40,8 @@ export class ContractDeploymentService {
       const zkAppAddress = zkAppKey.toPublicKey();
       logger.info({ zkAppAddress: zkAppAddress.toBase58() }, 'Generated zkApp address');
 
-      // Create zkApp instance and bind BatchReducer
+      // Create zkApp instance
       const zkApp = new AuthenticityZkApp(zkAppAddress);
-      BatchReducerUtils.setContractInstance(zkApp);
 
       // 1. AuthenticityProgram
       logger.info('Compiling AuthenticityProgram...');
@@ -51,11 +50,7 @@ export class ContractDeploymentService {
       await AuthenticityProgram.compile({ cache });
       logger.info({ durationMs: Date.now() - programStartTime }, 'AuthenticityProgram compiled');
 
-      // 2. BatchReducerUtils
-      logger.info('Compiling BatchReducerUtils...');
-      const batchStartTime = Date.now();
-      await BatchReducerUtils.compile();
-      logger.info({ durationMs: Date.now() - batchStartTime }, 'BatchReducerUtils compiled');
+      // 2. BatchReducerUtils (removed)
 
       // 3. AuthenticityZkApp
       logger.info('Compiling AuthenticityZkApp...');

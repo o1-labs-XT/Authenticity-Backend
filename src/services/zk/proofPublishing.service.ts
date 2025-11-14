@@ -1,9 +1,4 @@
-import {
-  AuthenticityZkApp,
-  AuthenticityProof,
-  AuthenticityInputs,
-  BatchReducerUtils,
-} from 'authenticity-zkapp';
+import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8, Cache } from 'o1js';
 import { SubmissionsRepository } from '../../db/repositories/submissions.repository.js';
 import { MinaNodeService } from '../blockchain/minaNode.service.js';
@@ -74,9 +69,6 @@ export class ProofPublishingService {
     const cache = Cache.FileSystem(config.circuitCachePath);
     const compileTracker = new PerformanceTracker('publish.compile');
 
-    // Set contract instance and compile BatchReducerUtils
-    BatchReducerUtils.setContractInstance(zkApp);
-    await BatchReducerUtils.compile();
     await AuthenticityZkApp.compile({ cache });
 
     compileTracker.end('success');
