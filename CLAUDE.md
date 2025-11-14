@@ -20,6 +20,7 @@ docker-compose up -d  # Starts PostgreSQL, pgweb, MinIO, Grafana, Loki, Promtail
 npm run dev:api         # Start API server with hot reload (port 3000)
 npm run dev:worker      # Start proof generation worker with hot reload  
 npm run dev:monitoring  # Start blockchain monitoring worker with hot reload
+npm run dev:deployment  # Start contract deployment worker with hot reload
 
 # Production commands:
 npm run build           # Build TypeScript to dist/
@@ -27,6 +28,7 @@ npm run start           # Run migrations, compile zkApp, start API
 npm run start:api       # Run migrations and start API server
 npm run start:worker    # Compile zkApp and start proof generation worker
 npm run start:monitoring # Start blockchain monitoring worker
+npm run start:deployment # Compile zkApp and start contract deployment worker
 
 # MinIO bucket setup (first time only):
 docker-compose exec minio mc alias set local http://minio:9000 minioadmin minioadmin
@@ -76,11 +78,21 @@ npm run test:integration:local   # Run integration tests directly with vitest (l
 npm run lint                     # Run ESLint
 npm run format                   # Format code with Prettier
 
+# Run specific tests:
+npx vitest run test/handlers/submissions.handler.test.ts  # Single test file
+npx vitest run --reporter=verbose test/integration/       # Integration tests with verbose output
+
 # Integration test setup (first time):
 # 1. Ensure .env.test exists with test credentials and SIGNER keys
 # 2. scripts/test-integration.sh sources .env.test automatically
 # 3. Tests use SIGNER_PRIVATE_KEY from .env.test to create valid signatures
 # 4. Test environment uses its own keypair (separate from production)
+
+# IMPORTANT: Integration test environment notes:
+# - test:integration:local does NOT automatically load .env.test
+# - If using test:integration:local, run: source .env.test && npm run test:integration:local
+# - Or use npm run test:integration (recommended, includes full environment setup)
+# - API server and tests MUST use matching SIGNER keypairs or signature verification fails
 
 # Pre-commit hooks (Husky + lint-staged):
 # - Automatically runs ESLint with auto-fix
@@ -127,12 +139,13 @@ The system includes both a backend API and an admin dashboard (Next.js app) for 
 
 ### Core Flow
 1. **Upload**: Client uploads image with cryptographic signature (signed with SIGNER_PUBLIC_KEY)
-2. **Review**: Admin reviews and approves/rejects submission via dashboard
-3. **Queue**: Admin approval enqueues proof generation job in pg-boss
-4. **Process**: Worker service processes jobs asynchronously
-5. **Prove**: Worker generates zero-knowledge proofs using o1js
-6. **Publish**: Worker publishes proofs to Mina blockchain
-7. **Verify**: Anyone can verify authenticity via token owner address
+2. **Auto-Approve**: Submissions are automatically approved and proof generation is enqueued immediately
+3. **Process**: Worker service processes proof generation jobs asynchronously
+4. **Prove**: Worker generates zero-knowledge proofs using o1js
+5. **Publish**: Worker publishes proofs to Mina blockchain
+6. **Verify**: Anyone can verify authenticity via token owner address
+
+**Note**: Admin review workflow has been replaced with auto-approval for MVP. Admin dashboard still provides management capabilities for challenges, users, and monitoring.
 
 ### Service Architecture
 
@@ -196,10 +209,12 @@ src/
 │   └── performance.ts   # Performance tracking utilities
 ├── workers/
 │   ├── proofGenerationWorker.ts    # Proof generation job processor
-│   └── blockchainMonitorWorker.ts  # Blockchain monitoring job processor
+│   ├── blockchainMonitorWorker.ts  # Blockchain monitoring job processor
+│   └── contractDeploymentWorker.ts # Contract deployment job processor
 ├── index.ts                # API server entry point with dependency wiring
 ├── startProofWorker.ts     # Proof generation worker service entry point
-└── startMonitoringWorker.ts # Blockchain monitoring worker service entry point
+├── startMonitoringWorker.ts # Blockchain monitoring worker service entry point
+└── startContractDeploymentWorker.ts # Contract deployment worker service entry point
 
 admin-dashboard/         # Next.js admin interface
 ├── app/                # App router pages (jobs, challenges, users, chains)
@@ -217,7 +232,7 @@ test/                    # Unit tests with Vitest
 ## Key Components
 
 ### Handlers
-- **SubmissionsHandler**: Validates uploads, creates records, handles admin review (enqueues jobs on approval), comprehensive error recovery
+- **SubmissionsHandler**: Validates uploads, creates records, auto-approves submissions (enqueues jobs immediately), comprehensive error recovery
 - **StatusHandler**: Returns proof generation/publishing status (legacy)
 - **TokenOwnerHandler**: Returns token owner for verified images (legacy)
 - **AdminHandler**: Job queue management (stats, failures, retries) (legacy)
@@ -252,6 +267,9 @@ test/                    # Unit tests with Vitest
   - Queries Mina archive node every 5 minutes to track transaction status
   - Logs transaction categorization (pending/included/final/abandoned)
   - Independent deployment with minimal resource requirements
+- **ContractDeploymentWorker**: Handles zkApp contract deployment for new challenges
+  - Compiles and deploys zkApp contracts when challenges are created
+  - Updates challenge deployment status (pending_deployment → deploying → active/failed)
 
 ## API Endpoints
 
@@ -259,8 +277,8 @@ test/                    # Unit tests with Vitest
 - `POST /api/submissions` - Submit image for challenge
   - Multipart form: `image` file, `chainId`, `walletAddress`, `signatureR`, `signatureS`, optional `tagline`
   - Signature must be signed with SIGNER_PUBLIC_KEY (from env)
-  - Returns: Submission object with `status: 'awaiting_review'`
-  - Proof generation enqueued after admin approval
+  - Returns: Submission object with `status: 'processing'` (auto-approved)
+  - Proof generation enqueued immediately upon upload
 
 - `GET /api/submissions/:id` - Get submission by ID
   - Returns: Submission object with status and metadata
@@ -289,10 +307,6 @@ test/                    # Unit tests with Vitest
 - `GET /api-docs` - Swagger API documentation
 
 ### Admin Endpoints (require authentication)
-- `PATCH /api/submissions/:id` - Review submission (approve/reject)
-  - Body: `{ challengeVerified: boolean, failureReason?: string }`
-  - Enqueues proof generation on approval
-
 - `DELETE /api/submissions/:id` - Delete submission
 
 - `GET /api/admin/jobs/stats` - Queue statistics (legacy)
@@ -344,7 +358,7 @@ WORKER_TEMP_DIR=/tmp        # Temporary directory for downloaded images during p
 ## Implementation Details
 
 ### Job Queue (pg-boss)
-- Queue names: `proof-generation`, `blockchain-monitoring`
+- Queue names: `proof-generation`, `blockchain-monitoring`, `contract-deployment`
 - Singleton key prevents duplicate jobs for same hash
 - Retry policy: 3 attempts with exponential backoff
 - Job retention: 24 hours for auditing
@@ -466,6 +480,7 @@ services:
    - Terminal 1: `npm run dev:api`
    - Terminal 2: `npm run dev:worker`
    - Terminal 3: `npm run dev:monitoring` (optional, for blockchain monitoring)
+   - Terminal 4: `npm run dev:deployment` (optional, for contract deployment)
 6. **Access tools**:
    - API: http://localhost:3000
    - Swagger API docs: http://localhost:3000/api-docs

@@ -226,7 +226,33 @@ export class SubmissionsHandler {
 
       logger.info({ submissionId: submission.id, sha256Hash }, 'Submission created');
 
-      res.status(201).json(this.toResponse(submission, 0));
+      // Auto-approve submission and enqueue proof generation job
+      const jobId = await this.jobQueue.enqueueProofGeneration({
+        sha256Hash,
+        signature: JSON.stringify({
+          r: signatureData.signatureR,
+          s: signatureData.signatureS,
+        }),
+        storageKey,
+        tokenOwnerAddress: walletAddress,
+        tokenOwnerPrivateKey: PrivateKey.random().toBase58(),
+        zkAppAddress: challenge.zkapp_address,
+        uploadedAt: new Date(submission.created_at),
+        correlationId: (req as Request & { correlationId: string }).correlationId,
+      });
+
+      // Update submission status to processing and mark as verified
+      let updatedSubmission = await this.submissionsRepo.update(submission.id, {
+        challenge_verified: true,
+        status: 'processing',
+      });
+
+      logger.info(
+        { jobId, submissionId: updatedSubmission!.id },
+        'Proof generation job auto-enqueued'
+      );
+
+      res.status(201).json(this.toResponse(updatedSubmission!, 0));
     } catch (error) {
       logger.error({ err: error }, 'Submission handler error');
 
