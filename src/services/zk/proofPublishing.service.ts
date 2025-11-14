@@ -156,11 +156,11 @@ export class ProofPublishingService {
       }
 
       // Wait for confirmation (optional - could be async)
-      if (pendingTxn.wait) {
-        logger.debug('Waiting for transaction confirmation...');
-        await pendingTxn.wait();
-        logger.info('Transaction confirmed on blockchain');
-      }
+      // if (pendingTxn.wait) {
+      //   logger.debug('Waiting for transaction confirmation...');
+      //   await pendingTxn.wait();
+      //   logger.info('Transaction confirmed on blockchain');
+      // }
 
       return pendingTxn.hash;
     } catch (error) {
