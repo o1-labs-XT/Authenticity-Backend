@@ -1,4 +1,4 @@
-import { AuthenticityZkApp, AuthenticityProof, AuthenticityInputs } from 'authenticity-zkapp';
+import { AuthenticityZkApp, AuthenticityProof } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8, Cache } from 'o1js';
 import { SubmissionsRepository } from '../../db/repositories/submissions.repository.js';
 import { MinaNodeService } from '../blockchain/minaNode.service.js';
@@ -45,8 +45,6 @@ export class ProofPublishingService {
   async publishProof(
     sha256Hash: string,
     proof: AuthenticityProof,
-    publicInputs: AuthenticityInputs,
-    tokenOwnerPrivateKey: string,
     zkAppAddress: string
   ): Promise<string> {
     // Check if zkApp is deployed
@@ -74,7 +72,7 @@ export class ProofPublishingService {
     compileTracker.end('success');
 
     // Parse addresses and keys
-    const tokenOwnerPrivate = PrivateKey.fromBase58(tokenOwnerPrivateKey);
+    const tokenOwnerPrivate = PrivateKey.random();
     const tokenOwner = tokenOwnerPrivate.toPublicKey();
     const feePayer = PrivateKey.fromBase58(this.feePayerKey);
 
