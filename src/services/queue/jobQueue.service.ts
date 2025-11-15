@@ -23,6 +23,11 @@ export interface ContractDeploymentJobData {
   correlationId?: string;
 }
 
+export interface TelegramNotificationJobData {
+  submissionId: string;
+  correlationId?: string;
+}
+
 export class JobQueueService {
   private boss: PgBoss;
 
@@ -37,6 +42,7 @@ export class JobQueueService {
     await this.boss.createQueue('proof-generation');
     await this.boss.createQueue('blockchain-monitoring');
     await this.boss.createQueue('contract-deployment');
+    await this.boss.createQueue('telegram-notification');
     logger.info('Job queue started');
   }
 
@@ -101,6 +107,31 @@ export class JobQueueService {
         'Failed to enqueue deployment job'
       );
       throw error;
+    }
+  }
+
+  async enqueueTelegramNotification(data: TelegramNotificationJobData): Promise<string | null> {
+    try {
+      const jobId = await this.boss.send('telegram-notification', data, {
+        retryLimit: 3,
+        retryDelay: 30,
+        retryBackoff: true,
+        singletonKey: `telegram-notification-${data.submissionId}`,
+        expireInHours: 1,
+      });
+
+      logger.debug(
+        { jobId, submissionId: data.submissionId, correlationId: data.correlationId },
+        'Telegram notification job enqueued'
+      );
+      return jobId || null;
+    } catch (error) {
+      logger.error(
+        { err: error, submissionId: data.submissionId },
+        'Failed to enqueue Telegram notification job'
+      );
+      // Telegram notifications are optional, shouldn't block submission
+      return null;
     }
   }
 }
