@@ -123,6 +123,8 @@ export class ProofPublishingService {
       proveTracker.end('success');
 
       logger.debug('Signing and sending transaction...');
+      // Get the latest account state for fee payer
+      fetchAccount({ publicKey: feePayer.toPublicKey() });
       // Sign with all required parties:
       // 1. Fee payer (for paying fees)
       // 2. Token owner (for the new token account)
