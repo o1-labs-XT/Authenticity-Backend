@@ -16,7 +16,6 @@ export interface Config {
 
   // Mina Network
   minaNetwork: 'testnet' | 'mainnet';
-  zkappAddress: string;
   feePayerPrivateKey: string;
 
   // API Configuration
@@ -114,7 +113,6 @@ function parseConfig(): Config {
     nodeEnv: nodeEnv as 'development' | 'production' | 'test',
     databaseUrl: databaseUrl || '',
     minaNetwork: minaNetwork as 'testnet' | 'mainnet',
-    zkappAddress: getRequired('ZKAPP_ADDRESS'),
     feePayerPrivateKey: getRequired('FEE_PAYER_PRIVATE_KEY'),
     corsOrigin: getRequired('CORS_ORIGIN'),
     uploadMaxSize: getRequiredNumber('UPLOAD_MAX_SIZE'),
