@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { AuthenticityProgram, AuthenticityZkApp, BatchReducerUtils } from 'authenticity-zkapp';
-import { Cache, PublicKey } from 'o1js';
+import { AuthenticityProgram, AuthenticityZkApp } from 'authenticity-zkapp';
+import { Cache } from 'o1js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -39,12 +39,6 @@ async function compileZkApp(): Promise<void> {
     if (!process.env.ZKAPP_ADDRESS) {
       throw new Error('ZKAPP_ADDRESS environment variable not set');
     }
-    const zkAppAddress = PublicKey.fromBase58(process.env.ZKAPP_ADDRESS);
-    // Note: we set the contract instance here, even though there is more than one contract (each challenge has its own zkApp)
-    // This is ok as long as we never actually call the batch reducer on any of the zkapps
-    // This is just a vestige from when we were going to use the reducer to keep score, and it's safe to ignore.
-    BatchReducerUtils.setContractInstance(new AuthenticityZkApp(zkAppAddress));
-    await BatchReducerUtils.compile();
     console.log('Compiling AuthenticityProgram...');
     await AuthenticityProgram.compile({ cache });
     console.log('Compiling AuthenticityZkApp...');

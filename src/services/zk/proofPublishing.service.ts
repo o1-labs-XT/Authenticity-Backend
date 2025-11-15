@@ -1,9 +1,4 @@
-import {
-  AuthenticityZkApp,
-  AuthenticityProof,
-  AuthenticityInputs,
-  BatchReducerUtils,
-} from 'authenticity-zkapp';
+import { AuthenticityZkApp, AuthenticityProof } from 'authenticity-zkapp';
 import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8, Cache } from 'o1js';
 import { SubmissionsRepository } from '../../db/repositories/submissions.repository.js';
 import { MinaNodeService } from '../blockchain/minaNode.service.js';
@@ -50,8 +45,6 @@ export class ProofPublishingService {
   async publishProof(
     sha256Hash: string,
     proof: AuthenticityProof,
-    publicInputs: AuthenticityInputs,
-    tokenOwnerPrivateKey: string,
     zkAppAddress: string
   ): Promise<string> {
     // Check if zkApp is deployed
@@ -74,15 +67,12 @@ export class ProofPublishingService {
     const cache = Cache.FileSystem(config.circuitCachePath);
     const compileTracker = new PerformanceTracker('publish.compile');
 
-    // Set contract instance and compile BatchReducerUtils
-    BatchReducerUtils.setContractInstance(zkApp);
-    await BatchReducerUtils.compile();
     await AuthenticityZkApp.compile({ cache });
 
     compileTracker.end('success');
 
     // Parse addresses and keys
-    const tokenOwnerPrivate = PrivateKey.fromBase58(tokenOwnerPrivateKey);
+    const tokenOwnerPrivate = PrivateKey.random();
     const tokenOwner = tokenOwnerPrivate.toPublicKey();
     const feePayer = PrivateKey.fromBase58(this.feePayerKey);
 
@@ -164,11 +154,11 @@ export class ProofPublishingService {
       }
 
       // Wait for confirmation (optional - could be async)
-      if (pendingTxn.wait) {
-        logger.debug('Waiting for transaction confirmation...');
-        await pendingTxn.wait();
-        logger.info('Transaction confirmed on blockchain');
-      }
+      // if (pendingTxn.wait) {
+      //   logger.debug('Waiting for transaction confirmation...');
+      //   await pendingTxn.wait();
+      //   logger.info('Transaction confirmed on blockchain');
+      // }
 
       return pendingTxn.hash;
     } catch (error) {
