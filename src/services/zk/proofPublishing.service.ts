@@ -104,7 +104,6 @@ export class ProofPublishingService {
       }
     }
 
-    // Count how many images this token owner has submitted so far
     try {
       // Create transaction to verify and store the proof on-chain
       const txn = await Mina.transaction(
