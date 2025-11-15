@@ -55,14 +55,7 @@ export class ProofGenerationWorker {
               });
               logger.info('Starting proof generation job');
 
-              const {
-                sha256Hash,
-                signature,
-                storageKey,
-                tokenOwnerAddress: _tokenOwnerAddress, // TODO: remove
-                tokenOwnerPrivateKey,
-                zkAppAddress,
-              } = job.data;
+              const { sha256Hash, signature, storageKey, zkAppAddress } = job.data;
 
               // Parse ECDSA signature from JSON and get public key from config
               let signatureData: ECDSASignatureData;
@@ -118,7 +111,7 @@ export class ProofGenerationWorker {
                 // Step 3: Generate proof
                 logger.info('Generating zero-knowledge proof');
                 const proofTracker = new PerformanceTracker('job.generateProof');
-                const { proof, publicInputs } = await this.proofGenerationService.generateProof(
+                const { proof } = await this.proofGenerationService.generateProof(
                   sha256Hash,
                   signatureData,
                   commitment,
@@ -134,8 +127,6 @@ export class ProofGenerationWorker {
                 const transactionId = await this.proofPublishingService.publishProof(
                   sha256Hash,
                   proof,
-                  publicInputs,
-                  tokenOwnerPrivateKey,
                   zkAppAddress
                 );
                 publishTracker.end('success', { transactionId });
