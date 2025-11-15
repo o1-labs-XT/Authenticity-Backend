@@ -18,9 +18,10 @@ docker-compose up -d  # Starts PostgreSQL, pgweb, MinIO, Grafana, Loki, Promtail
 
 # Run services (in separate terminals):
 npm run dev:api         # Start API server with hot reload (port 3000)
-npm run dev:worker      # Start proof generation worker with hot reload  
+npm run dev:worker      # Start proof generation worker with hot reload
 npm run dev:monitoring  # Start blockchain monitoring worker with hot reload
 npm run dev:deployment  # Start contract deployment worker with hot reload
+npm run dev:telegram    # Start Telegram notification worker with hot reload
 
 # Production commands:
 npm run build           # Build TypeScript to dist/
@@ -29,6 +30,7 @@ npm run start:api       # Run migrations and start API server
 npm run start:worker    # Compile zkApp and start proof generation worker
 npm run start:monitoring # Start blockchain monitoring worker
 npm run start:deployment # Compile zkApp and start contract deployment worker
+npm run start:telegram  # Start Telegram notification worker
 
 # MinIO bucket setup (first time only):
 docker-compose exec minio mc alias set local http://minio:9000 minioadmin minioadmin
@@ -201,6 +203,9 @@ src/
 │   │   └── jobQueue.service.ts      # pg-boss wrapper with singleton keys, retry logic
 │   ├── storage/
 │   │   └── storageService.ts        # MinIO S3-compatible storage abstraction
+│   ├── telegram/
+│   │   ├── telegramBot.service.ts   # Telegram Bot API wrapper
+│   │   └── messageFormatter.service.ts  # MarkdownV2 message formatting
 │   └── zk/
 │       ├── proofGeneration.service.ts  # ZK proof generation with o1js circuits
 │       └── proofPublishing.service.ts  # Mina blockchain publishing
@@ -210,10 +215,12 @@ src/
 ├── workers/
 │   ├── proofGenerationWorker.ts    # Proof generation job processor
 │   ├── blockchainMonitorWorker.ts  # Blockchain monitoring job processor
+│   ├── telegramNotificationWorker.ts  # Telegram notification job processor
 │   └── contractDeploymentWorker.ts # Contract deployment job processor
 ├── index.ts                # API server entry point with dependency wiring
 ├── startProofWorker.ts     # Proof generation worker service entry point
 ├── startMonitoringWorker.ts # Blockchain monitoring worker service entry point
+├── startTelegramWorker.ts  # Telegram notification worker service entry point
 └── startContractDeploymentWorker.ts # Contract deployment worker service entry point
 
 admin-dashboard/         # Next.js admin interface
@@ -270,6 +277,12 @@ test/                    # Unit tests with Vitest
 - **ContractDeploymentWorker**: Handles zkApp contract deployment for new challenges
   - Compiles and deploys zkApp contracts when challenges are created
   - Updates challenge deployment status (pending_deployment → deploying → active/failed)
+- **TelegramNotificationWorker**: Sends notifications to Telegram channel for new submissions
+  - Processes telegram-notification jobs from pg-boss queue
+  - Fetches submission, challenge, and chain data
+  - Formats messages with MarkdownV2 (escapes special characters)
+  - Sends to configured Telegram channel
+  - Non-blocking: failures don't affect submission flow
 
 ## API Endpoints
 
@@ -353,18 +366,25 @@ MONITORING_ENABLED=true     # Enable blockchain transaction monitoring (default:
 # Worker Configuration
 WORKER_RETRY_LIMIT=3        # Number of retry attempts for failed proof generation jobs (default: 3)
 WORKER_TEMP_DIR=/tmp        # Temporary directory for downloaded images during processing (default: /tmp)
+
+# Telegram Notifications (Optional)
+TELEGRAM_ENABLED=false      # Enable Telegram notifications for new submissions (default: false)
+TELEGRAM_BOT_TOKEN=         # Bot token from @BotFather (required if TELEGRAM_ENABLED=true)
+TELEGRAM_CHANNEL_ID=        # Numeric channel ID for announcement channel (e.g., -1003388166826)
+FRONTEND_URL=http://localhost:3000  # Frontend URL for submission page links
 ```
 
 ## Implementation Details
 
 ### Job Queue (pg-boss)
-- Queue names: `proof-generation`, `blockchain-monitoring`, `contract-deployment`
+- Queue names: `proof-generation`, `blockchain-monitoring`, `contract-deployment`, `telegram-notification`
 - Singleton key prevents duplicate jobs for same hash
 - Retry policy: 3 attempts with exponential backoff
-- Job retention: 24 hours for auditing
+- Job retention: 1 hour for Telegram jobs, 24 hours for others
 - Jobs carry correlation IDs for distributed tracing
 - Worker concurrency: Configurable via pg-boss
 - Monitoring job: Runs every 5 minutes to check transaction status on-chain
+- Telegram jobs: Non-blocking, failures don't affect submission flow
 
 ### Database Schema
 
@@ -429,6 +449,7 @@ updated_at              -- Last modified
 - **API Service**: Lightweight (512MB RAM), 2 replicas
 - **Worker Service**: Heavy (2GB RAM for proof generation), 2 replicas
 - **Monitoring Service**: Lightweight (512MB RAM), 1 replica for blockchain monitoring
+- **Telegram Worker**: Lightweight (512MB RAM), 1 replica for notification processing
 - **MinIO Service**: S3-compatible storage for image files
 - **Health Checks**: 180s timeout, 3 restart attempts
 - **Auto-migrations**: Run at API startup
