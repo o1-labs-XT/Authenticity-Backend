@@ -241,6 +241,19 @@ export class SubmissionsHandler {
         correlationId: (req as Request & { correlationId: string }).correlationId,
       });
 
+      // Enqueue Telegram notification
+      const telegramJobId = await this.jobQueue.enqueueTelegramNotification({
+        submissionId: submission.id,
+        correlationId: (req as Request & { correlationId: string }).correlationId,
+      });
+
+      if (telegramJobId) {
+        logger.debug(
+          { submissionId: submission.id, telegramJobId },
+          'Telegram notification job enqueued'
+        );
+      }
+
       // Update submission status to processing and mark as verified
       let updatedSubmission = await this.submissionsRepo.update(submission.id, {
         challenge_verified: true,

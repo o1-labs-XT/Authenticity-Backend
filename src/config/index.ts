@@ -57,6 +57,12 @@ export interface Config {
 
   // Transaction Configuration
   minaTransactionFee: number;
+
+  // Telegram Notifications
+  telegramEnabled: boolean;
+  telegramBotToken?: string;
+  telegramChannelId?: string;
+  frontendUrl: string;
 }
 
 /**
@@ -114,8 +120,8 @@ function parseConfig(): Config {
     nodeEnv: nodeEnv as 'development' | 'production' | 'test',
     databaseUrl: databaseUrl || '',
     minaNetwork: minaNetwork as 'testnet' | 'mainnet',
-    zkappAddress: getRequired('ZKAPP_ADDRESS'),
-    feePayerPrivateKey: getRequired('FEE_PAYER_PRIVATE_KEY'),
+    zkappAddress: process.env.ZKAPP_ADDRESS || '',
+    feePayerPrivateKey: process.env.FEE_PAYER_PRIVATE_KEY || '',
     corsOrigin: getRequired('CORS_ORIGIN'),
     uploadMaxSize: getRequiredNumber('UPLOAD_MAX_SIZE'),
     circuitCachePath: process.env.CIRCUIT_CACHE_PATH || './cache',
@@ -136,7 +142,18 @@ function parseConfig(): Config {
     workerTempDir: process.env.WORKER_TEMP_DIR || '/tmp',
     workerMaxJobsBeforeRestart: parseInt(process.env.WORKER_MAX_JOBS_BEFORE_RESTART || '10', 10),
     minaTransactionFee: parseFloat(process.env.MINA_TRANSACTION_FEE || '0.01'),
+
+    // Telegram configuration (optional)
+    telegramEnabled: process.env.TELEGRAM_ENABLED === 'true',
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
+    telegramChannelId: process.env.TELEGRAM_CHANNEL_ID,
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
   };
+
+  // Validate Telegram configuration if enabled
+  if (config.telegramEnabled && !config.telegramBotToken) {
+    errors.push('TELEGRAM_BOT_TOKEN is required when TELEGRAM_ENABLED=true');
+  }
 
   // Throw if any errors
   if (errors.length > 0) {
