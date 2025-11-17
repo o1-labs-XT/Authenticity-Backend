@@ -6,6 +6,7 @@
   "scripts": {
     "dev:api": "tsx src/index.ts",
     "dev:worker": "tsx src/startProofWorker.ts",
+    "dev:proof-publishing": "tsx src/startProofPublishingWorker.ts",
     "dev:monitoring": "tsx src/startMonitoringWorker.ts",
     "dev:deployment": "tsx src/startContractDeploymentWorker.ts",
     "dev:telegram": "tsx src/startTelegramWorker.ts",
@@ -13,6 +14,7 @@
     "start": "npm run db:migrate && node dist/index.js",
     "start:api": "npm run db:migrate && node dist/index.js",
     "start:worker": "tsx scripts/compile-zkapp.ts && node dist/startProofWorker.js",
+    "start:proof-publishing": "tsx scripts/compile-zkapp.ts && node dist/startProofPublishingWorker.js",
     "start:monitoring": "node dist/startMonitoringWorker.js",
     "start:deployment": "tsx scripts/compile-zkapp.ts && node dist/startContractDeploymentWorker.js",
     "start:telegram": "node dist/startTelegramWorker.js",

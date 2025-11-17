@@ -1,22 +1,30 @@
 import { config } from './config/index.js';
 import { DatabaseConnection } from './db/database.js';
 import { SubmissionsRepository } from './db/repositories/submissions.repository.js';
-import { ImageAuthenticityService } from './services/image/verification.service.js';
-import { MinioStorageService } from './services/storage/minio.service.js';
-import { ProofGenerationService } from './services/zk/proofGeneration.service.js';
-import { JobQueueService } from './services/queue/jobQueue.service.js';
-import { ProofGenerationWorker } from './workers/proofGenerationWorker.js';
+import { ProofPublishingService } from './services/zk/proofPublishing.service.js';
+import { MinaNodeService } from './services/blockchain/minaNode.service.js';
+import { ProofPublishingWorker } from './workers/proofPublishingWorker.js';
 import PgBoss from 'pg-boss';
 import { logger } from './utils/logger.js';
+import { AuthenticityProgram } from 'authenticity-zkapp';
+import { Cache } from 'o1js';
+import { PerformanceTracker } from './utils/performance.js';
 
 async function startWorker() {
-  logger.info('Starting Authenticity Worker...');
+  logger.info('Starting Proof Publishing Worker...');
 
   let boss: PgBoss | null = null;
   let dbConnection: DatabaseConnection | null = null;
-  let jobQueueService: JobQueueService | null = null;
 
   try {
+    // Pre-compile AuthenticityProgram at startup (required for proof deserialization)
+    logger.info('Pre-compiling AuthenticityProgram for proof deserialization...');
+    const cache = Cache.FileSystem(config.circuitCachePath);
+    const compileTracker = new PerformanceTracker('startup.compileProgram');
+    await AuthenticityProgram.compile({ cache });
+    compileTracker.end('success');
+    logger.info('AuthenticityProgram compiled successfully');
+
     // Initialize database
     logger.info('Initializing database connection...');
     dbConnection = new DatabaseConnection({
@@ -32,28 +40,21 @@ async function startWorker() {
 
     // Initialize services
     logger.info('Initializing services...');
-    const verificationService = new ImageAuthenticityService();
-    const storageService = new MinioStorageService();
+    const minaNodeService = new MinaNodeService(config.minaNodeEndpoint);
 
-    logger.info('Initializing proof generation service...');
-    const proofGenerationService = new ProofGenerationService();
-
-    logger.info('Initializing job queue service...');
-    jobQueueService = new JobQueueService(config.databaseUrl);
-    await jobQueueService.start();
-
-    // Start worker
-    const worker = new ProofGenerationWorker(
-      boss,
+    logger.info('Initializing proof publishing service...');
+    const proofPublishingService = new ProofPublishingService(
+      config.feePayerPrivateKey,
+      config.minaNetwork,
       submissionsRepository,
-      verificationService,
-      proofGenerationService,
-      jobQueueService,
-      storageService
+      minaNodeService
     );
 
+    // Start worker
+    const worker = new ProofPublishingWorker(boss, submissionsRepository, proofPublishingService);
+
     await worker.start();
-    logger.info('Worker started successfully');
+    logger.info('Proof publishing worker started successfully');
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
@@ -61,11 +62,6 @@ async function startWorker() {
 
       if (worker) {
         await worker.stop();
-      }
-
-      if (jobQueueService) {
-        await jobQueueService.stop();
-        logger.info('Job queue service stopped');
       }
 
       if (boss) {
@@ -85,12 +81,8 @@ async function startWorker() {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (error) {
-    logger.fatal({ err: error }, 'Failed to start worker');
+    logger.fatal({ err: error }, 'Failed to start proof publishing worker');
 
-    // Clean up on error
-    if (jobQueueService) {
-      await jobQueueService.stop();
-    }
     if (boss) {
       await boss.stop();
     }
@@ -115,6 +107,6 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Start the worker
 startWorker().catch((error) => {
-  logger.fatal({ err: error }, 'Failed to start worker');
+  logger.fatal({ err: error }, 'Failed to start proof publishing worker');
   process.exit(1);
 });
