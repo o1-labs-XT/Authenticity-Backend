@@ -196,11 +196,16 @@ export class ProofPublishingService {
 
     try {
       // Parse transaction from JSON
-      const txn = Transaction.fromJSON(JSON.parse(transactionJson));
+      const txn = Transaction.fromJSON(transactionJson);
 
       // Reconstruct private keys
       const feePayer = PrivateKey.fromBase58(this.feePayerKey);
       const tokenOwnerPrivate = PrivateKey.fromBase58(tokenOwnerPrivateKey);
+
+      const nextNonce = Mina.getAccount(feePayer.toPublicKey()).nonce.add(1);
+      txn.transaction.feePayer.body.nonce = nextNonce;
+      txn.transaction.feePayer.authorization = '';
+      txn.transaction.feePayer.lazyAuthorization = { kind: 'lazy-signature' };
 
       logger.debug(
         {
@@ -228,8 +233,6 @@ export class ProofPublishingService {
       }
 
       logger.debug('Signing and sending transaction...');
-      // Get the latest account state for fee payer
-      fetchAccount({ publicKey: feePayer.toPublicKey() });
 
       // Sign with required parties: fee payer and token owner
       const signers = [feePayer, tokenOwnerPrivate];
