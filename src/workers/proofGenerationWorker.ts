@@ -107,32 +107,35 @@ export class ProofGenerationWorker {
                   );
                 }
 
-                // Step 3: Generate proof
-                logger.info('Generating zero-knowledge proof');
-                const proofTracker = new PerformanceTracker('job.generateProof');
-                const { proof } = await this.proofGenerationService.generateProof(
-                  sha256Hash,
-                  signatureData,
-                  commitment,
-                  verificationInputs,
-                  tempPath
-                );
+                // Step 3: Generate proof and create transaction
+                logger.info('Generating zero-knowledge proof and creating transaction');
+                const proofTracker = new PerformanceTracker('job.generateProofAndTransaction');
+                const { transactionJson, tokenOwnerAddress, tokenOwnerPrivateKey } =
+                  await this.proofGenerationService.generateProofAndTransaction(
+                    sha256Hash,
+                    signatureData,
+                    commitment,
+                    verificationInputs,
+                    zkAppAddress,
+                    tempPath
+                  );
                 proofTracker.end('success');
 
-                // Step 4: Serialize and store proof
-                logger.info('Serializing proof for publishing');
-                const proofJson = proof.toJSON();
+                // Step 4: Store transaction JSON for publishing worker
+                logger.info('Storing transaction JSON for publishing');
 
                 await this.submissionsRepository.updateBySha256Hash(sha256Hash, {
                   status: 'proof_publishing',
-                  proof_json: proofJson,
+                  transaction_json: transactionJson,
                 });
 
-                // Step 5: Enqueue publishing job
-                logger.info('Enqueueing proof publishing job');
+                // Step 5: Enqueue publishing job with token owner data
+                logger.info('Enqueueing proof publishing job with token owner data');
                 await this.jobQueue.enqueueProofPublishing({
                   sha256Hash,
                   zkAppAddress,
+                  tokenOwnerAddress,
+                  tokenOwnerPrivateKey,
                   correlationId: job.data.correlationId,
                 });
 

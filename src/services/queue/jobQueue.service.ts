@@ -31,6 +31,8 @@ export interface TelegramNotificationJobData {
 export interface ProofPublishingJobData {
   sha256Hash: string;
   zkAppAddress: string;
+  tokenOwnerAddress: string;
+  tokenOwnerPrivateKey: string;
   correlationId?: string;
 }
 
