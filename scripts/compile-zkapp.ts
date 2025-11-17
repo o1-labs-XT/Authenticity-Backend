@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { AuthenticityProgram, AuthenticityZkApp, BatchReducerUtils } from 'authenticity-zkapp';
-import { Cache, PublicKey } from 'o1js';
+import { AuthenticityProgram, AuthenticityZkApp } from 'authenticity-zkapp';
+import { Cache } from 'o1js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -30,14 +30,6 @@ async function compileZkApp(): Promise<void> {
   fs.mkdirSync(cachePath, { recursive: true });
 
   try {
-    // TODO: verify that the batch reducer can be precompiled against a fake zkapp instance
-    // precompiling the zkapp requires that the batch reducer is also precompiled,
-    // but the batch reducer cannot be compiled without a zkapp instance
-    const zkAppAddress = PublicKey.empty();
-    const zkApp = new AuthenticityZkApp(zkAppAddress);
-
-    BatchReducerUtils.setContractInstance(zkApp);
-
     // Create cache instance
     const cache = Cache.FileSystem(cachePath);
 
@@ -45,10 +37,6 @@ async function compileZkApp(): Promise<void> {
     console.log('📦 Compiling AuthenticityProgram...');
 
     await AuthenticityProgram.compile({ cache });
-
-    // Compile BatchReducer
-    console.log('📦 Compiling BatchReducer...');
-    await BatchReducerUtils.compile();
 
     // Compile AuthenticityZkApp
     console.log('📦 Compiling AuthenticityZkApp...');

@@ -50,8 +50,6 @@ export class ContractDeploymentService {
       await AuthenticityProgram.compile({ cache });
       logger.info({ durationMs: Date.now() - programStartTime }, 'AuthenticityProgram compiled');
 
-      // 2. BatchReducerUtils (removed)
-
       // 3. AuthenticityZkApp
       logger.info('Compiling AuthenticityZkApp...');
       const contractStartTime = Date.now();

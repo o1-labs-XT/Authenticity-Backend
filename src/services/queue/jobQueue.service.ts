@@ -28,6 +28,12 @@ export interface TelegramNotificationJobData {
   correlationId?: string;
 }
 
+export interface ProofPublishingJobData {
+  sha256Hash: string;
+  zkAppAddress: string;
+  correlationId?: string;
+}
+
 export class JobQueueService {
   private boss: PgBoss;
 
@@ -40,6 +46,7 @@ export class JobQueueService {
 
     // Create queues if they don't exist
     await this.boss.createQueue('proof-generation');
+    await this.boss.createQueue('proof-publishing');
     await this.boss.createQueue('blockchain-monitoring');
     await this.boss.createQueue('contract-deployment');
     await this.boss.createQueue('telegram-notification');
@@ -132,6 +139,27 @@ export class JobQueueService {
       );
       // Telegram notifications are optional, shouldn't block submission
       return null;
+    }
+  }
+
+  async enqueueProofPublishing(data: ProofPublishingJobData): Promise<string> {
+    try {
+      const jobId = await this.boss.send('proof-publishing', data, {
+        retryLimit: 3,
+        retryDelay: 300, // 5 minutes - avoid nonce errors on blockchain
+        retryBackoff: true,
+        singletonKey: data.sha256Hash, // Prevent duplicate publishing jobs
+        expireInHours: 12, // pg-boss limit is < 24 hours
+      });
+
+      logger.info(
+        { jobId, sha256Hash: data.sha256Hash, correlationId: data.correlationId },
+        'Proof publishing job enqueued'
+      );
+      return jobId || '';
+    } catch (error) {
+      logger.error({ err: error, sha256Hash: data.sha256Hash }, 'Failed to enqueue publishing job');
+      throw error;
     }
   }
 }

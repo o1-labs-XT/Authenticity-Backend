@@ -86,6 +86,11 @@ export class SubmissionsRepository {
     return result || null;
   }
 
+  async findBySha256Hash(sha256Hash: string): Promise<Submission | null> {
+    const result = await this.db.getKnex()('submissions').where('sha256_hash', sha256Hash).first();
+    return result || null;
+  }
+
   async findAll(options?: {
     walletAddress?: string;
     chainId?: string;
