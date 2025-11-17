@@ -6,14 +6,18 @@
   "scripts": {
     "dev:api": "tsx src/index.ts",
     "dev:worker": "tsx src/startProofWorker.ts",
+    "dev:proof-publishing": "tsx src/startProofPublishingWorker.ts",
     "dev:monitoring": "tsx src/startMonitoringWorker.ts",
     "dev:deployment": "tsx src/startContractDeploymentWorker.ts",
+    "dev:telegram": "tsx src/startTelegramWorker.ts",
     "build": "tsc",
     "start": "npm run db:migrate && node dist/index.js",
     "start:api": "npm run db:migrate && node dist/index.js",
     "start:worker": "tsx scripts/compile-zkapp.ts && node dist/startProofWorker.js",
+    "start:proof-publishing": "tsx scripts/compile-zkapp.ts && node dist/startProofPublishingWorker.js",
     "start:monitoring": "node dist/startMonitoringWorker.js",
     "start:deployment": "tsx scripts/compile-zkapp.ts && node dist/startContractDeploymentWorker.js",
+    "start:telegram": "node dist/startTelegramWorker.js",
     "db:migrate": "tsx node_modules/.bin/knex migrate:latest",
     "db:reset": "docker-compose down -v && docker-compose up -d && sleep 3 && npm run db:migrate",
     "test:unit": "vitest run --exclude='**/*.integration.test.ts'",
@@ -53,6 +57,7 @@
     "pino-http": "^10.5.0",
     "pino-pretty": "^13.1.1",
     "swagger-ui-express": "^5.0.1",
+    "telegraf": "^4.16.3",
     "yamljs": "^0.3.0"
   },
   "devDependencies": {

@@ -16,8 +16,7 @@ export class BlockchainMonitorWorker {
     private repository: SubmissionsRepository,
     private archiveNodeService: ArchiveNodeService,
     private minaNodeService: MinaNodeService,
-    private monitoringService: BlockchainMonitoringService,
-    private zkappAddress: string
+    private monitoringService: BlockchainMonitoringService
   ) {}
 
   async start(): Promise<void> {
@@ -73,29 +72,54 @@ export class BlockchainMonitorWorker {
             'Loaded transactions from database'
           );
 
-          // Step 3: Query archive node for actions
+          // Step 3: Get active zkApp addresses from challenges
+          const activeZkAppAddresses = await this.repository.getActiveZkAppAddresses();
+
+          if (activeZkAppAddresses.length === 0) {
+            logger.info('No active zkApp addresses found, skipping monitoring');
+            return;
+          }
+
+          logger.debug({ zkAppCount: activeZkAppAddresses.length }, 'Found active zkApp addresses');
+
+          // Step 4: Query archive node for actions from all zkApps
           const archiveTracker = new PerformanceTracker('job.archiveQuery');
-          const actionsResponse = await this.archiveNodeService.fetchActionsWithBlockInfo(
-            this.zkappAddress,
-            fromHeight,
-            toHeight,
-            false // Don't log the request
-          );
+          let allActions: any[] = [];
+
+          for (const zkAppAddress of activeZkAppAddresses) {
+            try {
+              const actionsResponse = await this.archiveNodeService.fetchActionsWithBlockInfo(
+                zkAppAddress,
+                fromHeight,
+                toHeight,
+                false // Don't log the request
+              );
+              allActions = [...allActions, ...actionsResponse];
+              logger.debug(
+                { zkAppAddress, actionsCount: actionsResponse.length },
+                'Retrieved actions for zkApp'
+              );
+            } catch (error) {
+              logger.error({ zkAppAddress, err: error }, 'Failed to fetch actions for zkApp');
+              // Continue with other zkApps even if one fails
+            }
+          }
+
           const archiveQueryDuration = archiveTracker.end('success');
 
           logger.debug(
-            { actionsCount: actionsResponse.length },
-            'Retrieved actions from archive node'
+            { totalActionsCount: allActions.length },
+            'Retrieved all actions from archive node'
           );
 
-          // Step 4: Aggregate transaction status
+          // Step 5: Aggregate transaction status
           const report = this.monitoringService.aggregateTransactionStatus(
             submittedTxs,
-            actionsResponse,
+            allActions,
             currentHeight
           );
 
-          // Step 5: Log the results
+          // Step 6: Log the results
           const totalDuration = totalTracker.end('success');
           this.monitoringService.logTransactionStatus(
             report,

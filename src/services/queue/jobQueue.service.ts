@@ -23,6 +23,17 @@ export interface ContractDeploymentJobData {
   correlationId?: string;
 }
 
+export interface TelegramNotificationJobData {
+  submissionId: string;
+  correlationId?: string;
+}
+
+export interface ProofPublishingJobData {
+  sha256Hash: string;
+  zkAppAddress: string;
+  correlationId?: string;
+}
+
 export class JobQueueService {
   private boss: PgBoss;
 
@@ -35,8 +46,10 @@ export class JobQueueService {
 
     // Create queues if they don't exist
     await this.boss.createQueue('proof-generation');
+    await this.boss.createQueue('proof-publishing');
     await this.boss.createQueue('blockchain-monitoring');
     await this.boss.createQueue('contract-deployment');
+    await this.boss.createQueue('telegram-notification');
     logger.info('Job queue started');
   }
 
@@ -100,6 +113,52 @@ export class JobQueueService {
         { err: error, challengeId: data.challengeId },
         'Failed to enqueue deployment job'
       );
+      throw error;
+    }
+  }
+
+  async enqueueTelegramNotification(data: TelegramNotificationJobData): Promise<string | null> {
+    try {
+      const jobId = await this.boss.send('telegram-notification', data, {
+        retryLimit: 3,
+        retryDelay: 30,
+        retryBackoff: true,
+        singletonKey: `telegram-notification-${data.submissionId}`,
+        expireInHours: 1,
+      });
+
+      logger.debug(
+        { jobId, submissionId: data.submissionId, correlationId: data.correlationId },
+        'Telegram notification job enqueued'
+      );
+      return jobId || null;
+    } catch (error) {
+      logger.error(
+        { err: error, submissionId: data.submissionId },
+        'Failed to enqueue Telegram notification job'
+      );
+      // Telegram notifications are optional, shouldn't block submission
+      return null;
+    }
+  }
+
+  async enqueueProofPublishing(data: ProofPublishingJobData): Promise<string> {
+    try {
+      const jobId = await this.boss.send('proof-publishing', data, {
+        retryLimit: 3,
+        retryDelay: 300, // 5 minutes - avoid nonce errors on blockchain
+        retryBackoff: true,
+        singletonKey: data.sha256Hash, // Prevent duplicate publishing jobs
+        expireInHours: 12, // pg-boss limit is < 24 hours
+      });
+
+      logger.info(
+        { jobId, sha256Hash: data.sha256Hash, correlationId: data.correlationId },
+        'Proof publishing job enqueued'
+      );
+      return jobId || '';
+    } catch (error) {
+      logger.error({ err: error, sha256Hash: data.sha256Hash }, 'Failed to enqueue publishing job');
       throw error;
     }
   }

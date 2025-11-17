@@ -45,7 +45,8 @@ export interface Submission {
   storage_key: string;
   tagline?: string | null;
   chain_position: number;
-  status: 'awaiting_review' | 'rejected' | 'processing' | 'complete';
+  status: 'awaiting_review' | 'rejected' | 'proof_generation' | 'proof_publishing' | 'complete';
+  proof_json?: object | null; // Serialized proof stored between proof generation and publishing
   transaction_id?: string | null;
   transaction_submitted_block_height?: number | null;
   failure_reason?: string | null;

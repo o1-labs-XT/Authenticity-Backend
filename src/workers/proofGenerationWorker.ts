@@ -6,8 +6,7 @@ import {
 } from '../services/image/verification.service.js';
 import { MinioStorageService } from '../services/storage/minio.service.js';
 import { ProofGenerationService } from '../services/zk/proofGeneration.service.js';
-import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
-import { ProofGenerationJobData } from '../services/queue/jobQueue.service.js';
+import { JobQueueService, ProofGenerationJobData } from '../services/queue/jobQueue.service.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { logger, withContext } from '../utils/logger.js';
@@ -24,14 +23,14 @@ export class ProofGenerationWorker {
     private submissionsRepository: SubmissionsRepository,
     private imageAuthenticityService: ImageAuthenticityService,
     private proofGenerationService: ProofGenerationService,
-    private proofPublishingService: ProofPublishingService,
+    private jobQueue: JobQueueService,
     private storageService: MinioStorageService
   ) {}
 
   /**
-   * Handles proof generation job queued by an admin approving a submission
-   * loads image from minio, generates verificationInputs for proof generation
-   * runs proof generation and triggers proof publishing
+   * Handles proof generation job for approved submissions
+   * Loads image from MinIO, generates ZK proof, stores proof JSON,
+   * and enqueues publishing job
    */
   async start(): Promise<void> {
     await this.boss.work<ProofGenerationJobData>(
@@ -81,11 +80,11 @@ export class ProofGenerationWorker {
               const tempPath = path.join(config.workerTempDir, `${sha256Hash}.png`);
 
               try {
-                // Update status to processing
+                // Update status to proof_generation
                 const processingStartedAt = new Date().toISOString();
 
                 await this.submissionsRepository.updateBySha256Hash(sha256Hash, {
-                  status: 'processing',
+                  status: 'proof_generation',
                   processing_started_at: processingStartedAt,
                   retry_count: retryCount,
                 });
@@ -120,28 +119,25 @@ export class ProofGenerationWorker {
                 );
                 proofTracker.end('success');
 
-                // Step 4: Publish to blockchain
-                logger.info('Publishing proof to Mina blockchain');
-                const publishTracker = new PerformanceTracker('job.publishProof');
-
-                const transactionId = await this.proofPublishingService.publishProof(
-                  sha256Hash,
-                  proof,
-                  zkAppAddress
-                );
-                publishTracker.end('success', { transactionId });
-
-                // Step 5: Update database with success
-                const verifiedAt = new Date().toISOString();
+                // Step 4: Serialize and store proof
+                logger.info('Serializing proof for publishing');
+                const proofJson = proof.toJSON();
 
                 await this.submissionsRepository.updateBySha256Hash(sha256Hash, {
-                  status: 'complete',
-                  transaction_id: transactionId,
-                  verified_at: verifiedAt,
+                  status: 'proof_publishing',
+                  proof_json: proofJson,
                 });
 
-                jobTracker.end('success', { transactionId });
-                logger.info({ transactionId }, 'Proof generation completed successfully');
+                // Step 5: Enqueue publishing job
+                logger.info('Enqueueing proof publishing job');
+                await this.jobQueue.enqueueProofPublishing({
+                  sha256Hash,
+                  zkAppAddress,
+                  correlationId: job.data.correlationId,
+                });
+
+                jobTracker.end('success');
+                logger.info('Proof generated and publishing job enqueued');
               } catch (error) {
                 const isLastRetry = retryCount >= config.workerRetryLimit - 1;
 
@@ -164,7 +160,7 @@ export class ProofGenerationWorker {
                 const newRetryCount = retryCount + 1;
 
                 await this.submissionsRepository.updateBySha256Hash(sha256Hash, {
-                  status: isLastRetry ? 'rejected' : 'processing',
+                  status: isLastRetry ? 'rejected' : 'proof_generation',
                   failed_at: failedAt,
                   failure_reason: failureReason,
                   retry_count: newRetryCount,
