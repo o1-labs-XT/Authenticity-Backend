@@ -271,7 +271,8 @@ test/                    # Unit tests with Vitest
   - Downloads images from MinIO, generates proofs, publishes to blockchain
   - Cleans up temporary files and MinIO storage after processing
 - **BlockchainMonitorWorker**: Lightweight monitoring service for transaction status
-  - Queries Mina archive node every 5 minutes to track transaction status
+  - Queries all active zkApp addresses from challenges in the database
+  - Queries Mina archive node every 5 minutes to track transaction status across all zkApps
   - Logs transaction categorization (pending/included/final/abandoned)
   - Independent deployment with minimal resource requirements
 - **ContractDeploymentWorker**: Handles zkApp contract deployment for new challenges
@@ -333,8 +334,7 @@ test/                    # Unit tests with Vitest
 ```bash
 DATABASE_URL=postgresql://user:pass@host:5432/db
 MINA_NETWORK=testnet|mainnet
-ZKAPP_ADDRESS=<deployed_zkapp_address>
-FEE_PAYER_PRIVATE_KEY=<private_key>  # MUST be the private key of the account that deployed the zkApp
+FEE_PAYER_PRIVATE_KEY=<private_key>  # Private key for transaction fees
 SIGNER_PUBLIC_KEY=<public_key_x>,<public_key_y>  # ECDSA public key for signature verification (hex format)
                                                    # Generate with: npx tsx scripts/generate-signer-keypair.mts
 PORT=3000
@@ -408,7 +408,9 @@ updated_at              -- Last modified
 
 -- TouchGrass MVP tables (see migrations for full schema)
 -- users: wallet_address, created_at
--- challenges: id, title, description, start_time, end_time, active, etc.
+-- challenges: id, title, description, start_time, end_time, active, zkapp_address, deployment_status, etc.
+--   Note: Each challenge has its own zkApp contract deployed on-chain
+--   zkapp_address is set when contract is deployed via ContractDeploymentWorker
 -- chains: id, name, challenge_id, created_at, etc.
 -- submissions: id, sha256_hash, user_wallet_address, challenge_id, chain_id, tagline, chain_position, etc.
 ```

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { AuthenticityProgram, AuthenticityZkApp } from 'authenticity-zkapp';
-import { Cache } from 'o1js';
+import { AuthenticityProgram, AuthenticityZkApp, BatchReducerUtils } from 'authenticity-zkapp';
+import { Cache, PublicKey } from 'o1js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -30,22 +30,29 @@ async function compileZkApp(): Promise<void> {
   fs.mkdirSync(cachePath, { recursive: true });
 
   try {
-    console.log('⏳ Compiling Artifacts...');
-    const startTime = Date.now();
+    // TODO: verify that the batch reducer can be precompiled against a fake zkapp instance
+    // precompiling the zkapp requires that the batch reducer is also precompiled,
+    // but the batch reducer cannot be compiled without a zkapp instance
+    const zkAppAddress = PublicKey.empty();
+    const zkApp = new AuthenticityZkApp(zkAppAddress);
 
-    // Create cache instance and compile
+    BatchReducerUtils.setContractInstance(zkApp);
+
+    // Create cache instance
     const cache = Cache.FileSystem(cachePath);
-    console.log('Compiling BatchReducer...');
-    if (!process.env.ZKAPP_ADDRESS) {
-      throw new Error('ZKAPP_ADDRESS environment variable not set');
-    }
-    console.log('Compiling AuthenticityProgram...');
-    await AuthenticityProgram.compile({ cache });
-    console.log('Compiling AuthenticityZkApp...');
-    await AuthenticityZkApp.compile({ cache });
 
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ Circuit compilation completed in ${duration}s`);
+    // Compile AuthenticityProgram (dependency)
+    console.log('📦 Compiling AuthenticityProgram...');
+
+    await AuthenticityProgram.compile({ cache });
+
+    // Compile BatchReducer
+    console.log('📦 Compiling BatchReducer...');
+    await BatchReducerUtils.compile();
+
+    // Compile AuthenticityZkApp
+    console.log('📦 Compiling AuthenticityZkApp...');
+    await AuthenticityZkApp.compile({ cache });
     console.log(`📦 Compilation artifacts cached in: ${cachePath}`);
 
     // Verify cache was created

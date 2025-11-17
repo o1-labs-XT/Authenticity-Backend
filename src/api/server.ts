@@ -79,7 +79,6 @@ export function createServer(dependencies: ServerDependencies): Express {
     res.json({
       version: '1.0.0',
       api: 'Provenance Backend API',
-      zkApp: config.zkappAddress || 'not configured',
     });
   });
 

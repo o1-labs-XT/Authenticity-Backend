@@ -163,4 +163,18 @@ export class SubmissionsRepository {
         sha256Hash: result.sha256_hash,
       }));
   }
+
+  /**
+   * Get all active zkApp addresses from challenges
+   * Used by blockchain monitoring worker to query multiple zkApps
+   */
+  async getActiveZkAppAddresses(): Promise<string[]> {
+    const results = await this.db
+      .getKnex()('challenges')
+      .select('zkapp_address')
+      .where('deployment_status', 'active')
+      .whereNotNull('zkapp_address');
+
+    return results.map((result) => result.zkapp_address).filter(Boolean);
+  }
 }
