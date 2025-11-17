@@ -6,6 +6,9 @@ import { MinaNodeService } from './services/blockchain/minaNode.service.js';
 import { ProofPublishingWorker } from './workers/proofPublishingWorker.js';
 import PgBoss from 'pg-boss';
 import { logger } from './utils/logger.js';
+import { AuthenticityProgram } from 'authenticity-zkapp';
+import { Cache } from 'o1js';
+import { PerformanceTracker } from './utils/performance.js';
 
 async function startWorker() {
   logger.info('Starting Proof Publishing Worker...');
@@ -14,6 +17,14 @@ async function startWorker() {
   let dbConnection: DatabaseConnection | null = null;
 
   try {
+    // Pre-compile AuthenticityProgram at startup (required for proof deserialization)
+    logger.info('Pre-compiling AuthenticityProgram for proof deserialization...');
+    const cache = Cache.FileSystem(config.circuitCachePath);
+    const compileTracker = new PerformanceTracker('startup.compileProgram');
+    await AuthenticityProgram.compile({ cache });
+    compileTracker.end('success');
+    logger.info('AuthenticityProgram compiled successfully');
+
     // Initialize database
     logger.info('Initializing database connection...');
     dbConnection = new DatabaseConnection({

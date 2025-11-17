@@ -2,13 +2,16 @@ import PgBoss from 'pg-boss';
 import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
 import { ProofPublishingJobData } from '../services/queue/jobQueue.service.js';
-import { AuthenticityProgram, AuthenticityProof } from 'authenticity-zkapp';
-import { Cache, JsonProof } from 'o1js';
+import { AuthenticityProof } from 'authenticity-zkapp';
+import { JsonProof } from 'o1js';
 import { logger, withContext } from '../utils/logger.js';
 import { PerformanceTracker } from '../utils/performance.js';
 import { config } from '../config/index.js';
 
 export class ProofPublishingWorker {
+  private processedJobCount = 0;
+  private readonly MAX_JOBS_BEFORE_RESTART = config.workerMaxJobsBeforeRestart;
+
   constructor(
     private boss: PgBoss,
     private submissionsRepository: SubmissionsRepository,
@@ -50,20 +53,13 @@ export class ProofPublishingWorker {
                   throw new Error('Proof JSON not found in database');
                 }
 
-                // Step 2: Compile AuthenticityProgram (required for proof deserialization)
-                logger.info('Compiling AuthenticityProgram for proof deserialization');
-                const cache = Cache.FileSystem(config.circuitCachePath);
-                const compileTracker = new PerformanceTracker('publish.compileProgram');
-                await AuthenticityProgram.compile({ cache });
-                compileTracker.end('success');
-
-                // Step 3: Deserialize proof from JSON
+                // Step 2: Deserialize proof from JSON (AuthenticityProgram pre-compiled at startup)
                 logger.info('Deserializing proof from JSON');
                 const deserializeTracker = new PerformanceTracker('publish.deserializeProof');
                 const proof = await AuthenticityProof.fromJSON(submission.proof_json as JsonProof);
                 deserializeTracker.end('success');
 
-                // Step 4: Publish to blockchain
+                // Step 3: Publish to blockchain
                 logger.info('Publishing proof to Mina blockchain');
                 const publishTracker = new PerformanceTracker('publish.transaction');
                 const transactionId = await this.proofPublishingService.publishProof(
@@ -73,7 +69,7 @@ export class ProofPublishingWorker {
                 );
                 publishTracker.end('success', { transactionId });
 
-                // Step 5: Update status and clear proof_json
+                // Step 4: Update status and clear proof_json
                 const verifiedAt = new Date().toISOString();
 
                 await this.submissionsRepository.updateBySha256Hash(sha256Hash, {
@@ -110,6 +106,29 @@ export class ProofPublishingWorker {
 
                 // Re-throw error to trigger pg-boss retry
                 throw error;
+              } finally {
+                // Increment job counter and check for restart (runs for both success and failure)
+                this.processedJobCount++;
+                logger.info(
+                  {
+                    processedJobCount: this.processedJobCount,
+                    maxJobs: this.MAX_JOBS_BEFORE_RESTART,
+                  },
+                  'Job completed, checking restart threshold'
+                );
+
+                if (this.processedJobCount >= this.MAX_JOBS_BEFORE_RESTART) {
+                  logger.info(
+                    { processedJobCount: this.processedJobCount },
+                    'Reached max jobs threshold, initiating graceful restart'
+                  );
+
+                  // Schedule graceful shutdown after a brief delay to complete current job
+                  setTimeout(() => {
+                    logger.info('Sending SIGTERM for graceful restart');
+                    process.kill(process.pid, 'SIGTERM');
+                  }, 1000);
+                }
               }
             }
           );
