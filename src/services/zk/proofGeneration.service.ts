@@ -14,17 +14,10 @@ import { logger } from '../../utils/logger.js';
 import { PerformanceTracker } from '../../utils/performance.js';
 import { Errors } from '../../utils/errors.js';
 import { config } from '../../config/index.js';
-import { MinioStorageService } from '../storage/minio.service.js';
-import * as fs from 'fs';
-import * as path from 'path';
 
 export class ProofGenerationService {
-  private minioService: MinioStorageService;
-  private cachedDirectory: string | null = null;
-
   constructor() {
     logger.debug('ProofGenerationService initialized');
-    this.minioService = new MinioStorageService();
     this.setupNetwork();
   }
 
@@ -45,62 +38,6 @@ export class ProofGenerationService {
       },
       'Connected to Mina network'
     );
-  }
-
-  /**
-   * Ensure cache is available, downloading from MinIO if needed
-   */
-  private async ensureCache(): Promise<string> {
-    if (this.cachedDirectory && fs.existsSync(this.cachedDirectory)) {
-      return this.cachedDirectory;
-    }
-
-    // Create unique temp directory for this service instance
-    const tempCacheDir = path.join(
-      config.workerTempDir,
-      `circuit-cache-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-    );
-
-    try {
-      // Check if cache exists in MinIO
-      const cacheExists = await this.minioService.cacheExists();
-
-      if (cacheExists) {
-        logger.info('Downloading o1js cache from MinIO...');
-        await this.minioService.downloadCache(tempCacheDir);
-        this.cachedDirectory = tempCacheDir;
-        logger.info({ cacheDirectory: tempCacheDir }, 'o1js cache downloaded from MinIO');
-      } else {
-        // Fall back to local cache or compilation
-        logger.warn('No cache found in MinIO, falling back to local cache path');
-        this.cachedDirectory = config.circuitCachePath;
-
-        // Ensure local cache directory exists
-        if (!fs.existsSync(this.cachedDirectory)) {
-          fs.mkdirSync(this.cachedDirectory, { recursive: true });
-        }
-      }
-
-      return this.cachedDirectory;
-    } catch (error) {
-      logger.warn(
-        { error, tempCacheDir },
-        'Failed to download cache from MinIO, falling back to local cache'
-      );
-
-      // Clean up failed temp directory
-      if (fs.existsSync(tempCacheDir)) {
-        fs.rmSync(tempCacheDir, { recursive: true, force: true });
-      }
-
-      // Fall back to local cache
-      this.cachedDirectory = config.circuitCachePath;
-      if (!fs.existsSync(this.cachedDirectory)) {
-        fs.mkdirSync(this.cachedDirectory, { recursive: true });
-      }
-
-      return this.cachedDirectory;
-    }
   }
 
   /**
