@@ -186,10 +186,11 @@ export class ProofGenerationService {
       logger.debug('Proving transaction...');
       const proveTracker = new PerformanceTracker('publish.prove');
       await txn.prove();
+      txn.sign([feePayer, tokenOwnerPrivate]); // pre-sign the account updates to authorize everything
       proveTracker.end('success');
 
       // Serialize transaction to JSON (without signatures)
-      const transactionJson = JSON.stringify(txn.toJSON());
+      const transactionJson = txn.toJSON();
 
       logger.info('Transaction created and proved, ready for signing/sending');
 
