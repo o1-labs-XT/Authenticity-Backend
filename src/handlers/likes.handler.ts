@@ -59,23 +59,8 @@ export class LikesHandler {
         throw Errors.notFound('Submission');
       }
 
-      // Check if user exists
-      const user = await this.usersRepo.findByWalletAddress(walletAddress);
-      if (!user) {
-        throw Errors.notFound('User not found');
-      }
-
-      // Check if user has at least one submission (any status)
-      const userSubmissions = await this.submissionsRepo.findAll({
-        walletAddress,
-      });
-
-      if (userSubmissions.length === 0) {
-        throw Errors.forbidden(
-          'You must upload at least one image before you can like submissions',
-          'walletAddress'
-        );
-      }
+      // Ensure user exists (auto-create if needed, like submission handler does)
+      await this.usersRepo.findOrCreate(walletAddress);
 
       // Create the like
       const like = await this.likesRepo.create(submissionId, walletAddress);

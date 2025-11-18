@@ -416,25 +416,30 @@ describe('Likes API Integration', () => {
     expect(res.body.walletAddress).toBe(testData1.walletAddress);
   });
 
-  it('should reject like from non-existent user', async () => {
+  it('should auto-create user when liking (if user does not exist)', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
-    createdUserAddresses.push(testData1.walletAddress);
+    createdUserAddresses.push(testData1.walletAddress, testData2.walletAddress);
 
     // Create submission
     const submissionId = await createTestSubmission(chainId, testData1.walletAddress);
     createdSubmissionIds.push(submissionId);
 
-    // Try to create like with non-existent user (testData2 user never created)
+    // Try to like with user that doesn't exist yet (should auto-create)
     const res = await request(API_URL)
       .post(`/api/submissions/${submissionId}/likes`)
       .send({ walletAddress: testData2.walletAddress });
 
-    expect(res.status).toBe(404);
-    expect(res.body.error.message).toContain('User not found');
+    expect(res.status).toBe(201);
+    expect(res.body.walletAddress).toBe(testData2.walletAddress);
+
+    // Verify user was auto-created
+    const userRes = await request(API_URL).get(`/api/users/${testData2.walletAddress}`);
+    expect(userRes.status).toBe(200);
+    expect(userRes.body.walletAddress).toBe(testData2.walletAddress);
   });
 
-  it('should reject like from user without any submissions', async () => {
+  it('should allow like from user without any submissions', async () => {
     const testData1 = createSubmissionTestData();
     const testData2 = createSubmissionTestData();
     createdUserAddresses.push(testData1.walletAddress, testData2.walletAddress);
@@ -446,13 +451,13 @@ describe('Likes API Integration', () => {
     // Create user2 WITHOUT creating a submission
     await request(API_URL).post('/api/users').send({ walletAddress: testData2.walletAddress });
 
-    // Try to like with user2 who has no submissions
+    // User2 can like even without any submissions
     const res = await request(API_URL)
       .post(`/api/submissions/${submissionId}/likes`)
       .send({ walletAddress: testData2.walletAddress });
 
-    expect(res.status).toBe(403);
-    expect(res.body.error.message).toContain('upload at least one image');
+    expect(res.status).toBe(201);
+    expect(res.body.walletAddress).toBe(testData2.walletAddress);
   });
 
   it('should reject like for non-existent submission', async () => {
