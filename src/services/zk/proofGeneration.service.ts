@@ -6,38 +6,16 @@ import {
   Secp256r1,
   Ecdsa,
   Bytes32,
-  AuthenticityZkApp,
 } from 'authenticity-zkapp';
-import { Cache, Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8 } from 'o1js';
+import { Cache } from 'o1js';
 import { VerificationInputs, ECDSASignatureData } from '../image/verification.service.js';
 import { logger } from '../../utils/logger.js';
 import { PerformanceTracker } from '../../utils/performance.js';
-import { Errors } from '../../utils/errors.js';
 import { config } from '../../config/index.js';
 
 export class ProofGenerationService {
   constructor() {
     logger.debug('ProofGenerationService initialized');
-    this.setupNetwork();
-  }
-
-  private setupNetwork(): void {
-    // Setup Mina network connection
-    const Network =
-      config.minaNetwork === 'mainnet'
-        ? Mina.Network({
-            networkId: 'mainnet', // Required for mainnet signatures to be valid
-            mina: config.minaNodeEndpoint,
-          })
-        : Mina.Network(config.minaNodeEndpoint); // default value is 'devnet', which is correct (touchgrass calls it 'testnet', so it's simpler to not specify it here)
-    Mina.setActiveInstance(Network);
-    logger.info(
-      {
-        network: config.minaNetwork,
-        endpoint: config.minaNodeEndpoint,
-      },
-      'Connected to Mina network'
-    );
   }
 
   /**
@@ -102,136 +80,5 @@ export class ProofGenerationService {
     proofTracker.end('success');
 
     return { proof, publicInputs };
-  }
-
-  /**
-   * Generate proof and create/prove transaction for publishing
-   * This combines proof generation with transaction creation and proving
-   */
-  async generateProofAndTransaction(
-    sha256Hash: string,
-    signatureData: ECDSASignatureData,
-    commitment: Bytes32,
-    verificationInputs: VerificationInputs,
-    zkAppAddress: string,
-    imagePath?: string
-  ): Promise<{
-    proof: AuthenticityProof;
-    transactionJson: string; // Serialized Mina transaction for later signing/sending
-    tokenOwnerAddress: string;
-    tokenOwnerPrivateKey: string;
-  }> {
-    logger.debug({ sha256Hash, zkAppAddress }, 'Generating proof and transaction');
-
-    // Check if zkApp is deployed
-    const isDeployed = await this.isDeployed(zkAppAddress);
-    if (!isDeployed) {
-      throw Errors.internal(`AuthenticityZkApp at ${zkAppAddress} is not deployed`);
-    }
-
-    // Step 1: Generate the authenticity proof
-    const { proof } = await this.generateProof(
-      sha256Hash,
-      signatureData,
-      commitment,
-      verificationInputs,
-      imagePath
-    );
-
-    // Step 2: Generate token owner key (will be used later during publishing)
-    const tokenOwnerPrivate = PrivateKey.random();
-    const tokenOwner = tokenOwnerPrivate.toPublicKey();
-
-    // Step 3: Create and prove zkApp transaction
-    logger.info('Creating and proving zkApp transaction');
-
-    // Create zkApp instance for this specific address
-    const zkAppPublicKey = PublicKey.fromBase58(zkAppAddress);
-    const zkApp = new AuthenticityZkApp(zkAppPublicKey);
-
-    // Compile zkApp contracts
-    const cache = Cache.FileSystem(config.circuitCachePath);
-    const compileTracker = new PerformanceTracker('publish.compile');
-    await AuthenticityZkApp.compile({ cache });
-    compileTracker.end('success');
-
-    // Create fee payer key for transaction structure
-    if (!config.feePayerPrivateKey) {
-      throw Errors.internal('Fee payer private key not configured');
-    }
-    const feePayer = PrivateKey.fromBase58(config.feePayerPrivateKey);
-
-    logger.debug(
-      {
-        feePayer: feePayer.toPublicKey().toBase58(),
-        tokenOwner: tokenOwner.toBase58(),
-        creator: `(${proof.publicInput.publicKey.x.toBigInt()}, ${proof.publicInput.publicKey.y.toBigInt()})`,
-      },
-      'Transaction participants'
-    );
-
-    try {
-      // Create transaction to verify and store the proof on-chain
-      const txn = await Mina.transaction(
-        { sender: feePayer.toPublicKey(), fee: config.minaTransactionFee * 1e9 },
-        async () => {
-          // Fund the new token account
-          AccountUpdate.fundNewAccount(feePayer.toPublicKey());
-
-          // Call verifyAndStore on the zkApp
-          await zkApp.verifyAndStore(tokenOwner, UInt8.from(0), proof);
-        }
-      );
-
-      logger.debug('Proving transaction...');
-      const proveTracker = new PerformanceTracker('publish.prove');
-      await txn.prove();
-      txn.sign([feePayer, tokenOwnerPrivate]); // pre-sign the account updates to authorize everything
-      proveTracker.end('success');
-
-      // Serialize transaction to JSON (without signatures)
-      const transactionJson = txn.toJSON();
-
-      logger.info('Transaction created and proved, ready for signing/sending');
-
-      return {
-        proof,
-        transactionJson,
-        tokenOwnerAddress: tokenOwner.toBase58(),
-        tokenOwnerPrivateKey: tokenOwnerPrivate.toBase58(),
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to create and prove transaction');
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw Errors.internal(`Failed to create and prove transaction: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Check if a specific zkApp is deployed
-   */
-  private async isDeployed(zkAppAddress: string): Promise<boolean> {
-    try {
-      const zkAppPublicKey = PublicKey.fromBase58(zkAppAddress);
-      logger.debug(`Checking zkApp deployment at ${zkAppAddress}`);
-
-      await fetchAccount({ publicKey: zkAppPublicKey });
-      const account = Mina.getAccount(zkAppPublicKey);
-      logger.debug(
-        {
-          address: zkAppPublicKey.toBase58(),
-          balance: account.balance.toString(),
-          nonce: account.nonce.toString(),
-          hasZkapp: !!account.zkapp,
-          zkappState: account.zkapp?.appState?.map((s) => s.toString()),
-        },
-        'Account fetched'
-      );
-
-      return !!account.zkapp;
-    } catch (error) {
-      logger.error({ err: error }, 'Error checking deployment');
-      return false;
-    }
   }
 }

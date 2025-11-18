@@ -1,14 +1,5 @@
 import { AuthenticityZkApp, AuthenticityProof } from 'authenticity-zkapp';
-import {
-  Mina,
-  PublicKey,
-  PrivateKey,
-  AccountUpdate,
-  fetchAccount,
-  UInt8,
-  Cache,
-  Transaction,
-} from 'o1js';
+import { Mina, PublicKey, PrivateKey, AccountUpdate, fetchAccount, UInt8, Cache } from 'o1js';
 import { SubmissionsRepository } from '../../db/repositories/submissions.repository.js';
 import { MinaNodeService } from '../blockchain/minaNode.service.js';
 import { logger } from '../../utils/logger.js';
@@ -176,99 +167,6 @@ export class ProofPublishingService {
       logger.error({ err: error }, 'Failed to publish proof');
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw Errors.internal(`Failed to publish proof: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Sign and send a pre-created transaction
-   * This is used in the refactored workflow where transaction creation happens in proof generation
-   */
-  async signAndSendTransaction(
-    sha256Hash: string,
-    transactionJson: string,
-    tokenOwnerPrivateKey: string
-  ): Promise<string> {
-    if (!this.feePayerKey) {
-      throw Errors.internal('Fee payer private key not configured');
-    }
-
-    logger.info({ sha256Hash }, 'Signing and sending pre-created transaction');
-
-    try {
-      // Parse transaction from JSON
-      const txn = Transaction.fromJSON(transactionJson);
-
-      // Reconstruct private keys
-      const feePayer = PrivateKey.fromBase58(this.feePayerKey);
-      const tokenOwnerPrivate = PrivateKey.fromBase58(tokenOwnerPrivateKey);
-
-      // Fetch account state before accessing nonce
-      await fetchAccount({ publicKey: feePayer.toPublicKey() });
-      const nextNonce = Mina.getAccount(feePayer.toPublicKey()).nonce.add(1);
-      txn.transaction.feePayer.body.nonce = nextNonce;
-      txn.transaction.feePayer.lazyAuthorization = { kind: 'lazy-signature' };
-
-      logger.debug(
-        {
-          feePayer: feePayer.toPublicKey().toBase58(),
-          tokenOwner: tokenOwnerPrivate.toPublicKey().toBase58(),
-        },
-        'Transaction signers'
-      );
-
-      // Capture current block height before submitting transaction
-      let submittedBlockHeight: number | undefined;
-      if (this.minaNodeService) {
-        try {
-          submittedBlockHeight = await this.minaNodeService.getCurrentBlockHeight();
-          logger.debug(
-            { submittedBlockHeight },
-            'Captured current block height before transaction submission'
-          );
-        } catch (error) {
-          logger.warn(
-            { err: error },
-            'Failed to capture current block height, proceeding without it'
-          );
-        }
-      }
-
-      logger.debug('Signing and sending transaction...');
-
-      // Sign with required parties: fee payer and token owner
-      const signers = [feePayer, tokenOwnerPrivate];
-      logger.debug(`Signing transaction with ${signers.length} signers`);
-
-      const sendTracker = new PerformanceTracker('publish.send');
-      const pendingTxn = await txn.sign(signers).send();
-      sendTracker.end('success', { hash: pendingTxn.hash });
-
-      logger.info({ transactionHash: pendingTxn.hash }, 'Transaction sent');
-
-      // Save transaction ID and block height to database immediately after sending
-      if (this.submissionsRepository) {
-        const updateData: { transaction_id: string; transaction_submitted_block_height?: number } =
-          {
-            transaction_id: pendingTxn.hash,
-          };
-
-        if (submittedBlockHeight !== undefined) {
-          updateData.transaction_submitted_block_height = submittedBlockHeight;
-        }
-
-        await this.submissionsRepository.updateBySha256Hash(sha256Hash, updateData);
-
-        logger.debug(
-          { sha256Hash, transactionHash: pendingTxn.hash, submittedBlockHeight },
-          'Transaction ID and block height saved to database'
-        );
-      }
-
-      return pendingTxn.hash;
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to sign and send transaction');
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw Errors.internal(`Failed to sign and send transaction: ${errorMessage}`);
     }
   }
 

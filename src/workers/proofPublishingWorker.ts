@@ -2,6 +2,8 @@ import PgBoss from 'pg-boss';
 import { SubmissionsRepository } from '../db/repositories/submissions.repository.js';
 import { ProofPublishingService } from '../services/zk/proofPublishing.service.js';
 import { ProofPublishingJobData } from '../services/queue/jobQueue.service.js';
+import { AuthenticityProof } from 'authenticity-zkapp';
+import { JsonProof } from 'o1js';
 import { logger, withContext } from '../utils/logger.js';
 import { PerformanceTracker } from '../utils/performance.js';
 import { config } from '../config/index.js';
@@ -41,33 +43,39 @@ export class ProofPublishingWorker {
               });
               logger.info('Starting proof publishing job');
 
-              const { sha256Hash, tokenOwnerPrivateKey } = job.data;
+              const { sha256Hash, zkAppAddress } = job.data;
 
               try {
-                // Step 1: Fetch submission with transaction JSON
+                // Step 1: Fetch submission with proof
                 const submission = await this.submissionsRepository.findBySha256Hash(sha256Hash);
 
-                if (!submission?.transaction_json) {
-                  throw new Error('Transaction JSON not found in database');
+                if (!submission?.proof_json) {
+                  throw new Error('Proof JSON not found in database');
                 }
 
-                // Step 2: Sign and send pre-created transaction
-                logger.info('Signing and sending pre-created transaction');
-                const publishTracker = new PerformanceTracker('publish.signAndSend');
-                const transactionId = await this.proofPublishingService.signAndSendTransaction(
+                // Step 2: Deserialize proof from JSON (AuthenticityProgram pre-compiled at startup)
+                logger.info('Deserializing proof from JSON');
+                const deserializeTracker = new PerformanceTracker('publish.deserializeProof');
+                const proof = await AuthenticityProof.fromJSON(submission.proof_json as JsonProof);
+                deserializeTracker.end('success');
+
+                // Step 3: Publish to blockchain
+                logger.info('Publishing proof to Mina blockchain');
+                const publishTracker = new PerformanceTracker('publish.transaction');
+                const transactionId = await this.proofPublishingService.publishProof(
                   sha256Hash,
-                  submission.transaction_json,
-                  tokenOwnerPrivateKey
+                  proof,
+                  zkAppAddress
                 );
                 publishTracker.end('success', { transactionId });
 
-                // Step 3: Update status and clear transaction_json
+                // Step 4: Update status and clear proof_json
                 const verifiedAt = new Date().toISOString();
 
                 await this.submissionsRepository.updateBySha256Hash(sha256Hash, {
                   status: 'complete',
                   verified_at: verifiedAt,
-                  transaction_json: null, // Clear transaction to save database space
+                  proof_json: null, // Clear proof to save database space
                 });
 
                 jobTracker.end('success', { transactionId });
@@ -92,7 +100,7 @@ export class ProofPublishingWorker {
                     status: 'rejected',
                     failed_at: failedAt,
                     failure_reason: failureReason,
-                    transaction_json: null, // Clear transaction on final failure
+                    proof_json: null, // Clear proof on final failure
                   });
                 }
 
