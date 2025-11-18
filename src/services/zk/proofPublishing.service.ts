@@ -206,7 +206,6 @@ export class ProofPublishingService {
       await fetchAccount({ publicKey: feePayer.toPublicKey() });
       const nextNonce = Mina.getAccount(feePayer.toPublicKey()).nonce.add(1);
       txn.transaction.feePayer.body.nonce = nextNonce;
-      txn.transaction.feePayer.authorization = '';
       txn.transaction.feePayer.lazyAuthorization = { kind: 'lazy-signature' };
 
       logger.debug(
