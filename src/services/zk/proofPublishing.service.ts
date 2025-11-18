@@ -202,6 +202,8 @@ export class ProofPublishingService {
       const feePayer = PrivateKey.fromBase58(this.feePayerKey);
       const tokenOwnerPrivate = PrivateKey.fromBase58(tokenOwnerPrivateKey);
 
+      // Fetch account state before accessing nonce
+      await fetchAccount({ publicKey: feePayer.toPublicKey() });
       const nextNonce = Mina.getAccount(feePayer.toPublicKey()).nonce.add(1);
       txn.transaction.feePayer.body.nonce = nextNonce;
       txn.transaction.feePayer.authorization = '';
