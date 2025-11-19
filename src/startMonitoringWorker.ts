@@ -53,8 +53,7 @@ async function startMonitoringWorker() {
       repository,
       archiveNodeService,
       minaNodeService,
-      monitoringService,
-      config.zkappAddress
+      monitoringService
     );
 
     await worker.start();

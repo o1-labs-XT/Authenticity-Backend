@@ -33,7 +33,7 @@ npm run dev
 
 ## Key Generation
 
-Generate ECDSA keypair for image signature verification:
+Generate ECDSA keypair for image signature verification
 
 ```bash
 npx tsx scripts/generate-signer-keypair.mts

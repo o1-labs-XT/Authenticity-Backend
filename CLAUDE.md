@@ -19,6 +19,7 @@ docker-compose up -d  # Starts PostgreSQL, pgweb, MinIO, Grafana, Loki, Promtail
 # Run services (in separate terminals):
 npm run dev:api         # Start API server with hot reload (port 3000)
 npm run dev:worker      # Start proof generation worker with hot reload
+npm run dev:proof-publishing # Start proof publishing worker with hot reload
 npm run dev:monitoring  # Start blockchain monitoring worker with hot reload
 npm run dev:deployment  # Start contract deployment worker with hot reload
 npm run dev:telegram    # Start Telegram notification worker with hot reload
@@ -28,6 +29,7 @@ npm run build           # Build TypeScript to dist/
 npm run start           # Run migrations, compile zkApp, start API
 npm run start:api       # Run migrations and start API server
 npm run start:worker    # Compile zkApp and start proof generation worker
+npm run start:proof-publishing # Start proof publishing worker
 npm run start:monitoring # Start blockchain monitoring worker
 npm run start:deployment # Compile zkApp and start contract deployment worker
 npm run start:telegram  # Start Telegram notification worker
@@ -142,19 +144,21 @@ The system includes both a backend API and an admin dashboard (Next.js app) for 
 ### Core Flow
 1. **Upload**: Client uploads image with cryptographic signature (signed with SIGNER_PUBLIC_KEY)
 2. **Auto-Approve**: Submissions are automatically approved and proof generation is enqueued immediately
-3. **Process**: Worker service processes proof generation jobs asynchronously
-4. **Prove**: Worker generates zero-knowledge proofs using o1js
-5. **Publish**: Worker publishes proofs to Mina blockchain
+3. **Generate Proof**: Proof generation worker processes job and creates ZK proof (~30-60s)
+4. **Store Proof**: Proof is serialized and stored in database, publishing job is enqueued
+5. **Publish**: Proof publishing worker publishes proof to Mina blockchain (~5-10s)
 6. **Verify**: Anyone can verify authenticity via token owner address
 
-**Note**: Admin review workflow has been replaced with auto-approval for MVP. Admin dashboard still provides management capabilities for challenges, users, and monitoring.
+**Note**: Proof generation and publishing are split into separate workers for independent retry logic. If publishing fails, only publishing retries (no expensive proof regeneration).
 
 ### Service Architecture
 
 ```
 Client → REST API → Handlers → Services → Database
                          ↓
-                    Job Queue → Worker → Blockchain
+                    Job Queue → Proof Gen Worker → Store Proof
+                         ↓
+                    Job Queue → Proof Pub Worker → Blockchain
 ```
 
 ### Architectural Patterns
@@ -262,16 +266,25 @@ test/                    # Unit tests with Vitest
 - **AuthenticityRepository**: Repository pattern for data access with camelCase/snake_case transformation
 - **ChallengesRepository**: TouchGrass challenges data access
 - **Migrations**: Schema managed via Knex migrations
-- **Status values**: `pending`, `processing`, `verified`, `failed`
+- **Submission status values**: `awaiting_review`, `proof_generation`, `proof_publishing`, `complete`, `rejected`
 
 ### Workers
-- **ProofGenerationWorker**: Processes proof generation jobs from pg-boss queue with context propagation
-  - Updates status throughout lifecycle
+- **ProofGenerationWorker**: Processes proof generation jobs from pg-boss queue
+  - Downloads images from MinIO and verifies ECDSA signatures
+  - Generates ZK proofs using o1js (~30-60s)
+  - Serializes proof to JSON and stores in database
+  - Enqueues proof publishing job
   - Handles retries (3 attempts with exponential backoff)
-  - Downloads images from MinIO, generates proofs, publishes to blockchain
-  - Cleans up temporary files and MinIO storage after processing
+  - Cleans up temporary files after processing
+- **ProofPublishingWorker**: Processes proof publishing jobs from pg-boss queue
+  - Compiles AuthenticityProgram (for proof deserialization)
+  - Deserializes proof from database
+  - Publishes proof to Mina blockchain (~5-10s)
+  - Clears proof_json after successful publishing
+  - Independent retry logic (publishing failures don't regenerate proofs)
 - **BlockchainMonitorWorker**: Lightweight monitoring service for transaction status
-  - Queries Mina archive node every 5 minutes to track transaction status
+  - Queries all active zkApp addresses from challenges in the database
+  - Queries Mina archive node every 5 minutes to track transaction status across all zkApps
   - Logs transaction categorization (pending/included/final/abandoned)
   - Independent deployment with minimal resource requirements
 - **ContractDeploymentWorker**: Handles zkApp contract deployment for new challenges
@@ -290,8 +303,8 @@ test/                    # Unit tests with Vitest
 - `POST /api/submissions` - Submit image for challenge
   - Multipart form: `image` file, `chainId`, `walletAddress`, `signatureR`, `signatureS`, optional `tagline`
   - Signature must be signed with SIGNER_PUBLIC_KEY (from env)
-  - Returns: Submission object with `status: 'processing'` (auto-approved)
-  - Proof generation enqueued immediately upon upload
+  - Returns: Submission object with `status: 'proof_generation'` (auto-approved)
+  - Proof generation job enqueued immediately upon upload
 
 - `GET /api/submissions/:id` - Get submission by ID
   - Returns: Submission object with status and metadata
@@ -333,8 +346,7 @@ test/                    # Unit tests with Vitest
 ```bash
 DATABASE_URL=postgresql://user:pass@host:5432/db
 MINA_NETWORK=testnet|mainnet
-ZKAPP_ADDRESS=<deployed_zkapp_address>
-FEE_PAYER_PRIVATE_KEY=<private_key>  # MUST be the private key of the account that deployed the zkApp
+FEE_PAYER_PRIVATE_KEY=<private_key>  # Private key for transaction fees
 SIGNER_PUBLIC_KEY=<public_key_x>,<public_key_y>  # ECDSA public key for signature verification (hex format)
                                                    # Generate with: npx tsx scripts/generate-signer-keypair.mts
 PORT=3000
@@ -377,14 +389,15 @@ FRONTEND_URL=http://localhost:3000  # Frontend URL for submission page links
 ## Implementation Details
 
 ### Job Queue (pg-boss)
-- Queue names: `proof-generation`, `blockchain-monitoring`, `contract-deployment`, `telegram-notification`
+- Queue names: `proof-generation`, `proof-publishing`, `blockchain-monitoring`, `contract-deployment`, `telegram-notification`
 - Singleton key prevents duplicate jobs for same hash
 - Retry policy: 3 attempts with exponential backoff
-- Job retention: 1 hour for Telegram jobs, 24 hours for others
+- Job retention: 1 hour for Telegram jobs, 24 hours for proof-publishing and others
 - Jobs carry correlation IDs for distributed tracing
 - Worker concurrency: Configurable via pg-boss
 - Monitoring job: Runs every 5 minutes to check transaction status on-chain
 - Telegram jobs: Non-blocking, failures don't affect submission flow
+- **Proof workflow**: proof-generation job completes → proof-publishing job enqueued (split for independent retries)
 
 ### Database Schema
 
@@ -408,9 +421,14 @@ updated_at              -- Last modified
 
 -- TouchGrass MVP tables (see migrations for full schema)
 -- users: wallet_address, created_at
--- challenges: id, title, description, start_time, end_time, active, etc.
+-- challenges: id, title, description, start_time, end_time, active, zkapp_address, deployment_status, etc.
+--   Note: Each challenge has its own zkApp contract deployed on-chain
+--   zkapp_address is set when contract is deployed via ContractDeploymentWorker
 -- chains: id, name, challenge_id, created_at, etc.
 -- submissions: id, sha256_hash, user_wallet_address, challenge_id, chain_id, tagline, chain_position, etc.
+--   status: awaiting_review | rejected | proof_generation | proof_publishing | complete
+--   proof_json: Serialized ZK proof (stored between generation and publishing, cleared after)
+--   Status flow: proof_generation → proof_publishing → complete (or rejected on failure)
 ```
 
 ### Security & Middleware
@@ -447,13 +465,14 @@ updated_at              -- Last modified
 
 ### Railway Configuration
 - **API Service**: Lightweight (512MB RAM), 2 replicas
-- **Worker Service**: Heavy (2GB RAM for proof generation), 2 replicas
+- **Proof Generation Worker**: Heavy (2GB RAM for ZK proof generation), 2 replicas
+- **Proof Publishing Worker**: Lightweight (512MB RAM for blockchain publishing), 1 replica
 - **Monitoring Service**: Lightweight (512MB RAM), 1 replica for blockchain monitoring
 - **Telegram Worker**: Lightweight (512MB RAM), 1 replica for notification processing
 - **MinIO Service**: S3-compatible storage for image files
 - **Health Checks**: 180s timeout, 3 restart attempts
 - **Auto-migrations**: Run at API startup
-- **Circuit Compilation**: At proof generation worker startup
+- **Circuit Compilation**: At proof generation worker startup (for proof generation); at runtime in publishing worker (uses cache)
 - **Graceful Shutdown**: Signal handling for clean termination
 
 ### Railway CLI
@@ -499,9 +518,10 @@ services:
 4. **Run migrations**: `npm run db:migrate`
 5. **Start services**:
    - Terminal 1: `npm run dev:api`
-   - Terminal 2: `npm run dev:worker`
-   - Terminal 3: `npm run dev:monitoring` (optional, for blockchain monitoring)
-   - Terminal 4: `npm run dev:deployment` (optional, for contract deployment)
+   - Terminal 2: `npm run dev:worker` (proof generation)
+   - Terminal 3: `npm run dev:proof-publishing` (proof publishing)
+   - Terminal 4: `npm run dev:monitoring` (optional, for blockchain monitoring)
+   - Terminal 5: `npm run dev:deployment` (optional, for contract deployment)
 6. **Access tools**:
    - API: http://localhost:3000
    - Swagger API docs: http://localhost:3000/api-docs
